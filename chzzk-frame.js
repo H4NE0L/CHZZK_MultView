@@ -57,7 +57,9 @@
   }
 
   function reportVideoState(video) {
-    if (!frameUid || !video) return;
+    // The chat iframe silences its own <video>; it must never report that
+    // state as if it were the broadcast player.
+    if (!frameUid || !video || chatMode) return;
     window.parent.postMessage({
       source: "chzzk-multiview", type: "VIDEO_STATE", uid: frameUid,
       muted: isVideoMuted(video), volume: Number(video.volume)
@@ -257,16 +259,8 @@
     }
   });
 
-  document.addEventListener("click", event => {
-    if (!frameUid || chatMode) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    const nav = target.closest('header, nav, [class*="Header"], [class*="header"], [class*="Navigation"], [class*="navigation"]');
-    if (!nav) return;
-    window.parent.postMessage({
-      source: "chzzk-multiview", type: "PROMOTE_MAIN", uid: frameUid
-    }, "*");
-  }, true);
+  // Clicking inside a tile (including its header) never changes the main
+  // broadcast. Only the tile's "메인으로 변경" button in the MultiView UI does.
 
   window.addEventListener("load", () => {
     sendChannelInfo();

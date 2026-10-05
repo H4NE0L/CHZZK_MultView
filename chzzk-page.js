@@ -14,7 +14,9 @@
     chatOpen: true,
     screenLocked: false,
     mainOnly: false,
-    darkMode: true
+    darkMode: true,
+    masterVolume: 1,
+    chatSide: "right"
   };
 
   let state = { ...DEFAULT_STATE };
@@ -29,6 +31,23 @@
   let opened = false;
   let toolbarCollapsed = false;
   let favorites = [];
+  let favDragUid = null;
+  let saveTimer = null;
+  let volumeListSig = "";
+  let activeRange = null;
+  const lastVolumeSent = new Map();
+
+  const ICON_SUN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const ICON_MOON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  const ICON_CHEVRON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
+  const ICON_CHEVRON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  const ICON_SPEAKER = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  const ICON_SPEAKER_MUTED = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  function chatSideIcon(side) {
+    const x = side === "left" ? 3 : 15;
+    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="${x}" y="4" width="6" height="16" rx="1" fill="currentColor" stroke="none"/></svg>`;
+  }
 
   function uidFromInput(value) {
     const raw = String(value || "").trim();
@@ -83,20 +102,41 @@
   }
 
   function saveState() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     chrome.storage.local.set({
       [STORAGE_KEY]: {
         channels: state.channels.map(({ _mainOnlyMuted, ...channel }) => channel),
         selectedUid: state.selectedUid,
         layout: state.layout,
         chatOpen: state.chatOpen !== false,
+        chatSide: state.chatSide === "left" ? "left" : "right",
         screenLocked: state.screenLocked === true,
-      mainOnly: state.mainOnly === true,
-      darkMode: state.darkMode !== false
+        mainOnly: state.mainOnly === true,
+        darkMode: state.darkMode !== false,
+        masterVolume: clamp01(state.masterVolume ?? 1)
       }
     }).catch(console.warn);
   }
 
+  // Slider drags fire many events; write to storage once the drag settles.
+  function saveStateSoon() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 300);
+  }
+
+  async function loadFavorites() {
+    const favResult = await chrome.storage.local.get(FAVORITES_KEY);
+    favorites = Array.isArray(favResult[FAVORITES_KEY]) ? favResult[FAVORITES_KEY].map(f => ({
+      uid: f?.uid || "",
+      name: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
+      title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || ""
+    })).filter(f => f.uid) : [];
+  }
+
   async function loadState() {
+    // Favorites are independent of the saved session, so always load them.
+    await loadFavorites();
+
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const saved = result[STORAGE_KEY];
 
@@ -109,7 +149,9 @@
       chatOpen: saved.chatOpen !== false,
       screenLocked: saved.screenLocked === true,
       mainOnly: saved.mainOnly === true,
-      darkMode: saved.darkMode !== false
+      darkMode: saved.darkMode !== false,
+      chatSide: saved.chatSide === "left" ? "left" : "right",
+      masterVolume: Number.isFinite(Number(saved.masterVolume)) ? clamp01(saved.masterVolume) : 1
     };
 
     // v0.12.1 unifies the former 2x2/3x3 modes into one Basic layout.
@@ -121,12 +163,6 @@
     if (!state.selectedUid && state.channels[0]) {
       state.selectedUid = state.channels[0].uid;
     }
-    const favResult = await chrome.storage.local.get(FAVORITES_KEY);
-    favorites = Array.isArray(favResult[FAVORITES_KEY]) ? favResult[FAVORITES_KEY].map(f => ({
-      uid: f?.uid || "",
-      name: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
-      title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || ""
-    })).filter(f => f.uid) : [];
   }
 
   function createUI() {
@@ -170,15 +206,24 @@
           </div>
         </div>
 
+        <div class="toolbar-center" aria-hidden="true"></div>
+
         <div class="toolbar-right">
           <details id="volumeManager" class="volume-manager">
             <summary>볼륨</summary>
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
-                <label>전체 볼륨 <output id="masterVolumeValue">100%</output></label>
+                <label for="masterVolume">전체 볼륨 <output id="masterVolumeValue">100%</output></label>
                 <input id="masterVolume" type="range" min="0" max="100" value="100" step="1">
+                <p class="volume-help">확장프로그램 전체 음량입니다. 아래 방송별 볼륨에 곱해져 적용되며, 방송별 설정값은 바뀌지 않습니다.</p>
               </div>
-              <button id="mainOnlyBtn" class="main-only-btn" type="button" title="레이드 뷰에서는 메인 방송만 소리를 재생합니다.">메인만 듣기</button>
+              <label class="main-only-check" for="mainOnlyCheck">
+                <input id="mainOnlyCheck" type="checkbox">
+                <span class="main-only-text">
+                  <strong>메인만 듣기</strong>
+                  <small>체크하면 메인 방송의 소리만 재생하고 나머지 방송은 음소거합니다. 해제하면 각 방송이 기존 설정대로 돌아옵니다.</small>
+                </span>
+              </label>
               <div id="tileVolumeList" class="tile-volume-list"></div>
             </div>
           </details>
@@ -186,18 +231,15 @@
             <button type="button" class="layout-toggle-btn" data-layout="grid">기본</button>
             <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드 뷰</button>
           </div>
+          <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기">채팅 닫기</button>
-          <button id="screenLockBtn" title="플레이어 조작 잠금">화면 잠금</button>
-          <button id="darkModeBtn" title="다크모드 전환">다크모드</button>
-          <button id="collapseBtn" class="toolbar-collapse" title="멀티뷰 메뉴 닫기">⌃</button>
+          <button id="darkModeBtn" class="icon-btn" type="button"></button>
         </div>
       </header>
 
-      <div class="toolbar-floating-actions">
-        <button id="collapsedScreenLockBtn" class="collapsed-screen-lock" title="플레이어 조작 잠금">화면 잠금</button>
-      </div>
-      <div class="toolbar-hover-zone">
-        <button id="reopenToolbarBtn" class="reopen-toolbar" title="멀티뷰 메뉴 열기">⌄</button>
+      <div id="centerControls" class="center-controls">
+        <button id="screenLockBtn" class="center-btn" type="button" title="플레이어 조작 잠금">화면 잠금</button>
+        <button id="collapseBtn" class="center-btn center-collapse" type="button" title="멀티뷰 메뉴 접기" aria-label="멀티뷰 메뉴 접기"></button>
       </div>
 
       <section class="mv-body">
@@ -224,13 +266,15 @@
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
-    ui.querySelector("#reopenToolbarBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
+    ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
     ui.querySelector("#darkModeBtn").addEventListener("click", toggleDarkMode);
-    ui.querySelector("#masterVolume").addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
-    ui.querySelector("#mainOnlyBtn").addEventListener("click", toggleMainOnly);
-    ui.querySelector("#collapsedScreenLockBtn").addEventListener("click", toggleScreenLock);
+
+    const masterInput = ui.querySelector("#masterVolume");
+    masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
+    bindRangeDrag(masterInput);
+    ui.querySelector("#mainOnlyCheck").addEventListener("change", e => setMainOnly(e.target.checked));
 
     ui.querySelector("#uidInput").addEventListener("keydown", e => {
       if (e.key === "Enter") addFromInput();
@@ -242,6 +286,8 @@
         if (!["grid", "main-sub"].includes(nextLayout)) return;
         if (state.layout === nextLayout) return;
         state.layout = nextLayout;
+        // The raid view always shows the current main broadcast in the big slot.
+        if (nextLayout === "main-sub") moveSelectedToFront();
         applyLayout();
         saveState();
       });
@@ -253,7 +299,11 @@
     refreshFavoriteList();
     refreshChannelManager();
     setChatOpen(state.chatOpen !== false);
+    setChatSide(state.chatSide, false);
     setScreenLock(state.screenLocked === true, false);
+    updateDarkMode();
+    updateToolbarToggleUI();
+    syncVolumeUI();
     opened = true;
     showPageLauncher(false);
   }
@@ -329,6 +379,8 @@
         refreshFavoriteList();
         refreshChannelManager();
       }
+      refreshChannelManager();
+      syncVolumeUI();
       saveState();
     });
   }
@@ -377,8 +429,8 @@
       <div class="tile-head" draggable="true">
         <span class="drag-handle" title="드래그해서 위치 변경">⠿</span>
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
-        <button class="tile-btn main-btn" title="메인 방송으로 변경">메인</button>
         <button class="tile-address" title="방송 링크 생성">링크 생성</button>
+        <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
         <button class="tile-btn favorite-btn" title="즐겨찾기">☆</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
@@ -403,14 +455,13 @@
       removeChannel(channel.uid);
     });
 
-    tile.addEventListener("click", e => {
-      if (e.target.closest("button")) return;
-      if (channel.uid !== state.selectedUid) selectChannel(channel.uid);
-    });
-
+    // Main broadcast changes ONLY through this button. Clicking a tile or the
+    // player inside it never changes the main broadcast.
     tile.querySelector(".main-btn").addEventListener("click", e => {
       e.stopPropagation();
+      if (channel.uid === state.selectedUid) return;
       if (state.layout === "main-sub") promoteToMain(channel.uid);
+      else selectChannel(channel.uid);
     });
 
     tile.addEventListener("mouseenter", () => {
@@ -502,12 +553,10 @@
         tileFrame.contentWindow.postMessage({
           source: "chzzk-multiview", type: "SET_CHAT_VISIBLE", visible: false
         }, "https://chzzk.naver.com");
-        // New/recreated tiles start muted by default. Existing saved mute state
-        // is respected when the tile is recreated.
-        tileFrame.contentWindow.postMessage({
-          source: "chzzk-multiview", type: "SET_VOLUME", volume: Number(channel.volume ?? 1), muted: !!channel.muted
-        }, "https://chzzk.naver.com");
       } catch (_) {}
+      // New/recreated tiles start muted by default. Saved mute state, the
+      // per-tile volume and the master volume are combined here.
+      sendTileVolume(channel.uid);
     });
 
     tile.addEventListener("dragover", e => {
@@ -538,7 +587,8 @@
     tileMap.set(channel.uid, tile);
     videoGrid.appendChild(tile);
 
-    sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+    updateTileMainUI(channel.uid);
+    sendTileVolume(channel.uid);
     applyTileLock(tile, state.screenLocked === true);
 
     // Do not touch iframe.src after creation.
@@ -547,19 +597,13 @@
 
   function promoteToMain(uid) {
     const index = state.channels.findIndex(c => c.uid === uid);
-    if (index <= 0) {
-      if (index === 0) {
-        state.selectedUid = uid;
-        syncSelection();
-        updateChat();
-        saveState();
-      }
-      return;
-    }
+    if (index < 0) return;
 
-    state.channels = [state.channels[index], ...state.channels.slice(0, index), ...state.channels.slice(index + 1)];
+    if (index > 0) {
+      state.channels = [state.channels[index], ...state.channels.slice(0, index), ...state.channels.slice(index + 1)];
+    }
     state.selectedUid = uid;
-    applyMainOnlyState();
+    if (state.mainOnly) makeMainAudible();
 
     // Change only the visual grid position. Existing tile/iframe DOM nodes are
     // intentionally kept in place so promoting the main broadcast does not
@@ -568,6 +612,15 @@
     syncSelection();
     updateChat();
     saveState();
+  }
+
+  // Used when switching to the raid view: the current main broadcast moves to
+  // the front without touching the iframes.
+  function moveSelectedToFront() {
+    const index = state.channels.findIndex(c => c.uid === state.selectedUid);
+    if (index > 0) {
+      state.channels = [state.channels[index], ...state.channels.slice(0, index), ...state.channels.slice(index + 1)];
+    }
   }
 
   function swapChannels(fromUid, toUid) {
@@ -589,6 +642,7 @@
     if (!state.channels.some(c => c.uid === uid)) return;
 
     state.selectedUid = uid;
+    if (state.mainOnly) makeMainAudible();
 
     syncSelection();
     applyLayout();
@@ -603,17 +657,30 @@
     saveState();
   }
 
+  // Highlight + "메인으로 변경 / 현재 메인" state of one tile.
+  function updateTileMainUI(uid) {
+    const tile = tileMap.get(uid);
+    if (!tile) return;
+    const selected = uid === state.selectedUid;
+    tile.classList.toggle("selected", selected);
+    tile.classList.toggle("tile-hover-controls", selected);
+    const favoriteBtn = tile.querySelector(".favorite-btn");
+    if (favoriteBtn) favoriteBtn.textContent = isFavorite(uid) ? "★" : "☆";
+    const mainBtn = tile.querySelector(".main-btn");
+    if (mainBtn) {
+      mainBtn.textContent = selected ? "현재 메인" : "메인으로 변경";
+      mainBtn.disabled = selected;
+      mainBtn.classList.toggle("is-main", selected);
+    }
+  }
+
   function syncSelection() {
     for (const channel of state.channels) {
       const tile = tileMap.get(channel.uid);
       if (!tile) continue;
 
-      const selected = channel.uid === state.selectedUid;
-      tile.classList.toggle("selected", selected);
-      tile.classList.toggle("tile-hover-controls", selected);
-      sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
-      const favoriteBtn = tile.querySelector(".favorite-btn");
-      if (favoriteBtn) favoriteBtn.textContent = isFavorite(channel.uid) ? "★" : "☆";
+      updateTileMainUI(channel.uid);
+      sendTileVolume(channel.uid);
       const iframe = tile.querySelector("iframe");
       try {
         iframe?.contentWindow?.postMessage({
@@ -628,100 +695,203 @@
         }, "https://chzzk.naver.com");
       } catch (_) {}
     }
+    syncVolumeUI();
   }
 
-  function sendTileVolume(uid, volume, muted = null) {
-    const tile = tileMap.get(uid);
-    const iframe = tile?.querySelector("iframe");
-    if (!iframe) return;
+  /* ------------------------------------------------------------------
+     Volume model
+       channel.volume  : each broadcast's own volume (0..1)
+       channel.muted   : each broadcast's own mute switch
+       state.masterVolume : the extension's overall volume (0..1)
+
+     What a player actually receives is channel.volume * masterVolume.
+     The master volume never rewrites channel.volume, so moving it does not
+     disturb the individual settings. "Main only" is applied on top as a
+     temporary forced mute for every non-main broadcast.
+  ------------------------------------------------------------------ */
+
+  function clamp01(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0;
+  }
+
+  function mainUid() {
+    if (state.selectedUid && state.channels.some(c => c.uid === state.selectedUid)) return state.selectedUid;
+    return state.channels[0]?.uid || null;
+  }
+
+  function effectiveVolume(channel) {
+    return clamp01(channel.volume ?? 1) * clamp01(state.masterVolume ?? 1);
+  }
+
+  function isForcedMuted(channel) {
+    return clamp01(state.masterVolume ?? 1) <= 0 || (state.mainOnly === true && channel.uid !== mainUid());
+  }
+
+  function effectiveMuted(channel) {
+    return channel.muted === true || clamp01(channel.volume ?? 1) <= 0 || isForcedMuted(channel);
+  }
+
+  function sendTileVolume(uid) {
+    const channel = state.channels.find(c => c.uid === uid);
+    const iframe = tileMap.get(uid)?.querySelector("iframe");
+    if (!channel || !iframe) return;
+    lastVolumeSent.set(uid, Date.now());
     try {
-      iframe.contentWindow.postMessage({ source: "chzzk-multiview", type: "SET_VOLUME", volume: Math.max(0, Math.min(1, Number(volume) || 0)), muted }, "https://chzzk.naver.com");
+      iframe.contentWindow.postMessage({
+        source: "chzzk-multiview",
+        type: "SET_VOLUME",
+        volume: effectiveVolume(channel),
+        muted: effectiveMuted(channel)
+      }, "https://chzzk.naver.com");
     } catch (_) {}
+  }
+
+  function sendAllTileVolumes() {
+    for (const uid of tileMap.keys()) sendTileVolume(uid);
   }
 
   function setTileVolume(uid, volume) {
     const channel = state.channels.find(c => c.uid === uid);
     if (!channel) return;
-    const value = Math.max(0, Math.min(1, Number(volume) || 0));
-    channel.volume = value;
-    channel.muted = state.mainOnly && channel.uid !== state.selectedUid ? true : value <= 0;
-    const tile = tileMap.get(uid);
-    const iframe = tile?.querySelector("iframe");
-    try {
-      const video = iframe?.contentDocument?.querySelector("video");
-      if (video) {
-        video.volume = value;
-        video.muted = value <= 0;
-      }
-    } catch (_) {}
-    sendTileVolume(uid, value, channel.muted);
-    refreshVolumeManager();
-    saveState();
+    channel.volume = clamp01(volume);
+    channel.muted = channel.volume <= 0;
+    sendTileVolume(uid);
+    syncVolumeUI();
+    saveStateSoon();
+  }
+
+  function toggleTileMute(uid) {
+    const channel = state.channels.find(c => c.uid === uid);
+    if (!channel) return;
+    const silent = channel.muted === true || clamp01(channel.volume ?? 1) <= 0;
+    if (silent) {
+      channel.muted = false;
+      if (clamp01(channel.volume ?? 1) <= 0) channel.volume = 0.5;
+    } else {
+      channel.muted = true;
+    }
+    sendTileVolume(uid);
+    syncVolumeUI();
+    saveStateSoon();
   }
 
   function setMasterVolume(value) {
-    const volume = Math.max(0, Math.min(1, Number(value) || 0));
-    state.channels.forEach(channel => {
-      channel.volume = volume;
-      channel.muted = state.mainOnly && channel.uid !== state.selectedUid ? true : volume <= 0;
-      sendTileVolume(channel.uid, volume, channel.muted);
-    });
-    refreshVolumeManager();
+    state.masterVolume = clamp01(value);
+    sendAllTileVolumes();
+    syncVolumeUI();
+    saveStateSoon();
+  }
+
+  function makeMainAudible() {
+    const main = state.channels.find(c => c.uid === mainUid());
+    if (!main) return;
+    main.muted = false;
+    if (clamp01(main.volume ?? 1) <= 0) main.volume = 0.5;
+  }
+
+  function setMainOnly(on) {
+    state.mainOnly = !!on;
+    if (state.mainOnly) makeMainAudible();
+    sendAllTileVolumes();
+    syncVolumeUI();
     saveState();
   }
 
-  function applyMainOnlyState() {
-    if (!state.mainOnly) return;
-    state.channels.forEach(channel => {
-      const shouldMute = channel.uid !== state.channels[0]?.uid;
-      channel.muted = shouldMute;
-      sendTileVolume(channel.uid, channel.volume ?? 1, shouldMute);
-    });
+  // While a slider is being dragged, its DOM node must stay alive and keep its
+  // own value; rebuilding it mid-drag is what used to break click-and-drag.
+  function bindRangeDrag(input) {
+    const start = () => { activeRange = input; };
+    const end = () => { if (activeRange === input) activeRange = null; syncVolumeUI(); };
+    input.addEventListener("pointerdown", start);
+    input.addEventListener("change", end);
+    input.addEventListener("pointerup", end);
+    input.addEventListener("pointercancel", end);
+    input.addEventListener("blur", end);
   }
 
-  function toggleMainOnly() {
-    state.mainOnly = !state.mainOnly;
-    if (state.mainOnly) {
-      state.channels.forEach(channel => {
-        channel._mainOnlyMuted = channel.muted;
-      });
-      applyMainOnlyState();
-    } else {
-      state.channels.forEach(channel => {
-        if (typeof channel._mainOnlyMuted === "boolean") channel.muted = channel._mainOnlyMuted;
-        delete channel._mainOnlyMuted;
-        sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
-      });
+  function buildVolumeList() {
+    const list = ui?.querySelector("#tileVolumeList");
+    if (!list) return null;
+
+    const sig = state.channels.map(c => `${c.uid}\u0000${displayChannelName(c)}`).join("\n");
+    if (sig === volumeListSig && (list.children.length > 0 || !state.channels.length)) return list;
+    volumeListSig = sig;
+    activeRange = null;
+
+    if (!state.channels.length) {
+      list.innerHTML = '<div class="volume-empty">방송을 추가하면 개별 볼륨을 조절할 수 있습니다.</div>';
+      return list;
     }
-    refreshVolumeManager();
-    saveState();
+
+    list.innerHTML = state.channels.map(c => `
+      <div class="tile-volume-row" data-uid="${escapeHtml(c.uid)}">
+        <div class="tile-volume-top">
+          <button type="button" class="tile-mute-btn" title="음소거"></button>
+          <span class="tile-volume-name">${escapeHtml(displayChannelName(c))}</span>
+          <output></output>
+        </div>
+        <input type="range" min="0" max="100" step="1" value="100">
+      </div>`).join("");
+
+    list.querySelectorAll(".tile-volume-row").forEach(row => {
+      const uid = row.dataset.uid;
+      const input = row.querySelector("input");
+      input.addEventListener("input", () => setTileVolume(uid, Number(input.value) / 100));
+      bindRangeDrag(input);
+      row.querySelector(".tile-mute-btn").addEventListener("click", e => {
+        e.preventDefault();
+        toggleTileMute(uid);
+      });
+    });
+    return list;
   }
 
-  function refreshVolumeManager() {
+  // Updates existing controls in place (never recreates a slider that exists).
+  function syncVolumeUI() {
     if (!ui) return;
     const master = ui.querySelector("#masterVolume");
     const masterValue = ui.querySelector("#masterVolumeValue");
-    const mainBtn = ui.querySelector("#mainOnlyBtn");
-    const list = ui.querySelector("#tileVolumeList");
-    const volumes = state.channels.map(c => Number(c.volume ?? 1));
-    const masterVolume = volumes.length ? volumes.reduce((a,b) => a+b, 0) / volumes.length : 1;
-    if (master) master.value = String(Math.round(masterVolume * 100));
-    if (masterValue) masterValue.textContent = `${Math.round(masterVolume * 100)}%`;
-    if (mainBtn) mainBtn.classList.toggle("active", state.mainOnly);
+    const mainCheck = ui.querySelector("#mainOnlyCheck");
+    const masterPct = Math.round(clamp01(state.masterVolume ?? 1) * 100);
+
+    if (master && activeRange !== master) master.value = String(masterPct);
+    if (masterValue) masterValue.textContent = `${masterPct}%`;
+    if (mainCheck) mainCheck.checked = state.mainOnly === true;
+
+    const list = buildVolumeList();
     if (!list) return;
-    list.innerHTML = state.channels.length ? state.channels.map(c => {
-      const volume = Math.round((Number(c.volume ?? 1)) * 100);
-      return `<div class="tile-volume-row" data-uid="${escapeHtml(c.uid)}"><label>${escapeHtml(displayChannelName(c))}<output>${volume}%</output></label><input type="range" min="0" max="100" value="${volume}" step="1"></div>`;
-    }).join("") : '<div class="volume-empty">방송을 추가하면 개별 볼륨을 조절할 수 있습니다.</div>';
-    list.querySelectorAll(".tile-volume-row input").forEach(input => {
-      input.addEventListener("input", () => {
-        const row = input.closest(".tile-volume-row");
-        const uid = row?.dataset.uid;
-        if (!uid) return;
-        row.querySelector("output").textContent = `${input.value}%`;
-        setTileVolume(uid, Number(input.value) / 100);
-      });
+
+    list.querySelectorAll(".tile-volume-row").forEach(row => {
+      const channel = state.channels.find(c => c.uid === row.dataset.uid);
+      if (!channel) return;
+      const pct = Math.round(clamp01(channel.volume ?? 1) * 100);
+      const input = row.querySelector("input");
+      const output = row.querySelector("output");
+      const muteBtn = row.querySelector(".tile-mute-btn");
+      const ownMuted = channel.muted === true || pct <= 0;
+      const forced = isForcedMuted(channel);
+
+      if (input && activeRange !== input) input.value = String(pct);
+      if (output) output.textContent = ownMuted ? "음소거" : `${pct}%`;
+      if (muteBtn) {
+        const html = ownMuted ? ICON_SPEAKER_MUTED : ICON_SPEAKER;
+        if (muteBtn.dataset.state !== (ownMuted ? "m" : "u")) {
+          muteBtn.innerHTML = html;
+          muteBtn.dataset.state = ownMuted ? "m" : "u";
+        }
+        muteBtn.classList.toggle("is-muted", ownMuted);
+        muteBtn.title = ownMuted ? "음소거 해제" : "음소거";
+      }
+      row.classList.toggle("is-forced", forced && !ownMuted);
+      row.title = forced && !ownMuted
+        ? (clamp01(state.masterVolume ?? 1) <= 0 ? "전체 볼륨이 0이라 소리가 나지 않습니다." : "메인만 듣기로 인해 음소거 중입니다.")
+        : "";
     });
+  }
+
+  function refreshVolumeManager() {
+    syncVolumeUI();
   }
 
   function updateLayoutToggle() {
@@ -791,7 +961,7 @@
         }
       }
 
-      sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+      sendTileVolume(channel.uid);
       applyTileLock(tile, state.screenLocked === true);
     });
 
@@ -1082,10 +1252,7 @@
   function setScreenLock(locked, persist = true) {
     state.screenLocked = !!locked;
     if (ui) {
-      const buttons = [
-        ui.querySelector("#screenLockBtn"),
-        ui.querySelector("#collapsedScreenLockBtn")
-      ].filter(Boolean);
+      const buttons = [ui.querySelector("#screenLockBtn")].filter(Boolean);
       for (const btn of buttons) {
         btn.textContent = state.screenLocked ? "화면 잠금 해제" : "화면 잠금";
         btn.title = state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금";
@@ -1104,23 +1271,55 @@
     if (!ui) return;
     toolbarCollapsed = !toolbarCollapsed;
     ui.classList.toggle("toolbar-collapsed", toolbarCollapsed);
-    ui.querySelector("#collapseBtn").textContent = toolbarCollapsed ? "⌃" : "⌃";
-    ui.querySelector("#collapseBtn").title = toolbarCollapsed ? "멀티뷰 메뉴 열기" : "멀티뷰 메뉴 닫기";
-    ui.querySelector("#reopenToolbarBtn").textContent = "⌄";
-    ui.querySelector("#reopenToolbarBtn").title = "멀티뷰 메뉴 열기";
+    updateToolbarToggleUI();
+    requestAnimationFrame(() => resizeFixedAspectGrid());
+  }
+
+  function updateToolbarToggleUI() {
+    if (!ui) return;
+    const btn = ui.querySelector("#collapseBtn");
+    if (!btn) return;
+    btn.innerHTML = toolbarCollapsed ? ICON_CHEVRON_DOWN : ICON_CHEVRON_UP;
+    btn.title = toolbarCollapsed ? "멀티뷰 메뉴 펼치기" : "멀티뷰 메뉴 접기";
+    btn.setAttribute("aria-label", btn.title);
   }
 
   function updateDarkMode() {
     if (!ui) return;
-    ui.classList.toggle("light-mode", state.darkMode === false);
+    const dark = state.darkMode !== false;
+    ui.classList.toggle("light-mode", !dark);
     const btn = ui.querySelector("#darkModeBtn");
-    if (btn) btn.textContent = state.darkMode === false ? "라이트모드" : "다크모드";
+    if (btn) {
+      // The icon shows the CURRENT mode: moon = dark mode, sun = light mode.
+      btn.innerHTML = dark ? ICON_MOON : ICON_SUN;
+      btn.classList.toggle("is-dark", dark);
+      btn.title = dark ? "다크모드 사용 중 (클릭하여 라이트모드로 전환)" : "라이트모드 사용 중 (클릭하여 다크모드로 전환)";
+      btn.setAttribute("aria-label", btn.title);
+    }
   }
 
   function toggleDarkMode() {
     state.darkMode = state.darkMode === false;
     updateDarkMode();
     saveState();
+  }
+
+  function setChatSide(side, persist = true) {
+    state.chatSide = side === "left" ? "left" : "right";
+    if (!ui) return;
+    ui.classList.toggle("chat-left", state.chatSide === "left");
+    const btn = ui.querySelector("#chatSideBtn");
+    if (btn) {
+      btn.innerHTML = chatSideIcon(state.chatSide);
+      btn.title = state.chatSide === "left" ? "채팅창을 오른쪽으로 이동" : "채팅창을 왼쪽으로 이동";
+      btn.setAttribute("aria-label", btn.title);
+    }
+    requestAnimationFrame(() => resizeFixedAspectGrid());
+    if (persist) saveState();
+  }
+
+  function toggleChatSide() {
+    setChatSide(state.chatSide === "left" ? "right" : "left");
   }
 
   function setChatOpen(open) {
@@ -1158,24 +1357,14 @@
     }
     list.innerHTML = state.channels.map((channel, index) => `
       <div class="channel-list-row" data-uid="${escapeHtml(channel.uid)}">
-        <button class="channel-list-select" title="방송 선택">
+        <div class="channel-list-select">
           <span class="channel-list-index">${index + 1}</span>
-          <span class="channel-list-name">${escapeHtml(displayChannelName(channel))}</span>
-        </button>
+          <span class="channel-list-name">${escapeHtml(displayChannelName(channel))}${channel.uid === state.selectedUid ? ' <em class="channel-list-main">메인</em>' : ""}</span>
+        </div>
         <button class="channel-list-favorite" title="즐겨찾기 토글">${isFavorite(channel.uid) ? "★" : "☆"}</button>
         <button class="channel-list-remove" title="방송 삭제">✕</button>
       </div>`).join("");
 
-    list.querySelectorAll(".channel-list-select").forEach(btn => {
-      btn.addEventListener("click", e => {
-        e.stopPropagation();
-        const uid = btn.closest(".channel-list-row")?.dataset.uid;
-        if (!uid) return;
-        if (state.layout === "main-sub") promoteToMain(uid);
-        else selectChannel(uid);
-        ui.querySelector("#channelManager")?.removeAttribute("open");
-      });
-    });
     list.querySelectorAll(".channel-list-favorite").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
@@ -1204,7 +1393,8 @@
       return;
     }
     list.innerHTML = favorites.map(f => `
-      <div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
+      <div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}" draggable="true">
+        <span class="favorite-drag-handle" title="드래그해서 순서 변경">⠿</span>
         <button class="favorite-list-add" title="방송 추가">
           <span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span>
         </button>
@@ -1230,6 +1420,59 @@
         toggleFavorite(uid, fav?.title || fav?.name || uid);
       });
     });
+
+    const clearDropMarks = () => list.querySelectorAll(".drop-before, .drop-after").forEach(el => el.classList.remove("drop-before", "drop-after"));
+
+    list.querySelectorAll(".favorite-list-row").forEach(row => {
+      row.addEventListener("dragstart", e => {
+        favDragUid = row.dataset.uid;
+        row.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", favDragUid);
+      });
+
+      row.addEventListener("dragend", () => {
+        favDragUid = null;
+        row.classList.remove("dragging");
+        clearDropMarks();
+      });
+
+      row.addEventListener("dragover", e => {
+        if (!favDragUid || favDragUid === row.dataset.uid) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = row.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        clearDropMarks();
+        row.classList.add(after ? "drop-after" : "drop-before");
+      });
+
+      row.addEventListener("dragleave", e => {
+        if (!row.contains(e.relatedTarget)) row.classList.remove("drop-before", "drop-after");
+      });
+
+      row.addEventListener("drop", e => {
+        e.preventDefault();
+        const fromUid = favDragUid || e.dataTransfer.getData("text/plain");
+        const rect = row.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        clearDropMarks();
+        reorderFavorites(fromUid, row.dataset.uid, after);
+      });
+    });
+  }
+
+  function reorderFavorites(fromUid, toUid, after) {
+    if (!fromUid || !toUid || fromUid === toUid) return;
+    const fromIndex = favorites.findIndex(f => f.uid === fromUid);
+    if (fromIndex < 0) return;
+    const [moved] = favorites.splice(fromIndex, 1);
+    const toIndex = favorites.findIndex(f => f.uid === toUid);
+    if (toIndex < 0) { favorites.splice(fromIndex, 0, moved); return; }
+    favorites.splice(after ? toIndex + 1 : toIndex, 0, moved);
+    favDragUid = null;
+    saveFavorites().catch(console.warn);
+    refreshFavoriteList();
   }
 
   async function saveFavorites() {
@@ -1347,21 +1590,24 @@
       return true;
     }
 
-    if (message.type === "PROMOTE_MAIN" && message.uid) {
-      if (state.layout === "main-sub" && state.channels.some(c => c.uid === message.uid)) {
-        promoteToMain(message.uid);
-      }
-      return;
-    }
+    // The main broadcast changes only through the tile's "메인으로 변경" button.
+    // Messages from inside a player (e.g. header clicks) are ignored on purpose.
+    if (message.type === "PROMOTE_MAIN") return;
 
     if (message.type === "VIDEO_STATE" && message.uid) {
       const channel = state.channels.find(c => c.uid === message.uid);
-      const tile = tileMap.get(message.uid);
-      if (channel) {
-        if (typeof message.volume === "number" && Number.isFinite(message.volume)) channel.volume = Math.max(0, Math.min(1, message.volume));
-        if (typeof message.muted === "boolean") channel.muted = message.muted;
-        refreshVolumeManager();
-        saveState();
+      // Ignore the echo of our own SET_VOLUME command.
+      if (channel && Date.now() - (lastVolumeSent.get(message.uid) || 0) > 500) {
+        const master = clamp01(state.masterVolume ?? 1);
+        // Players report the EFFECTIVE volume (tile volume x master volume).
+        if (master > 0 && typeof message.volume === "number" && Number.isFinite(message.volume)) {
+          channel.volume = clamp01(message.volume / master);
+        }
+        if (typeof message.muted === "boolean" && !isForcedMuted(channel)) {
+          channel.muted = message.muted || clamp01(channel.volume ?? 1) <= 0;
+        }
+        syncVolumeUI();
+        saveStateSoon();
       }
       return;
     }
@@ -1378,6 +1624,8 @@
           const tile = tileMap.get(message.uid);
           const name = tile?.querySelector(".tile-streamer-name");
           if (name) name.textContent = streamerName;
+          refreshChannelManager();
+          syncVolumeUI();
           const fav = favorites.find(f => f.uid === message.uid);
           if (fav) {
             fav.title = streamerName;
@@ -1442,9 +1690,9 @@
 
     .mv-toolbar {
       flex: 0 0 54px;
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 200px minmax(0, 1fr);
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
       position: relative;
       padding: 8px 12px;
@@ -1453,7 +1701,7 @@
       box-shadow: 0 2px 12px rgba(0,0,0,.35);
     }
 
-    .toolbar-left, .toolbar-center, .toolbar-right {
+    .toolbar-left, .toolbar-right {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -1463,14 +1711,13 @@
     .toolbar-left {
       justify-content: flex-start;
       overflow: visible;
-      flex: 1 1 auto;
     }
 
     .toolbar-right {
       justify-content: flex-end;
-      flex: 0 0 auto;
-      margin-left: auto;
     }
+
+    .toolbar-center { min-width: 0; }
 
     .volume-manager { position: relative; flex: 0 0 auto; }
     .volume-manager > summary {
@@ -1485,13 +1732,36 @@
       position:absolute; z-index:60; top:calc(100% + 6px); right:0; width:300px; max-height:460px; overflow:auto;
       padding:10px; background:#171719; border:1px solid #343438; border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,.35);
     }
-    .volume-row label, .tile-volume-row label { display:flex; justify-content:space-between; gap:8px; margin-bottom:5px; color:#ddd; font-size:11px; }
-    .volume-row input, .tile-volume-row input { width:100%; accent-color:#00d26a; }
-    .main-only-btn { width:100%; margin-top:8px; }
-    .main-only-btn.active { background:#00d26a; border-color:#00d26a; color:#06150d; font-weight:800; }
-    .tile-volume-list { display:flex; flex-direction:column; gap:9px; margin-top:10px; padding-top:9px; border-top:1px solid #2c2c30; }
-    .tile-volume-row output, .volume-row output { color:#00d26a; font-variant-numeric:tabular-nums; }
+    .volume-row label { display:flex; justify-content:space-between; gap:8px; margin-bottom:5px; color:#ddd; font-size:11px; }
+    .volume-row input[type="range"], .tile-volume-row input[type="range"] { width:100%; accent-color:#00d26a; cursor:pointer; margin:0; }
+    .volume-help { margin:6px 0 0; color:#888; font-size:10.5px; line-height:1.45; }
+    .main-only-check {
+      display:flex; align-items:flex-start; gap:9px; margin-top:10px; padding:9px 10px;
+      border:1px solid #2c2c30; border-radius:7px; background:#1c1c1f; cursor:pointer; user-select:none;
+    }
+    .main-only-check input { flex:0 0 auto; width:16px; height:16px; margin:1px 0 0; accent-color:#00d26a; cursor:pointer; }
+    .main-only-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .main-only-text strong { font-size:12px; color:#eee; }
+    .main-only-text small { color:#888; font-size:10.5px; line-height:1.45; }
+    .tile-volume-list { display:flex; flex-direction:column; gap:10px; margin-top:10px; padding-top:9px; border-top:1px solid #2c2c30; }
+    .tile-volume-row.is-forced { opacity:.55; }
+    .tile-volume-top { display:flex; align-items:center; gap:7px; margin-bottom:4px; min-width:0; }
+    .tile-volume-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#ddd; font-size:11px; }
+    .tile-volume-row output, .volume-row output { color:#00d26a; font-variant-numeric:tabular-nums; font-size:11px; }
+    .tile-volume-row output { flex:0 0 auto; }
+    .tile-mute-btn {
+      flex:0 0 26px; width:26px; height:24px; padding:0; display:flex; align-items:center; justify-content:center;
+      border:1px solid #363638; border-radius:6px; background:#222224; color:#ddd;
+    }
+    .tile-mute-btn.is-muted { color:#ff7b86; border-color:#5a2d33; }
     .volume-empty { color:#777; font-size:11px; text-align:center; padding:8px; }
+
+    .icon-btn {
+      width:36px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+      flex:0 0 auto;
+    }
+    #darkModeBtn.is-dark { color:#b9c6ff; }
+    #darkModeBtn:not(.is-dark) { color:#e08a00; }
 
     .layout-toggle {
       display: inline-flex;
@@ -1533,8 +1803,9 @@
       display: flex;
       align-items: center;
       gap: 5px;
-      width: min(430px, 34vw);
-      min-width: 260px;
+      flex: 1 1 260px;
+      max-width: 430px;
+      min-width: 170px;
       height: 40px;
       padding: 3px;
       box-sizing: border-box;
@@ -1688,6 +1959,7 @@
       border: 0;
       background: transparent;
       text-align: left;
+      cursor: default;
     }
 
     .channel-list-index {
@@ -1702,6 +1974,17 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .channel-list-main {
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 9px;
+      background: #00d26a;
+      color: #06150d;
+      font-size: 9px;
+      font-style: normal;
+      font-weight: 800;
     }
 
     .channel-list-remove {
@@ -1781,6 +2064,16 @@
     }
 
     .favorite-list-row:hover { background: #242427; }
+    .favorite-list-row { position: relative; cursor: grab; }
+    .favorite-list-row.dragging { opacity: .45; cursor: grabbing; }
+    .favorite-list-row.drop-before::before,
+    .favorite-list-row.drop-after::after {
+      content: ""; position: absolute; left: 4px; right: 4px; height: 2px; border-radius: 2px;
+      background: #4d9cff; box-shadow: 0 0 6px rgba(77,156,255,.6); pointer-events: none;
+    }
+    .favorite-list-row.drop-before::before { top: -3px; }
+    .favorite-list-row.drop-after::after { bottom: -3px; }
+    .favorite-drag-handle { flex: 0 0 14px; color: #777; font-size: 15px; line-height: 1; text-align: center; user-select: none; }
 
     .favorite-list-add {
       min-width: 0;
@@ -1831,33 +2124,49 @@
 
 
 
-    .toolbar-collapse, .reopen-toolbar {
-      background: #00d26a !important;
-      border-color: #00d26a !important;
-      color: #06150d !important;
-      font-weight: 900;
-    }
-
-    .collapsed-screen-lock {
-      font-weight: 800;
-    }
-
-    .toolbar-collapse { margin-left: 4px; width: 38px; padding: 0; }
-
-    .toolbar-floating-actions {
+    .center-controls {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 40;
-      display: none;
+      top: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 45;
+      width: 200px;
+      height: 44px;
+      display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
     }
 
-    .collapsed-screen-lock {
+    .center-controls .center-btn {
       height: 32px;
-      padding: 0 11px;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity .14s ease, transform .14s ease, background .12s ease;
     }
+
+    .center-controls:hover .center-btn,
+    .center-controls:has(.center-btn:focus-visible) .center-btn {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .center-controls .center-btn { padding: 0 11px; font-weight: 800; white-space: nowrap; }
+
+    .center-controls .center-collapse {
+      width: 38px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #00d26a;
+      border-color: #00d26a;
+      color: #06150d;
+    }
+
+    .center-controls .center-collapse:hover { background: #16df7b; }
 
     #closeBtn {
       width: 34px;
@@ -1874,6 +2183,12 @@
       padding: 8px;
       overflow: hidden;
     }
+
+    .chat-left:not(.chat-closed) .mv-body {
+      grid-template-columns: 320px minmax(0, 1fr);
+    }
+
+    .chat-left .chat-panel { order: -1; }
 
     .video-grid {
       min-width: 0;
@@ -1994,9 +2309,19 @@
     }
 
     .main-btn {
-      flex: 0 0 auto; min-width: 44px; padding: 0 7px; font-size: 10px; font-weight: 800;
+      flex: 0 0 auto;
+      height: 24px;
+      padding: 0 8px;
+      border: 1px solid #3a3a3e;
+      border-radius: 5px;
+      background: transparent;
+      color: #ccc;
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
     }
-    .layout-grid .main-btn { display: none; }
+    .main-btn:hover:not(:disabled) { background: #00d26a; border-color: #00d26a; color: #06150d; }
+    .main-btn:disabled, .main-btn.is-main { background: #00d26a; border-color: #00d26a; color: #06150d; cursor: default; }
 
     .tile-address {
       flex: 0 0 auto; min-width: 62px;
@@ -2036,8 +2361,7 @@
       color: #ff6473;
     }
 
-    #screenLockBtn.lock-active,
-    #collapsedScreenLockBtn.lock-active {
+    #screenLockBtn.lock-active {
       background: #00d26a;
       border-color: #00d26a;
       color: #06150d;
@@ -2160,31 +2484,6 @@
       z-index: 20;
     }
 
-    .toolbar-hover-zone {
-      display: none; position: absolute; z-index: 30; top: 0; left: 50%; transform: translateX(-50%);
-      width: 180px; height: 34px; align-items: flex-start; justify-content: center;
-    }
-    .toolbar-collapsed .toolbar-hover-zone { display: flex; }
-    .toolbar-hover-zone .reopen-toolbar {
-      opacity: 0; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease;
-    }
-    .toolbar-hover-zone:hover .reopen-toolbar, .toolbar-hover-zone .reopen-toolbar:focus-visible {
-      opacity: 1; transform: translateY(0);
-    }
-
-    .toolbar-collapsed .mv-body {
-      /* Keep the floating lock/reopen controls outside the broadcast area. */
-      padding-top: 50px;
-    }
-
-    .reopen-toolbar {
-      width: 38px;
-      height: 32px;
-      padding: 0;
-    }
-
-    .toolbar-collapsed .toolbar-floating-actions { display: flex; }
-
     .chat-closed .chat-panel { display: none; }
     .chat-closed .mv-body { grid-template-columns: minmax(0, 1fr); }
 
@@ -2193,19 +2492,69 @@
     }
 
 
-    .light-mode .mv-toolbar { background:#f5f5f7; border-bottom-color:#d8d8dc; color:#222; }
+    /* ---------- Light mode: the whole MultiView, not just the toolbar ---------- */
+    .light-mode { background:#e9ebef; color:#1f2024; }
+    .light-mode .mv-toolbar { background:#f5f5f7; border-bottom-color:#d8d8dc; color:#222; box-shadow:0 2px 10px rgba(0,0,0,.08); }
     .light-mode button, .light-mode select, .light-mode .favorite-manager > summary, .light-mode .channel-manager > summary, .light-mode .volume-manager > summary { background:#fff; color:#222; border-color:#d0d0d5; }
+    .light-mode button:hover, .light-mode select:hover { background:#ececf0; }
+    .light-mode .accent { background:#00d26a; border-color:#00d26a; color:#06150d; }
+    .light-mode .accent:hover { background:#16df7b; }
     .light-mode .add-area { background:#fff; border-color:#d0d0d5; }
     .light-mode #uidInput { color:#222; }
-    .light-mode .volume-manager-panel, .light-mode .favorite-manager-panel, .light-mode .channel-manager-panel { background:#fff; border-color:#d0d0d5; color:#222; }
+    .light-mode #uidInput::placeholder { color:#888; }
+
+    .light-mode .volume-manager-panel, .light-mode .favorite-manager-panel, .light-mode .channel-manager-panel { background:#fff; border-color:#d0d0d5; color:#222; box-shadow:0 12px 28px rgba(0,0,0,.14); }
+    .light-mode .volume-row label, .light-mode .tile-volume-name, .light-mode .main-only-text strong { color:#222; }
+    .light-mode .volume-help, .light-mode .main-only-text small, .light-mode .volume-empty { color:#6b6b73; }
+    .light-mode .main-only-check { background:#f4f4f7; border-color:#dcdce1; }
+    .light-mode .tile-volume-list { border-top-color:#e2e2e6; }
+    .light-mode .tile-mute-btn { background:#fff; border-color:#d0d0d5; color:#444; }
+    .light-mode .tile-mute-btn.is-muted { color:#d63a4a; border-color:#f0b9bf; }
+    .light-mode .tile-volume-row output, .light-mode .volume-row output { color:#00a553; }
+    .light-mode .channel-manager-head { border-bottom-color:#e2e2e6; }
+    .light-mode .channel-list-index { color:#999; }
+    .light-mode .channel-list-empty, .light-mode .favorite-list-empty { color:#888; }
+    .light-mode .favorite-list-row:hover { background:#f0f0f3; }
+    .light-mode .favorite-list-add { color:#222; }
+    .light-mode .favorite-drag-handle { color:#999; }
+    .light-mode .channel-list-select, .light-mode .channel-list-remove, .light-mode .channel-list-favorite,
+    .light-mode .favorite-list-add, .light-mode .favorite-list-toggle, .light-mode .manager-clear,
+    .light-mode .tile-btn { background:transparent; border-color:transparent; }
+    .light-mode .channel-list-remove { color:#888; }
+    .light-mode .channel-list-favorite:hover, .light-mode .favorite-list-toggle:hover, .light-mode .tile-btn:hover { background:#ececf0; }
+    .light-mode .manager-clear { color:#d63a4a; }
+
+    .light-mode .layout-toggle { background:#e6e6ea; border-color:#d0d0d5; }
+    .light-mode .layout-toggle-btn { background:transparent; border-color:transparent; color:#666; }
+    .light-mode .layout-toggle-btn:hover { background:#d9d9df; color:#222; }
+    .light-mode .layout-toggle-btn.active { background:#00d26a; color:#06150d; }
+    .light-mode #screenLockBtn.lock-active { background:#00d26a; border-color:#00d26a; color:#06150d; }
+    .light-mode .center-controls .center-collapse { background:#00d26a; border-color:#00d26a; color:#06150d; }
+
+    .light-mode .video-tile { background:#fff; border-color:#d0d0d6; }
+    .light-mode .video-tile.selected { border-color:#00b85c; box-shadow:0 0 0 1px rgba(0,184,92,.6), 0 0 14px rgba(0,184,92,.2); }
     .light-mode .tile-head { background:#f4f4f6; border-bottom-color:#d8d8dc; color:#222; }
     .light-mode .tile-streamer-name { color:#222; }
+    .light-mode .tile-address { background:transparent; border-color:transparent; color:#555; }
+    .light-mode .tile-address:hover { background:transparent; color:#00a553; }
+    .light-mode .drag-handle { color:#999; }
+    .light-mode .main-btn { background:transparent; border-color:#c9c9d0; color:#444; }
+    .light-mode .main-btn:hover:not(:disabled) { background:#00d26a; border-color:#00d26a; color:#06150d; }
+    .light-mode .main-btn:disabled, .light-mode .main-btn.is-main { background:#00d26a; border-color:#00d26a; color:#06150d; }
+
+    .light-mode .chat-panel { background:#fff; border-color:#d0d0d6; }
+    .light-mode .chat-head { background:#f4f4f6; border-bottom-color:#d8d8dc; color:#222; }
+    .light-mode .chat-frame-wrap, .light-mode .chat-frame, .light-mode .chat-empty { background:#fff; }
+    .light-mode .chat-empty { color:#777; }
 
     @media (max-width: 900px) {
       .mv-body {
         grid-template-columns: minmax(0, 1fr) 260px;
       }
 
+      .chat-left:not(.chat-closed) .mv-body {
+        grid-template-columns: 260px minmax(0, 1fr);
+      }
     }
   `;
 })();
