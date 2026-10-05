@@ -93,7 +93,11 @@
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
     video.addEventListener("volumechange", () => reportVideoState(video));
+    video.addEventListener("loadedmetadata", () => reportStreamInfo(video));
+    video.addEventListener("playing", () => reportStreamInfo(video));
     reportVideoState(video);
+    reportStreamInfo(video);
+    startStats(video);
   }
 
   function bindObserver() {
@@ -153,6 +157,62 @@
 
   function showChat() {
     // MultiView currently keeps chat closed in video tiles. This exists for future use.
+  }
+
+  let statsTimer = null;
+  let lastDecodedBytes = null;
+  let lastStatsAt = 0;
+
+  function getStreamStats(video) {
+    if (!video) return {};
+    const width = Number(video.videoWidth) || 0;
+    const height = Number(video.videoHeight) || 0;
+    let fps = 0;
+    try {
+      const quality = video.getVideoPlaybackQuality?.();
+      const total = Number(quality?.totalVideoFrames) || 0;
+      const now = performance.now();
+      if (getStreamStats.lastFrames != null && getStreamStats.lastAt) {
+        const dt = (now - getStreamStats.lastAt) / 1000;
+        if (dt > 0.1) fps = Math.max(0, (total - getStreamStats.lastFrames) / dt);
+      }
+      getStreamStats.lastFrames = total;
+      getStreamStats.lastAt = now;
+    } catch (_) {}
+
+    let bitrate = 0;
+    const decodedBytes = Number(video.webkitVideoDecodedByteCount);
+    const now = performance.now();
+    if (Number.isFinite(decodedBytes) && decodedBytes >= 0 && lastDecodedBytes != null && lastStatsAt) {
+      const dt = (now - lastStatsAt) / 1000;
+      if (dt > 0.1 && decodedBytes >= lastDecodedBytes) bitrate = ((decodedBytes - lastDecodedBytes) * 8) / dt;
+    }
+    if (Number.isFinite(decodedBytes)) { lastDecodedBytes = decodedBytes; lastStatsAt = now; }
+
+    let latency = NaN;
+    try {
+      if (video.buffered?.length) {
+        const end = video.buffered.end(video.buffered.length - 1);
+        const gap = end - video.currentTime;
+        if (Number.isFinite(gap) && gap >= 0) latency = gap;
+      }
+    } catch (_) {}
+    return { width, height, fps, bitrate, latency };
+  }
+
+  function reportStreamInfo(video) {
+    if (!frameUid || !video || chatMode) return;
+    const stats = getStreamStats(video);
+    window.parent.postMessage({ source: "chzzk-multiview", type: "STREAM_INFO", uid: frameUid, ...stats }, "*");
+  }
+
+  function startStats(video) {
+    if (statsTimer) clearInterval(statsTimer);
+    reportStreamInfo(video);
+    statsTimer = setInterval(() => {
+      const current = findVideo();
+      if (current) reportStreamInfo(current);
+    }, 1000);
   }
 
   let theaterApplied = false;

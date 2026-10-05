@@ -14,7 +14,6 @@
     chatOpen: true,
     screenLocked: false,
     mainOnly: false,
-    darkMode: true,
     masterVolume: 1,
     chatSide: "right"
   };
@@ -112,7 +111,6 @@
         chatSide: state.chatSide === "left" ? "left" : "right",
         screenLocked: state.screenLocked === true,
         mainOnly: state.mainOnly === true,
-        darkMode: state.darkMode !== false,
         masterVolume: clamp01(state.masterVolume ?? 1)
       }
     }).catch(console.warn);
@@ -149,7 +147,6 @@
       chatOpen: saved.chatOpen !== false,
       screenLocked: saved.screenLocked === true,
       mainOnly: saved.mainOnly === true,
-      darkMode: saved.darkMode !== false,
       chatSide: saved.chatSide === "left" ? "left" : "right",
       masterVolume: Number.isFinite(Number(saved.masterVolume)) ? clamp01(saved.masterVolume) : 1
     };
@@ -197,6 +194,7 @@
             <summary>방송 목록</summary>
             <div class="channel-manager-panel">
               <div class="channel-manager-head"><strong>현재 방송</strong><button id="clearBtn" class="manager-clear">전체 삭제</button></div>
+              <div id="streamInfoPanel" class="stream-info-panel"></div>
               <div id="channelList" class="channel-list"></div>
             </div>
           </details>
@@ -233,7 +231,6 @@
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기">채팅 닫기</button>
-          <button id="darkModeBtn" class="icon-btn" type="button"></button>
         </div>
       </header>
 
@@ -269,7 +266,6 @@
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-    ui.querySelector("#darkModeBtn").addEventListener("click", toggleDarkMode);
 
     const masterInput = ui.querySelector("#masterVolume");
     masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
@@ -301,7 +297,6 @@
     setChatOpen(state.chatOpen !== false);
     setChatSide(state.chatSide, false);
     setScreenLock(state.screenLocked === true, false);
-    updateDarkMode();
     updateToolbarToggleUI();
     syncVolumeUI();
     opened = true;
@@ -429,9 +424,9 @@
       <div class="tile-head" draggable="true">
         <span class="drag-handle" title="드래그해서 위치 변경">⠿</span>
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
-        <button class="tile-address" title="방송 링크 생성">링크 생성</button>
         <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
-        <button class="tile-btn favorite-btn" title="즐겨찾기">☆</button>
+        <span class="tile-head-spacer"></span>
+        <button class="tile-address" title="방송 링크 생성">링크 생성</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
       <div class="tile-content">
@@ -509,6 +504,7 @@
         }
 
         addressBtn.textContent = "링크 복사됨";
+        showNotice("방송 링크 복사됨");
         setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
       } catch (_) {
         try {
@@ -530,18 +526,10 @@
           wrapper.remove();
 
           addressBtn.textContent = "링크 복사됨";
+          showNotice("방송 링크 복사됨");
           setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
         } catch (_) {}
       }
-    });
-
-    const favoriteBtn = tile.querySelector(".favorite-btn");
-    favoriteBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      const current = state.channels.find(c => c.uid === channel.uid);
-      const name = current?.name || (current?.title && !current.title.startsWith("CHZZK ") ? current.title : channel.uid);
-      toggleFavorite(channel.uid, name);
-      favoriteBtn.textContent = isFavorite(channel.uid) ? "★" : "☆";
     });
 
     const tileFrame = tile.querySelector("iframe");
@@ -647,6 +635,7 @@
     syncSelection();
     applyLayout();
     updateChat();
+    refreshChannelManager();
     saveState();
   }
 
@@ -664,8 +653,6 @@
     const selected = uid === state.selectedUid;
     tile.classList.toggle("selected", selected);
     tile.classList.toggle("tile-hover-controls", selected);
-    const favoriteBtn = tile.querySelector(".favorite-btn");
-    if (favoriteBtn) favoriteBtn.textContent = isFavorite(uid) ? "★" : "☆";
     const mainBtn = tile.querySelector(".main-btn");
     if (mainBtn) {
       mainBtn.textContent = selected ? "현재 메인" : "메인으로 변경";
@@ -1284,26 +1271,6 @@
     btn.setAttribute("aria-label", btn.title);
   }
 
-  function updateDarkMode() {
-    if (!ui) return;
-    const dark = state.darkMode !== false;
-    ui.classList.toggle("light-mode", !dark);
-    const btn = ui.querySelector("#darkModeBtn");
-    if (btn) {
-      // The icon shows the CURRENT mode: moon = dark mode, sun = light mode.
-      btn.innerHTML = dark ? ICON_MOON : ICON_SUN;
-      btn.classList.toggle("is-dark", dark);
-      btn.title = dark ? "다크모드 사용 중 (클릭하여 라이트모드로 전환)" : "라이트모드 사용 중 (클릭하여 다크모드로 전환)";
-      btn.setAttribute("aria-label", btn.title);
-    }
-  }
-
-  function toggleDarkMode() {
-    state.darkMode = state.darkMode === false;
-    updateDarkMode();
-    saveState();
-  }
-
   function setChatSide(side, persist = true) {
     state.chatSide = side === "left" ? "left" : "right";
     if (!ui) return;
@@ -1347,13 +1314,65 @@
     launcher?.remove();
   }
 
+  function showNotice(message) {
+    if (!ui) return;
+    let notice = ui.querySelector(".mv-notice");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.className = "mv-notice";
+      ui.appendChild(notice);
+    }
+    notice.textContent = message;
+    notice.classList.remove("show");
+    void notice.offsetWidth;
+    notice.classList.add("show");
+    clearTimeout(notice._hideTimer);
+    notice._hideTimer = setTimeout(() => notice.classList.remove("show"), 1400);
+  }
+
+  function formatBitrate(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return "확인 불가";
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)} Mbps`;
+    return `${Math.round(n / 1000)} Kbps`;
+  }
+
+  function formatLatency(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return "확인 불가";
+    return `${n.toFixed(1)}초`;
+  }
+
+  function updateStreamInfo(uid, info = {}) {
+    const channel = state.channels.find(c => c.uid === uid);
+    if (!channel) return;
+    channel.streamInfo = { ...(channel.streamInfo || {}), ...info, updatedAt: Date.now() };
+    refreshChannelManager();
+  }
+
   function refreshChannelManager() {
     if (!ui) return;
     const list = ui.querySelector("#channelList");
     if (!list) return;
-    if (!state.channels.length) {
-      list.innerHTML = '<div class="channel-list-empty">켜진 방송이 없습니다.</div>';
-      return;
+    const infoPanel = ui.querySelector("#streamInfoPanel");
+    if (infoPanel) {
+      if (!state.channels.length) {
+        infoPanel.innerHTML = '<div class="stream-info-empty">현재 방송이 없습니다.</div>';
+      } else {
+        infoPanel.innerHTML = state.channels.map(channel => {
+          const info = channel.streamInfo || {};
+          return `
+            <div class="stream-info-row">
+              <div class="stream-info-name">${escapeHtml(displayChannelName(channel))}${channel.uid === state.selectedUid ? '<em>메인</em>' : ''}</div>
+              <div class="stream-info-values">
+                <span>지연 <b>${escapeHtml(formatLatency(info.latency))}</b></span>
+                <span>해상도 <b>${escapeHtml(info.width && info.height ? `${info.width}×${info.height}` : "확인 불가")}</b></span>
+                <span>FPS <b>${escapeHtml(Number.isFinite(Number(info.fps)) ? Number(info.fps).toFixed(1) : "확인 불가")}</b></span>
+                <span>비트레이트 <b>${escapeHtml(formatBitrate(info.bitrate))}</b></span>
+              </div>
+            </div>`;
+        }).join("");
+      }
     }
     list.innerHTML = state.channels.map((channel, index) => `
       <div class="channel-list-row" data-uid="${escapeHtml(channel.uid)}">
@@ -1612,6 +1631,17 @@
       return;
     }
 
+    if (message.type === "STREAM_INFO" && message.uid) {
+      updateStreamInfo(message.uid, {
+        width: Number(message.width) || 0,
+        height: Number(message.height) || 0,
+        fps: Number(message.fps) || 0,
+        bitrate: Number(message.bitrate) || 0,
+        latency: Number(message.latency)
+      });
+      return;
+    }
+
     if (message.type === "CHANNEL_INFO" && message.uid) {
       const title = String(message.channelName || message.title || "").trim();
       if (title) {
@@ -1760,9 +1790,6 @@
       width:36px; padding:0; display:inline-flex; align-items:center; justify-content:center;
       flex:0 0 auto;
     }
-    #darkModeBtn.is-dark { color:#b9c6ff; }
-    #darkModeBtn:not(.is-dark) { color:#e08a00; }
-
     .layout-toggle {
       display: inline-flex;
       align-items: center;
@@ -1878,6 +1905,23 @@
       padding: 0 12px;
       border-radius: 6px;
     }
+
+    .mv-notice {
+      position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 10px);
+      z-index: 100; padding: 9px 15px; border-radius: 7px; background: rgba(25,25,28,.94);
+      border: 1px solid #3b3b40; color: #eee; font-size: 12px; font-weight: 700;
+      opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3);
+    }
+    .mv-notice.show { opacity: 1; transform: translate(-50%, 0); }
+    .stream-info-panel { margin: 8px 0 6px; padding: 7px; border: 1px solid #2d2d31; border-radius: 7px; background: #1b1b1e; display:flex; flex-direction:column; gap:5px; }
+    .stream-info-row { padding: 6px 7px; border-radius: 5px; background:#151517; }
+    .stream-info-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#eee; font-size:10.5px; font-weight:800; margin-bottom:5px; }
+    .stream-info-name em { margin-left:5px; padding:1px 5px; border-radius:8px; background:#00d26a; color:#06150d; font-size:8px; font-style:normal; }
+    .stream-info-values { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:4px; }
+    .stream-info-values span { color:#777; font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stream-info-values b { color:#ddd; font-size:9.5px; font-variant-numeric:tabular-nums; }
+    .stream-info-empty { color:#777; font-size:10px; line-height:1.4; }
 
     .channel-manager {
       position: relative;
@@ -2280,8 +2324,7 @@
       transition: opacity .12s ease, transform .12s ease;
     }
 
-    .video-tile:hover .tile-head,
-    .video-tile.selected .tile-head {
+    .video-tile:hover .tile-head {
       opacity: 1;
       transform: translateY(0);
     }
@@ -2322,6 +2365,8 @@
     }
     .main-btn:hover:not(:disabled) { background: #00d26a; border-color: #00d26a; color: #06150d; }
     .main-btn:disabled, .main-btn.is-main { background: #00d26a; border-color: #00d26a; color: #06150d; cursor: default; }
+
+    .tile-head-spacer { flex: 1 1 auto; min-width: 0; }
 
     .tile-address {
       flex: 0 0 auto; min-width: 62px;
@@ -2487,65 +2532,7 @@
     .chat-closed .chat-panel { display: none; }
     .chat-closed .mv-body { grid-template-columns: minmax(0, 1fr); }
 
-    .favorite-btn {
-      color: #f0c75e !important;
-    }
-
-
-    /* ---------- Light mode: the whole MultiView, not just the toolbar ---------- */
-    .light-mode { background:#e9ebef; color:#1f2024; }
-    .light-mode .mv-toolbar { background:#f5f5f7; border-bottom-color:#d8d8dc; color:#222; box-shadow:0 2px 10px rgba(0,0,0,.08); }
-    .light-mode button, .light-mode select, .light-mode .favorite-manager > summary, .light-mode .channel-manager > summary, .light-mode .volume-manager > summary { background:#fff; color:#222; border-color:#d0d0d5; }
-    .light-mode button:hover, .light-mode select:hover { background:#ececf0; }
-    .light-mode .accent { background:#00d26a; border-color:#00d26a; color:#06150d; }
-    .light-mode .accent:hover { background:#16df7b; }
-    .light-mode .add-area { background:#fff; border-color:#d0d0d5; }
-    .light-mode #uidInput { color:#222; }
-    .light-mode #uidInput::placeholder { color:#888; }
-
-    .light-mode .volume-manager-panel, .light-mode .favorite-manager-panel, .light-mode .channel-manager-panel { background:#fff; border-color:#d0d0d5; color:#222; box-shadow:0 12px 28px rgba(0,0,0,.14); }
-    .light-mode .volume-row label, .light-mode .tile-volume-name, .light-mode .main-only-text strong { color:#222; }
-    .light-mode .volume-help, .light-mode .main-only-text small, .light-mode .volume-empty { color:#6b6b73; }
-    .light-mode .main-only-check { background:#f4f4f7; border-color:#dcdce1; }
-    .light-mode .tile-volume-list { border-top-color:#e2e2e6; }
-    .light-mode .tile-mute-btn { background:#fff; border-color:#d0d0d5; color:#444; }
-    .light-mode .tile-mute-btn.is-muted { color:#d63a4a; border-color:#f0b9bf; }
-    .light-mode .tile-volume-row output, .light-mode .volume-row output { color:#00a553; }
-    .light-mode .channel-manager-head { border-bottom-color:#e2e2e6; }
-    .light-mode .channel-list-index { color:#999; }
-    .light-mode .channel-list-empty, .light-mode .favorite-list-empty { color:#888; }
-    .light-mode .favorite-list-row:hover { background:#f0f0f3; }
-    .light-mode .favorite-list-add { color:#222; }
-    .light-mode .favorite-drag-handle { color:#999; }
-    .light-mode .channel-list-select, .light-mode .channel-list-remove, .light-mode .channel-list-favorite,
-    .light-mode .favorite-list-add, .light-mode .favorite-list-toggle, .light-mode .manager-clear,
-    .light-mode .tile-btn { background:transparent; border-color:transparent; }
-    .light-mode .channel-list-remove { color:#888; }
-    .light-mode .channel-list-favorite:hover, .light-mode .favorite-list-toggle:hover, .light-mode .tile-btn:hover { background:#ececf0; }
-    .light-mode .manager-clear { color:#d63a4a; }
-
-    .light-mode .layout-toggle { background:#e6e6ea; border-color:#d0d0d5; }
-    .light-mode .layout-toggle-btn { background:transparent; border-color:transparent; color:#666; }
-    .light-mode .layout-toggle-btn:hover { background:#d9d9df; color:#222; }
-    .light-mode .layout-toggle-btn.active { background:#00d26a; color:#06150d; }
-    .light-mode #screenLockBtn.lock-active { background:#00d26a; border-color:#00d26a; color:#06150d; }
-    .light-mode .center-controls .center-collapse { background:#00d26a; border-color:#00d26a; color:#06150d; }
-
-    .light-mode .video-tile { background:#fff; border-color:#d0d0d6; }
-    .light-mode .video-tile.selected { border-color:#00b85c; box-shadow:0 0 0 1px rgba(0,184,92,.6), 0 0 14px rgba(0,184,92,.2); }
-    .light-mode .tile-head { background:#f4f4f6; border-bottom-color:#d8d8dc; color:#222; }
-    .light-mode .tile-streamer-name { color:#222; }
-    .light-mode .tile-address { background:transparent; border-color:transparent; color:#555; }
-    .light-mode .tile-address:hover { background:transparent; color:#00a553; }
-    .light-mode .drag-handle { color:#999; }
-    .light-mode .main-btn { background:transparent; border-color:#c9c9d0; color:#444; }
-    .light-mode .main-btn:hover:not(:disabled) { background:#00d26a; border-color:#00d26a; color:#06150d; }
-    .light-mode .main-btn:disabled, .light-mode .main-btn.is-main { background:#00d26a; border-color:#00d26a; color:#06150d; }
-
-    .light-mode .chat-panel { background:#fff; border-color:#d0d0d6; }
-    .light-mode .chat-head { background:#f4f4f6; border-bottom-color:#d8d8dc; color:#222; }
-    .light-mode .chat-frame-wrap, .light-mode .chat-frame, .light-mode .chat-empty { background:#fff; }
-    .light-mode .chat-empty { color:#777; }
+    /* ---------- Stream info / notice ---------- */
 
     @media (max-width: 900px) {
       .mv-body {
