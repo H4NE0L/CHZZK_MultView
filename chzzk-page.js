@@ -1,0 +1,2211 @@
+(() => {
+  if (window.top !== window) return;
+  if (window.__CHZZK_MULTIVIEW_PAGE_LOADED__) return;
+  window.__CHZZK_MULTIVIEW_PAGE_LOADED__ = true;
+
+  const ROOT_ID = "__chzzk_multiview_v09__";
+  const STORAGE_KEY = "chzzkMultiviewV09";
+  const FAVORITES_KEY = "chzzkMultiviewFavoritesV07";
+
+  const DEFAULT_STATE = {
+    channels: [],
+    selectedUid: null,
+    layout: "grid",
+    chatOpen: true,
+    screenLocked: false,
+    mainOnly: false,
+    darkMode: true
+  };
+
+  let state = { ...DEFAULT_STATE };
+  let shadowRoot = null;
+  let ui = null;
+  let videoGrid = null;
+  let chatPanel = null;
+  let chatFrame = null;
+  let tileMap = new Map();
+  let dragUid = null;
+  let chatTimer = null;
+  let opened = false;
+  let toolbarCollapsed = false;
+  let favorites = [];
+
+  function uidFromInput(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+
+    if (/^[A-Za-z0-9_-]{6,}$/.test(raw)) return raw;
+
+    try {
+      const url = new URL(raw);
+      const match = url.pathname.match(/^\/live\/([^/?#]+)/);
+      return match ? match[1] : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function safeTitle(uid) {
+    return `CHZZK ${uid}`;
+  }
+
+  async function fetchChannelName(uid) {
+    try {
+      const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
+        credentials: "include",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Front-Client-Platform-Type": "PC",
+          "Front-Client-Product-Type": "web"
+        }
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data?.content?.channel?.channelName || data?.content?.channelName || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function displayChannelName(channel) {
+    return channel?.name || (channel?.title && !channel.title.startsWith("CHZZK ") ? channel.title : channel?.uid || "");
+  }
+
+  function extractStreamerName(title, uid) {
+    let t = String(title || "").trim();
+    if (!t) return uid;
+    // Page title format: "채널명 - 방송 제목 - CHZZK".  The API result is
+    // preferred, so this is only a DOM/title fallback.
+    t = t.replace(/\s*[-|]\s*(치지직|CHZZK).*$/i, "").trim();
+    const parts = t.split(/\s+-\s+/).map(v => v.trim()).filter(Boolean);
+    if (parts.length >= 2) return parts[0];
+    return t !== uid ? t : uid;
+  }
+
+  function saveState() {
+    chrome.storage.local.set({
+      [STORAGE_KEY]: {
+        channels: state.channels.map(({ _mainOnlyMuted, ...channel }) => channel),
+        selectedUid: state.selectedUid,
+        layout: state.layout,
+        chatOpen: state.chatOpen !== false,
+        screenLocked: state.screenLocked === true,
+      mainOnly: state.mainOnly === true,
+      darkMode: state.darkMode !== false
+      }
+    }).catch(console.warn);
+  }
+
+  async function loadState() {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const saved = result[STORAGE_KEY];
+
+    if (!saved) return;
+
+    state = {
+      ...DEFAULT_STATE,
+      ...saved,
+      channels: Array.isArray(saved.channels) ? saved.channels : [],
+      chatOpen: saved.chatOpen !== false,
+      screenLocked: saved.screenLocked === true,
+      mainOnly: saved.mainOnly === true,
+      darkMode: saved.darkMode !== false
+    };
+
+    // v0.12.1 unifies the former 2x2/3x3 modes into one Basic layout.
+    if (state.layout === "2x2" || state.layout === "3x3" || !["grid", "main-sub"].includes(state.layout)) {
+      state.layout = "grid";
+    }
+
+    state.channels = state.channels.map(c => ({ ...c, volume: Number.isFinite(Number(c.volume)) ? Math.max(0, Math.min(1, Number(c.volume))) : 1, name: c.name || "" }));
+    if (!state.selectedUid && state.channels[0]) {
+      state.selectedUid = state.channels[0].uid;
+    }
+    const favResult = await chrome.storage.local.get(FAVORITES_KEY);
+    favorites = Array.isArray(favResult[FAVORITES_KEY]) ? favResult[FAVORITES_KEY].map(f => ({
+      uid: f?.uid || "",
+      name: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
+      title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || ""
+    })).filter(f => f.uid) : [];
+  }
+
+  function createUI() {
+    if (document.getElementById(ROOT_ID)) {
+      const existing = document.getElementById(ROOT_ID);
+      existing.style.display = "block";
+      opened = true;
+      return;
+    }
+
+    const host = document.createElement("div");
+    host.id = ROOT_ID;
+    document.documentElement.appendChild(host);
+    shadowRoot = host.attachShadow({ mode: "open" });
+
+    const style = document.createElement("style");
+    style.textContent = CSS;
+    shadowRoot.appendChild(style);
+
+    ui = document.createElement("div");
+    ui.className = "mv-root";
+    ui.innerHTML = `
+      <header class="mv-toolbar">
+        <div class="toolbar-left">
+          <details id="favoriteManager" class="favorite-manager">
+            <summary>즐겨찾기</summary>
+            <div class="favorite-manager-panel">
+              <div id="favoriteList" class="favorite-list"></div>
+            </div>
+          </details>
+          <details id="channelManager" class="channel-manager">
+            <summary>방송 목록</summary>
+            <div class="channel-manager-panel">
+              <div class="channel-manager-head"><strong>현재 방송</strong><button id="clearBtn" class="manager-clear">전체 삭제</button></div>
+              <div id="channelList" class="channel-list"></div>
+            </div>
+          </details>
+          <div class="add-area">
+            <input id="uidInput" placeholder="방송 URL 또는 UID">
+            <button id="addBtn" class="accent">방송 추가</button>
+          </div>
+        </div>
+
+        <div class="toolbar-right">
+          <details id="volumeManager" class="volume-manager">
+            <summary>볼륨</summary>
+            <div class="volume-manager-panel">
+              <div class="volume-row volume-master-row">
+                <label>전체 볼륨 <output id="masterVolumeValue">100%</output></label>
+                <input id="masterVolume" type="range" min="0" max="100" value="100" step="1">
+              </div>
+              <button id="mainOnlyBtn" class="main-only-btn" type="button" title="레이드 뷰에서는 메인 방송만 소리를 재생합니다.">메인만 듣기</button>
+              <div id="tileVolumeList" class="tile-volume-list"></div>
+            </div>
+          </details>
+          <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
+            <button type="button" class="layout-toggle-btn" data-layout="grid">기본</button>
+            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드 뷰</button>
+          </div>
+          <button id="chatToggleBtn" title="채팅 닫기/열기">채팅 닫기</button>
+          <button id="screenLockBtn" title="플레이어 조작 잠금">화면 잠금</button>
+          <button id="darkModeBtn" title="다크모드 전환">다크모드</button>
+          <button id="collapseBtn" class="toolbar-collapse" title="멀티뷰 메뉴 닫기">⌃</button>
+        </div>
+      </header>
+
+      <div class="toolbar-floating-actions">
+        <button id="collapsedScreenLockBtn" class="collapsed-screen-lock" title="플레이어 조작 잠금">화면 잠금</button>
+      </div>
+      <div class="toolbar-hover-zone">
+        <button id="reopenToolbarBtn" class="reopen-toolbar" title="멀티뷰 메뉴 열기">⌄</button>
+      </div>
+
+      <section class="mv-body">
+        <div id="videoGrid" class="video-grid"></div>
+
+        <aside id="chatPanel" class="chat-panel">
+          <div class="chat-head">
+            <strong>채팅</strong>
+          </div>
+          <div class="chat-frame-wrap">
+            <div id="chatEmpty" class="chat-empty">
+              메인 방송을 선택하면<br>실제 CHZZK 채팅을 불러옵니다.
+            </div>
+          </div>
+        </aside>
+      </section>
+    `;
+
+    shadowRoot.appendChild(ui);
+
+    videoGrid = ui.querySelector("#videoGrid");
+    chatPanel = ui.querySelector("#chatPanel");
+
+    ui.querySelector("#addBtn").addEventListener("click", addFromInput);
+    ui.querySelector("#clearBtn").addEventListener("click", clearAll);
+    ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
+    ui.querySelector("#reopenToolbarBtn").addEventListener("click", toggleToolbar);
+    ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
+    ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
+    ui.querySelector("#darkModeBtn").addEventListener("click", toggleDarkMode);
+    ui.querySelector("#masterVolume").addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
+    ui.querySelector("#mainOnlyBtn").addEventListener("click", toggleMainOnly);
+    ui.querySelector("#collapsedScreenLockBtn").addEventListener("click", toggleScreenLock);
+
+    ui.querySelector("#uidInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") addFromInput();
+    });
+
+    ui.querySelectorAll(".layout-toggle-btn").forEach(button => {
+      button.addEventListener("click", () => {
+        const nextLayout = button.dataset.layout;
+        if (!["grid", "main-sub"].includes(nextLayout)) return;
+        if (state.layout === nextLayout) return;
+        state.layout = nextLayout;
+        applyLayout();
+        saveState();
+      });
+    });
+
+    if (state.layout === "2x2" || state.layout === "3x3") state.layout = "grid";
+    if (state.layout !== "grid" && state.layout !== "main-sub") state.layout = "grid";
+    updateLayoutToggle();
+    refreshFavoriteList();
+    refreshChannelManager();
+    setChatOpen(state.chatOpen !== false);
+    setScreenLock(state.screenLocked === true, false);
+    opened = true;
+    showPageLauncher(false);
+  }
+
+  function addFromInput() {
+    const input = ui.querySelector("#uidInput");
+    const uid = uidFromInput(input.value);
+
+    if (!uid) {
+      input.focus();
+      input.classList.add("invalid");
+      setTimeout(() => input.classList.remove("invalid"), 500);
+      return;
+    }
+
+    addChannel(uid);
+    input.value = "";
+    input.focus();
+  }
+
+  function addChannel(uid) {
+    if (state.channels.some(c => c.uid === uid)) {
+      selectChannel(uid);
+      return;
+    }
+
+    const favorite = favorites.find(f => f.uid === uid);
+    const favoriteName = favorite?.name || favorite?.title || "";
+    const channel = {
+      uid,
+      title: favoriteName || safeTitle(uid),
+      linkTitle: favoriteName || safeTitle(uid),
+      name: favoriteName,
+      muted: true,
+      volume: 1
+    };
+
+    state.channels.push(channel);
+
+    // Keep the currently selected layout. The layout controls are toggle buttons,
+    // so adding a broadcast must not reset or overwrite the user's selection.
+    updateLayoutToggle();
+
+    if (!state.selectedUid) {
+      state.selectedUid = uid;
+    }
+
+    // Create a player tile only when the current layout can display it.
+    // Hidden broadcasts remain in state.channels but do not create/load an iframe.
+    if (isChannelVisibleInLayout(channel.uid)) createTile(channel);
+    refreshChannelManager();
+    syncSelection();
+    applyLayout();
+    updateChat();
+    saveState();
+
+    // Resolve the permanent channel name independently of the live title.
+    // This works even when the player document title is not ready yet.
+    fetchChannelName(uid).then(name => {
+      if (!name) return;
+      const current = state.channels.find(c => c.uid === uid);
+      if (!current) return;
+      current.name = name;
+      current.title = name;
+      const tile = tileMap.get(uid);
+      const nameEl = tile?.querySelector(".tile-streamer-name");
+      if (nameEl) nameEl.textContent = name;
+      const fav = favorites.find(f => f.uid === uid);
+      if (fav) {
+        fav.name = name;
+        fav.title = name;
+        saveFavorites().catch(console.warn);
+        refreshFavoriteList();
+        refreshChannelManager();
+      }
+      saveState();
+    });
+  }
+
+  function removeChannel(uid) {
+    const tile = tileMap.get(uid);
+    if (tile) {
+      const iframe = tile.querySelector("iframe");
+      if (iframe) iframe.src = "about:blank";
+      tile.remove();
+    }
+
+    tileMap.delete(uid);
+    state.channels = state.channels.filter(c => c.uid !== uid);
+
+    if (state.selectedUid === uid) {
+      state.selectedUid = state.channels[0]?.uid || null;
+      if (state.selectedUid) {
+        const selected = state.channels.find(c => c.uid === state.selectedUid);
+        if (selected) selected.muted = false;
+      }
+    }
+
+    refreshChannelManager();
+    syncSelection();
+    applyLayout();
+    updateChat();
+    saveState();
+  }
+
+  function isChannelVisibleInLayout(uid) {
+    const index = state.channels.findIndex(c => c.uid === uid);
+    if (index < 0) return false;
+    const displayMax = state.layout === "main-sub" ? 4 : 9;
+    return index < displayMax;
+  }
+
+  function createTile(channel) {
+    if (tileMap.has(channel.uid)) return;
+
+    const tile = document.createElement("article");
+    tile.className = "video-tile";
+    tile.dataset.uid = channel.uid;
+
+    tile.innerHTML = `
+      <div class="tile-head" draggable="true">
+        <span class="drag-handle" title="드래그해서 위치 변경">⠿</span>
+        <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
+        <button class="tile-btn main-btn" title="메인 방송으로 변경">메인</button>
+        <button class="tile-address" title="방송 링크 생성">링크 생성</button>
+        <button class="tile-btn favorite-btn" title="즐겨찾기">☆</button>
+        <button class="tile-btn remove-btn" title="삭제">✕</button>
+      </div>
+      <div class="tile-content">
+        <iframe
+          src="https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}"
+          allow="autoplay; fullscreen"
+          loading="eager"
+          scrolling="no"
+          frameborder="0"
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+
+    const removeBtn = tile.querySelector(".remove-btn");
+    const header = tile.querySelector(".tile-head");
+
+
+    removeBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      removeChannel(channel.uid);
+    });
+
+    tile.addEventListener("click", e => {
+      if (e.target.closest("button")) return;
+      if (channel.uid !== state.selectedUid) selectChannel(channel.uid);
+    });
+
+    tile.querySelector(".main-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      if (state.layout === "main-sub") promoteToMain(channel.uid);
+    });
+
+    tile.addEventListener("mouseenter", () => {
+      const iframe = tile.querySelector("iframe");
+      try { iframe?.contentWindow?.postMessage({ source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: true }, "https://chzzk.naver.com"); } catch (_) {}
+    });
+    tile.addEventListener("mouseleave", () => {
+      const iframe = tile.querySelector("iframe");
+      try { iframe?.contentWindow?.postMessage({ source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: false }, "https://chzzk.naver.com"); } catch (_) {}
+    });
+
+    header.addEventListener("dragstart", e => {
+      dragUid = channel.uid;
+      tile.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", channel.uid);
+    });
+
+    header.addEventListener("dragend", () => {
+      dragUid = null;
+      tile.classList.remove("dragging");
+      videoGrid.querySelectorAll(".drop-target").forEach(el => {
+        el.classList.remove("drop-target");
+      });
+    });
+
+    const addressBtn = tile.querySelector(".tile-address");
+    addressBtn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const url = `https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}`;
+      const current = state.channels.find(c => c.uid === channel.uid) || channel;
+      const streamerName = String(current.name || "").trim() || String(current.linkTitle || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || String(current.title || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || `CHZZK ${channel.uid}`;
+      const linkTitle = `${streamerName} - CHZZK`;
+      const html = `<a href="${escapeHtml(url)}">${escapeHtml(linkTitle)}</a>`;
+
+      try {
+        if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+          const item = new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([url], { type: "text/plain" })
+          });
+          await navigator.clipboard.write([item]);
+        } else {
+          throw new Error("Rich clipboard API unavailable");
+        }
+
+        addressBtn.textContent = "링크 복사됨";
+        setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
+      } catch (_) {
+        try {
+          // Fallback: copy a real anchor element through the browser's rich-text clipboard path.
+          const wrapper = document.createElement("div");
+          wrapper.contentEditable = "true";
+          wrapper.style.position = "fixed";
+          wrapper.style.left = "-9999px";
+          wrapper.innerHTML = html;
+          document.body.appendChild(wrapper);
+
+          const range = document.createRange();
+          range.selectNodeContents(wrapper);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          document.execCommand("copy");
+          selection.removeAllRanges();
+          wrapper.remove();
+
+          addressBtn.textContent = "링크 복사됨";
+          setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
+        } catch (_) {}
+      }
+    });
+
+    const favoriteBtn = tile.querySelector(".favorite-btn");
+    favoriteBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const current = state.channels.find(c => c.uid === channel.uid);
+      const name = current?.name || (current?.title && !current.title.startsWith("CHZZK ") ? current.title : channel.uid);
+      toggleFavorite(channel.uid, name);
+      favoriteBtn.textContent = isFavorite(channel.uid) ? "★" : "☆";
+    });
+
+    const tileFrame = tile.querySelector("iframe");
+    tileFrame?.addEventListener("load", () => {
+      try {
+        tileFrame.contentWindow.postMessage({
+          source: "chzzk-multiview", type: "ENTER_THEATER"
+        }, "https://chzzk.naver.com");
+        tileFrame.contentWindow.postMessage({
+          source: "chzzk-multiview", type: "SET_CHAT_VISIBLE", visible: false
+        }, "https://chzzk.naver.com");
+        // New/recreated tiles start muted by default. Existing saved mute state
+        // is respected when the tile is recreated.
+        tileFrame.contentWindow.postMessage({
+          source: "chzzk-multiview", type: "SET_VOLUME", volume: Number(channel.volume ?? 1), muted: !!channel.muted
+        }, "https://chzzk.naver.com");
+      } catch (_) {}
+    });
+
+    tile.addEventListener("dragover", e => {
+      if (!dragUid || dragUid === channel.uid) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      videoGrid.querySelectorAll(".drop-target").forEach(el => {
+        el.classList.remove("drop-target");
+      });
+      tile.classList.add("drop-target");
+    });
+
+    tile.addEventListener("dragleave", () => {
+      tile.classList.remove("drop-target");
+    });
+
+    tile.addEventListener("drop", e => {
+      e.preventDefault();
+      tile.classList.remove("drop-target");
+
+      const fromUid = e.dataTransfer.getData("text/plain") || dragUid;
+      const toUid = channel.uid;
+
+      if (!fromUid || fromUid === toUid) return;
+      swapChannels(fromUid, toUid);
+    });
+
+    tileMap.set(channel.uid, tile);
+    videoGrid.appendChild(tile);
+
+    sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+    applyTileLock(tile, state.screenLocked === true);
+
+    // Do not touch iframe.src after creation.
+    // This is the key to preserving the live player while changing layout/order.
+  }
+
+  function promoteToMain(uid) {
+    const index = state.channels.findIndex(c => c.uid === uid);
+    if (index <= 0) {
+      if (index === 0) {
+        state.selectedUid = uid;
+        syncSelection();
+        updateChat();
+        saveState();
+      }
+      return;
+    }
+
+    state.channels = [state.channels[index], ...state.channels.slice(0, index), ...state.channels.slice(index + 1)];
+    state.selectedUid = uid;
+    applyMainOnlyState();
+
+    // Change only the visual grid position. Existing tile/iframe DOM nodes are
+    // intentionally kept in place so promoting the main broadcast does not
+    // reload every live player.
+    applyLayout();
+    syncSelection();
+    updateChat();
+    saveState();
+  }
+
+  function swapChannels(fromUid, toUid) {
+    const fromIndex = state.channels.findIndex(c => c.uid === fromUid);
+    const toIndex = state.channels.findIndex(c => c.uid === toUid);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    [state.channels[fromIndex], state.channels[toIndex]] =
+      [state.channels[toIndex], state.channels[fromIndex]];
+
+    // Do not move or recreate iframe DOM nodes. CSS grid positioning is updated
+    // from the saved channel order instead.
+    applyLayout();
+    syncSelection();
+    saveState();
+  }
+
+  function selectChannel(uid) {
+    if (!state.channels.some(c => c.uid === uid)) return;
+
+    state.selectedUid = uid;
+
+    syncSelection();
+    applyLayout();
+    updateChat();
+    saveState();
+  }
+
+  function clearSelection() {
+    state.selectedUid = null;
+    syncSelection();
+    updateChat();
+    saveState();
+  }
+
+  function syncSelection() {
+    for (const channel of state.channels) {
+      const tile = tileMap.get(channel.uid);
+      if (!tile) continue;
+
+      const selected = channel.uid === state.selectedUid;
+      tile.classList.toggle("selected", selected);
+      tile.classList.toggle("tile-hover-controls", selected);
+      sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+      const favoriteBtn = tile.querySelector(".favorite-btn");
+      if (favoriteBtn) favoriteBtn.textContent = isFavorite(channel.uid) ? "★" : "☆";
+      const iframe = tile.querySelector("iframe");
+      try {
+        iframe?.contentWindow?.postMessage({
+          source: "chzzk-multiview",
+          type: "SET_NAV_VISIBLE",
+          visible: false
+        }, "https://chzzk.naver.com");
+        iframe?.contentWindow?.postMessage({
+          source: "chzzk-multiview",
+          type: "SET_CHAT_VISIBLE",
+          visible: false
+        }, "https://chzzk.naver.com");
+      } catch (_) {}
+    }
+  }
+
+  function sendTileVolume(uid, volume, muted = null) {
+    const tile = tileMap.get(uid);
+    const iframe = tile?.querySelector("iframe");
+    if (!iframe) return;
+    try {
+      iframe.contentWindow.postMessage({ source: "chzzk-multiview", type: "SET_VOLUME", volume: Math.max(0, Math.min(1, Number(volume) || 0)), muted }, "https://chzzk.naver.com");
+    } catch (_) {}
+  }
+
+  function setTileVolume(uid, volume) {
+    const channel = state.channels.find(c => c.uid === uid);
+    if (!channel) return;
+    const value = Math.max(0, Math.min(1, Number(volume) || 0));
+    channel.volume = value;
+    channel.muted = state.mainOnly && channel.uid !== state.selectedUid ? true : value <= 0;
+    const tile = tileMap.get(uid);
+    const iframe = tile?.querySelector("iframe");
+    try {
+      const video = iframe?.contentDocument?.querySelector("video");
+      if (video) {
+        video.volume = value;
+        video.muted = value <= 0;
+      }
+    } catch (_) {}
+    sendTileVolume(uid, value, channel.muted);
+    refreshVolumeManager();
+    saveState();
+  }
+
+  function setMasterVolume(value) {
+    const volume = Math.max(0, Math.min(1, Number(value) || 0));
+    state.channels.forEach(channel => {
+      channel.volume = volume;
+      channel.muted = state.mainOnly && channel.uid !== state.selectedUid ? true : volume <= 0;
+      sendTileVolume(channel.uid, volume, channel.muted);
+    });
+    refreshVolumeManager();
+    saveState();
+  }
+
+  function applyMainOnlyState() {
+    if (!state.mainOnly) return;
+    state.channels.forEach(channel => {
+      const shouldMute = channel.uid !== state.channels[0]?.uid;
+      channel.muted = shouldMute;
+      sendTileVolume(channel.uid, channel.volume ?? 1, shouldMute);
+    });
+  }
+
+  function toggleMainOnly() {
+    state.mainOnly = !state.mainOnly;
+    if (state.mainOnly) {
+      state.channels.forEach(channel => {
+        channel._mainOnlyMuted = channel.muted;
+      });
+      applyMainOnlyState();
+    } else {
+      state.channels.forEach(channel => {
+        if (typeof channel._mainOnlyMuted === "boolean") channel.muted = channel._mainOnlyMuted;
+        delete channel._mainOnlyMuted;
+        sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+      });
+    }
+    refreshVolumeManager();
+    saveState();
+  }
+
+  function refreshVolumeManager() {
+    if (!ui) return;
+    const master = ui.querySelector("#masterVolume");
+    const masterValue = ui.querySelector("#masterVolumeValue");
+    const mainBtn = ui.querySelector("#mainOnlyBtn");
+    const list = ui.querySelector("#tileVolumeList");
+    const volumes = state.channels.map(c => Number(c.volume ?? 1));
+    const masterVolume = volumes.length ? volumes.reduce((a,b) => a+b, 0) / volumes.length : 1;
+    if (master) master.value = String(Math.round(masterVolume * 100));
+    if (masterValue) masterValue.textContent = `${Math.round(masterVolume * 100)}%`;
+    if (mainBtn) mainBtn.classList.toggle("active", state.mainOnly);
+    if (!list) return;
+    list.innerHTML = state.channels.length ? state.channels.map(c => {
+      const volume = Math.round((Number(c.volume ?? 1)) * 100);
+      return `<div class="tile-volume-row" data-uid="${escapeHtml(c.uid)}"><label>${escapeHtml(displayChannelName(c))}<output>${volume}%</output></label><input type="range" min="0" max="100" value="${volume}" step="1"></div>`;
+    }).join("") : '<div class="volume-empty">방송을 추가하면 개별 볼륨을 조절할 수 있습니다.</div>';
+    list.querySelectorAll(".tile-volume-row input").forEach(input => {
+      input.addEventListener("input", () => {
+        const row = input.closest(".tile-volume-row");
+        const uid = row?.dataset.uid;
+        if (!uid) return;
+        row.querySelector("output").textContent = `${input.value}%`;
+        setTileVolume(uid, Number(input.value) / 100);
+      });
+    });
+  }
+
+  function updateLayoutToggle() {
+    if (!ui) return;
+    ui.querySelectorAll(".layout-toggle-btn").forEach(button => {
+      const active = button.dataset.layout === state.layout;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function applyLayout() {
+    if (!videoGrid) return;
+
+    videoGrid.classList.remove("layout-grid", "layout-2x2", "layout-3x3", "layout-main-sub");
+    if (state.layout === "2x2" || state.layout === "3x3") state.layout = "grid";
+    if (!["grid", "main-sub"].includes(state.layout)) state.layout = "grid";
+    videoGrid.classList.add(`layout-${state.layout}`);
+
+    // Keep the complete broadcast list in state, but only create player tiles
+    // for broadcasts that are actually visible in the current layout. This
+    // prevents hidden broadcasts from continuing to play audio.
+    const displayMax = state.layout === "main-sub" ? 4 : 9;
+    const visibleChannels = state.channels.slice(0, displayMax);
+    const visibleUids = new Set(visibleChannels.map(c => c.uid));
+
+    if (visibleChannels.length && !visibleUids.has(state.selectedUid)) {
+      state.selectedUid = visibleChannels[0].uid;
+    }
+
+    // Remove tiles that are outside the visible range. Their iframe is
+    // detached so it cannot continue playing audio in the background.
+    for (const [uid, tile] of Array.from(tileMap.entries())) {
+      if (visibleUids.has(uid)) continue;
+      const iframe = tile.querySelector("iframe");
+      if (iframe) iframe.src = "about:blank";
+      const hiddenChannel = state.channels.find(c => c.uid === uid);
+      if (hiddenChannel) hiddenChannel.muted = true;
+      tile.remove();
+      tileMap.delete(uid);
+    }
+
+    // Create tiles for the visible broadcasts only.
+    for (const channel of visibleChannels) {
+      createTile(channel);
+    }
+
+    // Update only CSS placement. Never append/move existing iframe nodes here:
+    // DOM reparenting can cause CHZZK's player to reinitialize.
+    visibleChannels.forEach((channel, index) => {
+      const tile = tileMap.get(channel.uid);
+      if (!tile) return;
+      tile.style.display = "flex";
+      tile.style.order = String(index);
+      tile.style.gridColumn = "";
+      tile.style.gridRow = "";
+      tile.classList.toggle("main-tile", state.layout === "main-sub" && index === 0);
+      tile.classList.remove("extra-main-sub");
+
+      if (state.layout === "main-sub") {
+        if (index === 0) {
+          tile.style.gridColumn = "2";
+          tile.style.gridRow = "1 / 4";
+        } else {
+          tile.style.gridColumn = "1";
+          tile.style.gridRow = String(index);
+        }
+      }
+
+      sendTileVolume(channel.uid, channel.volume ?? 1, channel.muted);
+      applyTileLock(tile, state.screenLocked === true);
+    });
+
+    if (state.layout === "main-sub") {
+      videoGrid.style.setProperty("--sub-count", String(Math.min(3, Math.max(1, visibleChannels.length - 1))));
+    } else {
+      videoGrid.style.removeProperty("--sub-count");
+    }
+
+    updateLayoutToggle();
+    resizeFixedAspectGrid();
+    refreshChannelManager();
+    refreshVolumeManager();
+  }
+
+  function resizeFixedAspectGrid() {
+    if (!videoGrid) return;
+    const layout = state.layout;
+    if (!["grid", "main-sub"].includes(layout)) return;
+
+    requestAnimationFrame(() => {
+      const rect = videoGrid.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const gap = 8;
+
+      if (layout === "main-sub") {
+        // Main is on the RIGHT; up to three 16:9 sub tiles are stacked on
+        // the LEFT. The main tile uses the remaining horizontal space.
+        const subH = Math.max(1, (rect.height - gap * 2) / 3);
+        const subW = subH * 16 / 9;
+        const mainW = Math.max(1, rect.width - gap - subW);
+
+        videoGrid.style.gridTemplateColumns = `${subW}px ${mainW}px`;
+        videoGrid.style.gridTemplateRows = `repeat(3, ${subH}px)`;
+        videoGrid.style.justifyContent = "center";
+        videoGrid.style.alignContent = "center";
+        videoGrid.style.overflow = "hidden";
+        return;
+      }
+
+      // Basic layout scales by the number of visible broadcasts:
+      // 1 -> 1x1, 2 -> 2x1, 3~4 -> 2x2, 5~6 -> 3x2, 7~9 -> 3x3.
+      // Only the first 9 broadcasts are displayed; the full list is retained.
+      // Dimensions are recalculated from the CURRENT viewport/grid size so
+      // moving a maximized browser between different monitors automatically
+      // resizes the tiles to fit the new screen.
+      const count = Math.min(state.channels.length, 9);
+      let cols = 1;
+      let rows = 1;
+      if (count >= 7) {
+        cols = 3;
+        rows = 3;
+      } else if (count >= 5) {
+        cols = 3;
+        rows = 2;
+      } else if (count >= 3) {
+        cols = 2;
+        rows = 2;
+      } else if (count === 2) {
+        cols = 2;
+        rows = 1;
+      }
+      const cellW = Math.max(1, (rect.width - gap * (cols - 1)) / cols);
+      const cellH = Math.max(1, (rect.height - gap * (rows - 1)) / rows);
+      const tileW = Math.min(cellW, cellH * 16 / 9);
+      const tileH = tileW * 9 / 16;
+
+      videoGrid.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
+      videoGrid.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
+      videoGrid.style.justifyContent = "center";
+      videoGrid.style.alignContent = "center";
+      videoGrid.style.overflow = "hidden";
+    });
+  }
+
+  function updateChat() {
+    const uid = state.selectedUid;
+
+    if (!uid) {
+      chatPanel.querySelector(".chat-frame-wrap").innerHTML = `
+        <div id="chatEmpty" class="chat-empty">
+          메인 방송을 선택하면<br>실제 CHZZK 채팅을 불러옵니다.
+        </div>`;
+      chatFrame = null;
+      return;
+    }
+
+
+    const wrap = chatPanel.querySelector(".chat-frame-wrap");
+
+    if (!chatFrame) {
+      chatFrame = document.createElement("iframe");
+      chatFrame.className = "chat-frame";
+      chatFrame.allow = "autoplay";
+      chatFrame.referrerPolicy = "strict-origin-when-cross-origin";
+      wrap.innerHTML = "";
+      wrap.appendChild(chatFrame);
+      chatFrame.addEventListener("load", () => {
+        try {
+          chatFrame.contentWindow.postMessage({
+            source: "chzzk-multiview", type: "SET_CHAT_MODE", visible: true
+          }, "https://chzzk.naver.com");
+        } catch (_) {}
+      });
+    }
+
+    const target = `https://chzzk.naver.com/live/${encodeURIComponent(uid)}/chat?multiview=1`;
+
+    // Only reload chat when the selected channel changes.
+    if (chatFrame.dataset.uid !== uid) {
+      chatFrame.dataset.uid = uid;
+      chatFrame.src = target;
+      waitForChatDom(chatFrame, uid);
+    }
+  }
+
+  function waitForChatDom(frame, uid) {
+    if (chatTimer) {
+      clearInterval(chatTimer);
+      chatTimer = null;
+    }
+
+    let tries = 0;
+
+    const timer = setInterval(() => {
+      tries++;
+
+      if (frame.dataset.uid !== uid) {
+        clearInterval(timer);
+        return;
+      }
+
+      try {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+
+        const chatRoot = findChatRoot(doc);
+
+        if (chatRoot) {
+          prepareChatOnlyFrame(doc, chatRoot);
+          clearInterval(timer);
+          chatTimer = null;
+              return;
+        }
+      } catch (_) {}
+
+      if (tries > 80) {
+        clearInterval(timer);
+        chatTimer = null;
+        }
+    }, 250);
+
+    chatTimer = timer;
+  }
+
+  function findChatRoot(doc) {
+    const selectors = [
+      '[class*="live_chat"]', '[class*="LiveChat"]',
+      '[class*="liveChat"]', '[class*="chat_area"]', '[class*="chatArea"]',
+      '[class*="chat-container"]', '[class*="chatContainer"]',
+      '[class*="chatting"]', '[class*="Chatting"]',
+      '[class*="_chat_"]', '[class*="chat__"]',
+      '[data-testid*="chat"]', '[data-test*="chat"]',
+      '[id*="chat"]', '[id*="Chat"]',
+      'aside'
+    ];
+
+    const candidates = [];
+
+    for (const selector of selectors) {
+      for (const el of doc.querySelectorAll(selector)) {
+        if (!isVisible(el)) continue;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 160 || rect.height < 120) continue;
+
+        let score = 0;
+
+        if (rect.left > doc.documentElement.clientWidth * 0.35) score += 5;
+        if (rect.height > 300) score += 2;
+        if (el.querySelector("textarea, input, [contenteditable='true']")) score += 8;
+        if (el.querySelectorAll("button").length >= 1) score += 2;
+        if (/chat|채팅/i.test(`${el.className || ""} ${el.id || ""}`)) score += 4;
+        if (el.querySelectorAll("li, [role='listitem']").length >= 3) score += 3;
+
+        candidates.push({ el, score, area: rect.width * rect.height });
+      }
+    }
+
+    candidates.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.area - a.area;
+    });
+
+    return candidates[0]?.el || null;
+  }
+
+  function isVisible(el) {
+    const style = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function prepareChatOnlyFrame(doc, chatRoot) {
+    // Keep every ancestor of the chat root visible, but make the chat itself
+    // fill the iframe. This avoids the clipped-right-column problem caused by
+    // nested CHZZK layout containers.
+    const ancestors = new Set();
+    let node = chatRoot;
+    while (node && node !== doc.body) {
+      ancestors.add(node);
+      node = node.parentElement;
+    }
+
+    for (const el of Array.from(doc.body.querySelectorAll("*"))) {
+      if (el === chatRoot || chatRoot.contains(el) || ancestors.has(el)) continue;
+      el.style.setProperty("display", "none", "important");
+    }
+
+    doc.documentElement.style.cssText = "margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#111!important;";
+    doc.body.style.cssText = "margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#111!important;";
+
+    for (const ancestor of ancestors) {
+      ancestor.style.setProperty("position", "static", "important");
+      ancestor.style.setProperty("width", "100%", "important");
+      ancestor.style.setProperty("height", "100%", "important");
+      ancestor.style.setProperty("max-width", "100%", "important");
+      ancestor.style.setProperty("max-height", "100%", "important");
+      ancestor.style.setProperty("min-width", "0", "important");
+      ancestor.style.setProperty("min-height", "0", "important");
+      ancestor.style.setProperty("overflow", "hidden", "important");
+      ancestor.style.setProperty("box-sizing", "border-box", "important");
+      ancestor.style.setProperty("transform", "none", "important");
+    }
+
+    // Prevent the CHZZK chat layout from creating a document-level scrollbar.
+    // The chat itself owns the available iframe area; internal message scrolling
+    // remains available inside the chat component.
+    for (const el of [doc.documentElement, doc.body, chatRoot]) {
+      el.style.setProperty("overflow", "hidden", "important");
+      el.style.setProperty("box-sizing", "border-box", "important");
+      el.style.setProperty("max-width", "100%", "important");
+      el.style.setProperty("max-height", "100%", "important");
+    }
+
+    chatRoot.style.setProperty("display", "flex", "important");
+    chatRoot.style.setProperty("position", "absolute", "important");
+    chatRoot.style.setProperty("inset", "0", "important");
+    chatRoot.style.setProperty("width", "100%", "important");
+    chatRoot.style.setProperty("height", "100%", "important");
+    chatRoot.style.setProperty("max-width", "100%", "important");
+    chatRoot.style.setProperty("max-height", "100%", "important");
+    chatRoot.style.setProperty("min-width", "0", "important");
+    chatRoot.style.setProperty("min-height", "0", "important");
+    chatRoot.style.setProperty("box-sizing", "border-box", "important");
+    chatRoot.style.setProperty("z-index", "2147483647", "important");
+
+    // The chat iframe must never be a second audio source. Pause/mute now and
+    // repeatedly because the CHZZK player may recreate its <video> element.
+    const silence = () => {
+      for (const video of doc.querySelectorAll("video")) {
+        video.muted = true;
+        video.volume = 0;
+        video.pause();
+      }
+    };
+    silence();
+    const observer = new MutationObserver(silence);
+    observer.observe(doc.documentElement, { childList: true, subtree: true });
+    setTimeout(() => observer.disconnect(), 15000);
+  }
+
+  function applyTileLock(tile, locked) {
+    if (!tile) return;
+    let shield = tile.querySelector(".tile-lock-shield");
+    if (locked && !shield) {
+      shield = document.createElement("div");
+      shield.className = "tile-lock-shield";
+      shield.title = "화면 잠금 상태";
+      tile.querySelector(".tile-content")?.appendChild(shield);
+    }
+    if (shield) shield.style.display = locked ? "block" : "none";
+    tile.classList.toggle("screen-locked", locked);
+  }
+
+  function setScreenLock(locked, persist = true) {
+    state.screenLocked = !!locked;
+    if (ui) {
+      const buttons = [
+        ui.querySelector("#screenLockBtn"),
+        ui.querySelector("#collapsedScreenLockBtn")
+      ].filter(Boolean);
+      for (const btn of buttons) {
+        btn.textContent = state.screenLocked ? "화면 잠금 해제" : "화면 잠금";
+        btn.title = state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금";
+        btn.classList.toggle("lock-active", state.screenLocked);
+      }
+    }
+    for (const tile of tileMap.values()) applyTileLock(tile, state.screenLocked);
+    if (persist) saveState();
+  }
+
+  function toggleScreenLock() {
+    setScreenLock(!state.screenLocked);
+  }
+
+  function toggleToolbar() {
+    if (!ui) return;
+    toolbarCollapsed = !toolbarCollapsed;
+    ui.classList.toggle("toolbar-collapsed", toolbarCollapsed);
+    ui.querySelector("#collapseBtn").textContent = toolbarCollapsed ? "⌃" : "⌃";
+    ui.querySelector("#collapseBtn").title = toolbarCollapsed ? "멀티뷰 메뉴 열기" : "멀티뷰 메뉴 닫기";
+    ui.querySelector("#reopenToolbarBtn").textContent = "⌄";
+    ui.querySelector("#reopenToolbarBtn").title = "멀티뷰 메뉴 열기";
+  }
+
+  function updateDarkMode() {
+    if (!ui) return;
+    ui.classList.toggle("light-mode", state.darkMode === false);
+    const btn = ui.querySelector("#darkModeBtn");
+    if (btn) btn.textContent = state.darkMode === false ? "라이트모드" : "다크모드";
+  }
+
+  function toggleDarkMode() {
+    state.darkMode = state.darkMode === false;
+    updateDarkMode();
+    saveState();
+  }
+
+  function setChatOpen(open) {
+    if (!ui) return;
+    state.chatOpen = !!open;
+    ui.classList.toggle("chat-closed", !state.chatOpen);
+    const btn = ui.querySelector("#chatToggleBtn");
+    if (btn) btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
+    if (!state.chatOpen) {
+      if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+    } else if (state.selectedUid) {
+      updateChat();
+    }
+    requestAnimationFrame(() => resizeFixedAspectGrid());
+    saveState();
+  }
+
+  function toggleChat() {
+    setChatOpen(state.chatOpen === false);
+  }
+
+  function showPageLauncher(_show) {
+    // v0.8: Do not inject a button into the CHZZK page header.
+    const launcher = document.getElementById("__chzzk_multiview_launcher_v07__");
+    launcher?.remove();
+  }
+
+  function refreshChannelManager() {
+    if (!ui) return;
+    const list = ui.querySelector("#channelList");
+    if (!list) return;
+    if (!state.channels.length) {
+      list.innerHTML = '<div class="channel-list-empty">켜진 방송이 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = state.channels.map((channel, index) => `
+      <div class="channel-list-row" data-uid="${escapeHtml(channel.uid)}">
+        <button class="channel-list-select" title="방송 선택">
+          <span class="channel-list-index">${index + 1}</span>
+          <span class="channel-list-name">${escapeHtml(displayChannelName(channel))}</span>
+        </button>
+        <button class="channel-list-favorite" title="즐겨찾기 토글">${isFavorite(channel.uid) ? "★" : "☆"}</button>
+        <button class="channel-list-remove" title="방송 삭제">✕</button>
+      </div>`).join("");
+
+    list.querySelectorAll(".channel-list-select").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const uid = btn.closest(".channel-list-row")?.dataset.uid;
+        if (!uid) return;
+        if (state.layout === "main-sub") promoteToMain(uid);
+        else selectChannel(uid);
+        ui.querySelector("#channelManager")?.removeAttribute("open");
+      });
+    });
+    list.querySelectorAll(".channel-list-favorite").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const uid = btn.closest(".channel-list-row")?.dataset.uid;
+        const channel = state.channels.find(c => c.uid === uid);
+        if (!uid) return;
+        toggleFavorite(uid, displayChannelName(channel) || uid);
+        refreshChannelManager();
+      });
+    });
+    list.querySelectorAll(".channel-list-remove").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const uid = btn.closest(".channel-list-row")?.dataset.uid;
+        if (uid) removeChannel(uid);
+      });
+    });
+  }
+
+  function refreshFavoriteList() {
+    if (!ui) return;
+    const list = ui.querySelector("#favoriteList");
+    if (!list) return;
+    if (!favorites.length) {
+      list.innerHTML = '<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = favorites.map(f => `
+      <div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
+        <button class="favorite-list-add" title="방송 추가">
+          <span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span>
+        </button>
+        <button class="favorite-list-toggle" title="즐겨찾기 토글">★</button>
+      </div>`).join("");
+
+    list.querySelectorAll(".favorite-list-add").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const uid = btn.closest(".favorite-list-row")?.dataset.uid;
+        if (!uid) return;
+        ui.querySelector("#uidInput").value = uid;
+        addFromInput();
+        ui.querySelector("#favoriteManager")?.removeAttribute("open");
+      });
+    });
+    list.querySelectorAll(".favorite-list-toggle").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const uid = btn.closest(".favorite-list-row")?.dataset.uid;
+        if (!uid) return;
+        const fav = favorites.find(f => f.uid === uid);
+        toggleFavorite(uid, fav?.title || fav?.name || uid);
+      });
+    });
+  }
+
+  async function saveFavorites() {
+    await chrome.storage.local.set({ [FAVORITES_KEY]: favorites });
+  }
+
+  function isFavorite(uid) {
+    return favorites.some(f => f.uid === uid);
+  }
+
+  function toggleFavorite(uid, title = uid) {
+    if (isFavorite(uid)) {
+      favorites = favorites.filter(f => f.uid !== uid);
+    } else {
+      favorites.push({ uid, name: title || uid, title: title || uid });
+    }
+    saveFavorites().catch(console.warn);
+    refreshFavoriteList();
+    refreshChannelManager();
+  }
+
+  function clearAll() {
+    for (const tile of tileMap.values()) {
+      const iframe = tile.querySelector("iframe");
+      if (iframe) iframe.src = "about:blank";
+      tile.remove();
+    }
+    tileMap.clear();
+    state.channels = [];
+    state.selectedUid = null;
+    refreshChannelManager();
+    updateChat();
+    applyLayout();
+    saveState();
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function openMultiView(initialInput = "", initialInputs = []) {
+    await loadState();
+
+    const hasPopupList = Array.isArray(initialInputs) && initialInputs.length > 0;
+    const popupInputs = hasPopupList ? initialInputs : (initialInput ? [initialInput] : []);
+
+    if (hasPopupList) {
+      // When the popup has an explicit MultiView list, that list is the
+      // requested session. Do not mix it with broadcasts restored from the
+      // previous session.
+      const nextChannels = [];
+      for (const input of popupInputs) {
+        const uid = uidFromInput(input);
+        if (!uid || nextChannels.some(c => c.uid === uid)) continue;
+        const previous = state.channels.find(c => c.uid === uid);
+        const favorite = favorites.find(f => f.uid === uid);
+        const favoriteName = favorite?.name || favorite?.title || "";
+        nextChannels.push({
+          uid,
+          title: previous?.title || favoriteName || safeTitle(uid),
+          linkTitle: previous?.linkTitle || favoriteName || safeTitle(uid),
+          name: previous?.name || favoriteName || "",
+          muted: true,
+          volume: 1
+        });
+      }
+      state.channels = nextChannels;
+    } else if (initialInput) {
+      // A direct input is treated as a new requested broadcast in addition to
+      // the restored session only when it is explicitly supplied.
+      const uid = uidFromInput(initialInput);
+      if (uid && !state.channels.some(c => c.uid === uid)) {
+        state.channels.push({ uid, title: safeTitle(uid), linkTitle: safeTitle(uid), name: "", muted: true, volume: 1 });
+      }
+    }
+
+    // Every new MultiView session starts in Basic layout. The saved channel
+    // order is retained only when no explicit popup list was supplied.
+    state.layout = "grid";
+    state.selectedUid = state.channels[0]?.uid || null;
+    // New sessions start with all visible players muted so the button state
+    // and actual player state have a predictable baseline.
+    for (const channel of state.channels) channel.muted = true;
+    saveState();
+
+    createUI();
+
+    syncSelection();
+    applyLayout();
+    updateChat();
+
+    // If a direct input was supplied, it has already been added above. For
+    // popup lists, the requested list has likewise replaced the restored list.
+    showPageLauncher(false);
+
+    try {
+      chrome.runtime.sendMessage({ type: "COOKIE_BRIDGE_INIT" });
+    } catch (_) {}
+
+    opened = true;
+  }
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message) return;
+
+    if (message.type === "OPEN_MULTIVIEW") {
+      openMultiView(message.initialInput || "", message.initialInputs || [])
+        .then(() => sendResponse({ ok: true }))
+        .catch(err => sendResponse({ ok: false, error: String(err) }));
+      return true;
+    }
+
+    if (message.type === "PROMOTE_MAIN" && message.uid) {
+      if (state.layout === "main-sub" && state.channels.some(c => c.uid === message.uid)) {
+        promoteToMain(message.uid);
+      }
+      return;
+    }
+
+    if (message.type === "VIDEO_STATE" && message.uid) {
+      const channel = state.channels.find(c => c.uid === message.uid);
+      const tile = tileMap.get(message.uid);
+      if (channel) {
+        if (typeof message.volume === "number" && Number.isFinite(message.volume)) channel.volume = Math.max(0, Math.min(1, message.volume));
+        if (typeof message.muted === "boolean") channel.muted = message.muted;
+        refreshVolumeManager();
+        saveState();
+      }
+      return;
+    }
+
+    if (message.type === "CHANNEL_INFO" && message.uid) {
+      const title = String(message.channelName || message.title || "").trim();
+      if (title) {
+        const channel = state.channels.find(c => c.uid === message.uid);
+        if (channel) {
+          const streamerName = extractStreamerName(title, message.uid);
+          channel.name = streamerName;
+          channel.title = streamerName;
+          channel.linkTitle = title || streamerName;
+          const tile = tileMap.get(message.uid);
+          const name = tile?.querySelector(".tile-streamer-name");
+          if (name) name.textContent = streamerName;
+          const fav = favorites.find(f => f.uid === message.uid);
+          if (fav) {
+            fav.title = streamerName;
+            fav.name = streamerName;
+            saveFavorites().catch(console.warn);
+            refreshFavoriteList();
+          }
+        }
+      }
+    }
+
+  });
+
+  showPageLauncher(true);
+
+  // Restore MultiView if it was already open after a CHZZK SPA navigation.
+  chrome.storage.local.get(STORAGE_KEY).then(result => {
+    if (result[STORAGE_KEY]?.channels?.length) {
+      // Do not auto-open; popup controls opening.
+    }
+  });
+
+  const scheduleGridResize = () => {
+    requestAnimationFrame(() => resizeFixedAspectGrid());
+  };
+
+  const mvResizeObserver = new ResizeObserver(scheduleGridResize);
+  setTimeout(() => {
+    if (videoGrid) mvResizeObserver.observe(videoGrid);
+    if (ui) mvResizeObserver.observe(ui);
+    scheduleGridResize();
+  }, 0);
+
+  // A maximized browser can change its CSS viewport when moved between
+  // monitors with different resolutions/scaling. Recalculate immediately.
+  window.addEventListener("resize", scheduleGridResize, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", scheduleGridResize, { passive: true });
+  }
+
+  const CSS = `
+    :host {
+      all: initial;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    .mv-root {
+      position: fixed;
+      z-index: 2147483640;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      background: #0c0c0d;
+      color: #eee;
+      font-family: Arial, "Noto Sans KR", sans-serif;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .mv-toolbar {
+      flex: 0 0 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      padding: 8px 12px;
+      background: #151516;
+      border-bottom: 1px solid #29292b;
+      box-shadow: 0 2px 12px rgba(0,0,0,.35);
+    }
+
+    .toolbar-left, .toolbar-center, .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .toolbar-left {
+      justify-content: flex-start;
+      overflow: visible;
+      flex: 1 1 auto;
+    }
+
+    .toolbar-right {
+      justify-content: flex-end;
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+
+    .volume-manager { position: relative; flex: 0 0 auto; }
+    .volume-manager > summary {
+      list-style: none; height: 34px; display: flex; align-items: center; padding: 0 10px;
+      border: 1px solid #363638; border-radius: 7px; background: #222224; color: #eee;
+      cursor: pointer; white-space: nowrap; user-select: none;
+    }
+    .volume-manager > summary::-webkit-details-marker { display:none; }
+    .volume-manager > summary::after { content:"▾"; margin-left:7px; color:#999; }
+    .volume-manager[open] > summary { background:#2b2b2e; }
+    .volume-manager-panel {
+      position:absolute; z-index:60; top:calc(100% + 6px); right:0; width:300px; max-height:460px; overflow:auto;
+      padding:10px; background:#171719; border:1px solid #343438; border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,.35);
+    }
+    .volume-row label, .tile-volume-row label { display:flex; justify-content:space-between; gap:8px; margin-bottom:5px; color:#ddd; font-size:11px; }
+    .volume-row input, .tile-volume-row input { width:100%; accent-color:#00d26a; }
+    .main-only-btn { width:100%; margin-top:8px; }
+    .main-only-btn.active { background:#00d26a; border-color:#00d26a; color:#06150d; font-weight:800; }
+    .tile-volume-list { display:flex; flex-direction:column; gap:9px; margin-top:10px; padding-top:9px; border-top:1px solid #2c2c30; }
+    .tile-volume-row output, .volume-row output { color:#00d26a; font-variant-numeric:tabular-nums; }
+    .volume-empty { color:#777; font-size:11px; text-align:center; padding:8px; }
+
+    .layout-toggle {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px;
+      gap: 2px;
+      border: 1px solid #363638;
+      border-radius: 8px;
+      background: #1b1b1d;
+    }
+
+    .layout-toggle-btn {
+      height: 30px;
+      min-width: 62px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #999;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .layout-toggle-btn:hover {
+      background: #29292c;
+      color: #eee;
+    }
+
+    .layout-toggle-btn.active {
+      background: #00d26a;
+      color: #06150d;
+    }
+
+    .layout-toggle-btn.active:hover {
+      background: #16df7b;
+    }
+
+    .add-area {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      width: min(430px, 34vw);
+      min-width: 260px;
+      height: 40px;
+      padding: 3px;
+      box-sizing: border-box;
+      background: #222224;
+      border: 1px solid #363638;
+      border-radius: 9px;
+    }
+
+    input, select, button {
+      font: inherit;
+    }
+
+    #uidInput {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 0;
+      height: 32px;
+      padding: 0 10px;
+      color: #eee;
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .add-area:focus-within {
+      border-color: #00d26a;
+      box-shadow: 0 0 0 1px rgba(0,210,106,.15);
+    }
+
+    #uidInput.invalid {
+      border-color: #ff4d5e;
+      animation: shake .18s linear 2;
+    }
+
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+      100% { transform: translateX(0); }
+    }
+
+    button, select {
+      height: 34px;
+      border: 1px solid #363638;
+      border-radius: 7px;
+      padding: 0 10px;
+      background: #222224;
+      color: #eee;
+      cursor: pointer;
+    }
+
+    button:hover, select:hover {
+      background: #2b2b2e;
+    }
+
+    .accent {
+      background: #00d26a;
+      border-color: #00d26a;
+      color: #06150d;
+      font-weight: 800;
+    }
+
+    .accent:hover {
+      background: #16df7b;
+    }
+
+    .add-area .accent {
+      flex: 0 0 auto;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 6px;
+    }
+
+    .channel-manager {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .channel-manager > summary {
+      list-style: none;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid #363638;
+      border-radius: 7px;
+      background: #222224;
+      color: #eee;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .channel-manager > summary::-webkit-details-marker { display: none; }
+    .channel-manager > summary::after { content: "▾"; margin-left: 7px; color: #999; }
+    .channel-manager[open] > summary { background: #2b2b2e; }
+
+    .channel-manager-panel {
+      position: absolute;
+      z-index: 50;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 260px;
+      padding: 8px;
+      background: #171719;
+      border: 1px solid #363638;
+      border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.45);
+    }
+
+    .channel-manager-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 2px 2px 7px;
+      border-bottom: 1px solid #2c2c30;
+      font-size: 11px;
+    }
+
+    .manager-clear {
+      height: 27px;
+      padding: 0 8px;
+      color: #ff7b86;
+    }
+
+    .channel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-top: 6px;
+    }
+
+    .channel-list-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .channel-list-select {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 6px;
+      border: 0;
+      background: transparent;
+      text-align: left;
+    }
+
+    .channel-list-index {
+      flex: 0 0 18px;
+      color: #777;
+      text-align: center;
+      font-size: 10px;
+    }
+
+    .channel-list-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .channel-list-remove {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #999;
+    }
+
+    .channel-list-remove:hover { color: #ff6473; }
+    .channel-list-empty { padding: 12px 5px 8px; color: #777; font-size: 11px; text-align: center; }
+
+    .channel-list-favorite {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #f0c75e;
+      font-size: 16px;
+    }
+
+    .channel-list-favorite:hover { background: #2b2b2e; }
+
+    .favorite-manager {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .favorite-manager > summary {
+      list-style: none;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid #363638;
+      border-radius: 7px;
+      background: #222224;
+      color: #eee;
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .favorite-manager > summary::-webkit-details-marker { display: none; }
+    .favorite-manager > summary::after { content: "▾"; margin-left: 7px; color: #999; }
+    .favorite-manager[open] > summary { background: #2b2b2e; }
+
+    .favorite-manager-panel {
+      position: absolute;
+      z-index: 50;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 300px;
+      max-height: 360px;
+      padding: 8px;
+      background: #171719;
+      border: 1px solid #343438;
+      border-radius: 8px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
+      overflow: auto;
+    }
+
+    .favorite-list { display: flex; flex-direction: column; gap: 4px; }
+
+    .favorite-list-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      padding: 2px;
+      border-radius: 6px;
+    }
+
+    .favorite-list-row:hover { background: #242427; }
+
+    .favorite-list-add {
+      min-width: 0;
+      flex: 1 1 auto;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 7px;
+      border: 0;
+      background: transparent;
+      color: #eee;
+      text-align: left;
+    }
+
+    .favorite-list-name {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .favorite-list-uid {
+      flex: 0 1 38%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #777;
+      font-size: 10px;
+    }
+
+    .favorite-list-toggle {
+      flex: 0 0 30px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #f0c75e;
+      font-size: 16px;
+    }
+
+    .favorite-list-toggle:hover { background: #303034; }
+    .favorite-list-empty { padding: 12px 5px; color: #777; font-size: 11px; text-align: center; }
+
+
+
+    .toolbar-collapse, .reopen-toolbar {
+      background: #00d26a !important;
+      border-color: #00d26a !important;
+      color: #06150d !important;
+      font-weight: 900;
+    }
+
+    .collapsed-screen-lock {
+      font-weight: 800;
+    }
+
+    .toolbar-collapse { margin-left: 4px; width: 38px; padding: 0; }
+
+    .toolbar-floating-actions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .collapsed-screen-lock {
+      height: 32px;
+      padding: 0 11px;
+    }
+
+    #closeBtn {
+      width: 34px;
+      padding: 0;
+      color: #bbb;
+    }
+
+    .mv-body {
+      min-height: 0;
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 8px;
+      padding: 8px;
+      overflow: hidden;
+    }
+
+    .video-grid {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      gap: 8px;
+      overflow: hidden;
+      align-content: center;
+    }
+
+    .layout-grid {
+      place-items: stretch;
+      align-content: center;
+      justify-content: center;
+    }
+
+    .layout-grid .video-tile {
+      aspect-ratio: 16 / 9;
+      min-height: 0;
+    }
+
+    .layout-main-sub {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      align-content: stretch;
+      grid-auto-flow: row;
+      gap: 8px;
+    }
+
+    .layout-main-sub .video-tile {
+      grid-column: 1;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      aspect-ratio: auto;
+    }
+
+    .video-tile {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #111113;
+      border: 2px solid #2c2c30;
+      border-radius: 8px;
+      transition: border-color .12s ease, box-shadow .12s ease, opacity .12s ease;
+      position: relative;
+    }
+
+    .video-tile.selected {
+      border-color: #00d26a;
+      box-shadow:
+        0 0 0 1px rgba(0,210,106,.7),
+        0 0 16px rgba(0,210,106,.24);
+    }
+
+    .video-tile.drop-target {
+      border-color: #4d9cff;
+      box-shadow: 0 0 18px rgba(77,156,255,.3);
+    }
+
+    .video-tile.dragging {
+      opacity: .55;
+    }
+
+
+    .layout-main-sub .main-tile {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      aspect-ratio: auto;
+      min-height: 0;
+    }
+
+    .tile-head {
+      position: absolute;
+      z-index: 5;
+      top: 0; left: 0; right: 0;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 7px;
+      background: #19191b;
+      border-bottom: 1px solid #2c2c30;
+      user-select: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity .12s ease, transform .12s ease;
+    }
+
+    .video-tile:hover .tile-head,
+    .video-tile.selected .tile-head {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .drag-handle {
+      color: #777;
+      cursor: grab;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .tile-streamer-name {
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #eee;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .main-btn {
+      flex: 0 0 auto; min-width: 44px; padding: 0 7px; font-size: 10px; font-weight: 800;
+    }
+    .layout-grid .main-btn { display: none; }
+
+    .tile-address {
+      flex: 0 0 auto; min-width: 62px;
+      min-width: 72px;
+      max-width: 80px;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: #bbb;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .tile-address:hover { color: #00d26a; }
+
+
+    .tile-btn {
+      flex: 0 0 27px;
+      width: 27px;
+      height: 25px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #bbb;
+    }
+
+    .tile-btn:hover {
+      background: #303034;
+    }
+
+    .remove-btn:hover {
+      color: #ff6473;
+    }
+
+    #screenLockBtn.lock-active,
+    #collapsedScreenLockBtn.lock-active {
+      background: #00d26a;
+      border-color: #00d26a;
+      color: #06150d;
+      font-weight: 800;
+    }
+
+    .tile-lock-shield {
+      position: absolute;
+      z-index: 4;
+      inset: 0;
+      display: none;
+      background: transparent;
+      cursor: default;
+    }
+
+    .video-tile.screen-locked .tile-lock-shield {
+      display: block;
+    }
+
+    .tile-content {
+      min-width: 0;
+      min-height: 0;
+      flex: 1 1 auto;
+      position: relative;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .tile-content iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      border: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .chat-panel {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #121214;
+      border: 1px solid #2c2c30;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .chat-head {
+      flex: 0 0 36px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      gap: 8px;
+      border-bottom: 1px solid #2c2c30;
+      background: #19191b;
+    }
+
+    .chat-close {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 26px;
+      padding: 0;
+      margin-left: 4px;
+      border: 0;
+      background: transparent;
+    }
+
+    .chat-close:hover { color: #ff6473; }
+
+    .chat-head span {
+      margin-left: auto;
+      color: #777;
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chat-frame-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      flex: 1 1 auto;
+      width: 100%;
+      height: 0;
+      overflow: hidden;
+      background: #111;
+    }
+
+    .chat-frame {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      border: 0;
+      overflow: hidden;
+      background: #111;
+    }
+
+    .chat-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #777;
+      line-height: 1.7;
+      background: #111;
+      z-index: 2;
+    }
+
+    .toolbar-collapsed .mv-toolbar {
+      transform: translateY(-100%);
+      position: absolute;
+      left: 0; right: 0;
+      z-index: 20;
+    }
+
+    .toolbar-hover-zone {
+      display: none; position: absolute; z-index: 30; top: 0; left: 50%; transform: translateX(-50%);
+      width: 180px; height: 34px; align-items: flex-start; justify-content: center;
+    }
+    .toolbar-collapsed .toolbar-hover-zone { display: flex; }
+    .toolbar-hover-zone .reopen-toolbar {
+      opacity: 0; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease;
+    }
+    .toolbar-hover-zone:hover .reopen-toolbar, .toolbar-hover-zone .reopen-toolbar:focus-visible {
+      opacity: 1; transform: translateY(0);
+    }
+
+    .toolbar-collapsed .mv-body {
+      /* Keep the floating lock/reopen controls outside the broadcast area. */
+      padding-top: 50px;
+    }
+
+    .reopen-toolbar {
+      width: 38px;
+      height: 32px;
+      padding: 0;
+    }
+
+    .toolbar-collapsed .toolbar-floating-actions { display: flex; }
+
+    .chat-closed .chat-panel { display: none; }
+    .chat-closed .mv-body { grid-template-columns: minmax(0, 1fr); }
+
+    .favorite-btn {
+      color: #f0c75e !important;
+    }
+
+
+    .light-mode .mv-toolbar { background:#f5f5f7; border-bottom-color:#d8d8dc; color:#222; }
+    .light-mode button, .light-mode select, .light-mode .favorite-manager > summary, .light-mode .channel-manager > summary, .light-mode .volume-manager > summary { background:#fff; color:#222; border-color:#d0d0d5; }
+    .light-mode .add-area { background:#fff; border-color:#d0d0d5; }
+    .light-mode #uidInput { color:#222; }
+    .light-mode .volume-manager-panel, .light-mode .favorite-manager-panel, .light-mode .channel-manager-panel { background:#fff; border-color:#d0d0d5; color:#222; }
+    .light-mode .tile-head { background:#f4f4f6; border-bottom-color:#d8d8dc; color:#222; }
+    .light-mode .tile-streamer-name { color:#222; }
+
+    @media (max-width: 900px) {
+      .mv-body {
+        grid-template-columns: minmax(0, 1fr) 260px;
+      }
+
+    }
+  `;
+})();

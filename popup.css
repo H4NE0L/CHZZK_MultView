@@ -1,0 +1,162 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  width: 400px;
+  min-height: 390px;
+  font-family: Arial, "Noto Sans KR", sans-serif;
+  background: #111;
+  color: #eee;
+}
+
+.popup {
+  padding: 18px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.desc {
+  margin: 0 0 14px;
+  color: #aaa;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.input-row {
+  display: flex;
+  gap: 6px;
+}
+
+input, select, button {
+  font: inherit;
+}
+
+input, select {
+  height: 36px;
+  border: 1px solid #363638;
+  border-radius: 8px;
+  background: #222224;
+  color: #eee;
+  outline: none;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+input:focus, select:focus {
+  border-color: #00d26a;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary {
+  padding: 0 10px;
+  background: #29292b;
+  color: #eee;
+}
+
+.icon {
+  width: 38px;
+  background: #2a2a2a;
+  color: #f0c75e;
+  font-size: 18px;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 12px;
+  background: #00d26a;
+  color: #07140c;
+  font-weight: 700;
+}
+
+.section-head,
+.favorites-head {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  font-size: 12px;
+}
+
+.text-btn {
+  margin-left: auto;
+  padding: 3px 6px;
+  background: transparent;
+  color: #888;
+}
+
+.text-btn:hover {
+  color: #ff6473;
+}
+
+.multi-list {
+  margin-top: 6px;
+  max-height: 135px;
+  overflow: auto;
+  border: 1px solid #2d2d30;
+  border-radius: 8px;
+  background: #181819;
+}
+
+.list-empty {
+  padding: 12px;
+  color: #666;
+  text-align: center;
+}
+
+.multi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid #29292b;
+}
+
+.multi-row:last-child {
+  border-bottom: 0;
+}
+
+.multi-row-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.row-del {
+  background: transparent;
+  color: #777;
+  padding: 2px 5px;
+}
+
+.row-del:hover {
+  color: #ff6473;
+}
+
+.favorites-select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 0 8px;
+}
+
+.status {
+  min-height: 16px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #999;
+}

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>CHZZK MultiView</title>
+
+  <link rel="stylesheet" href="multiview.css">
+</head>
+
+<body>
+
+  <header class="top-bar">
+
+    <div class="logo">
+      CHZZK MultiView
+    </div>
+
+    <div class="top-controls">
+
+      <button id="layout2x2" class="layout-button active">
+        2 × 2
+      </button>
+
+      <button id="layout3x3" class="layout-button">
+        3 × 3
+      </button>
+
+      <button id="toggleChat" class="layout-button">
+        채팅
+      </button>
+
+      <button id="loginButton" class="login-button">
+        치지직 로그인
+      </button>
+
+    </div>
+
+  </header>
+
+
+  <main class="workspace">
+
+    <section id="videoGrid" class="video-grid layout-2x2">
+      <!-- 방송 타일이 여기에 추가됨 -->
+    </section>
+
+
+    <aside id="chatPanel" class="chat-panel">
+
+      <div class="chat-header">
+        <span id="chatTitle">메인 방송 채팅</span>
+      </div>
+
+      <div class="chat-content">
+
+        <div id="chatEmpty" class="chat-empty">
+          방송을 선택하면<br>
+          메인 방송의 채팅이 표시됩니다.
+        </div>
+
+        <iframe
+          id="chatFrame"
+          class="chat-frame"
+          title="CHZZK Chat"
+          allow="autoplay; fullscreen"
+        ></iframe>
+
+      </div>
+
+    </aside>
+
+  </main>
+
+
+  <footer class="bottom-bar">
+
+    <input
+      id="channelInput"
+      type="text"
+      placeholder="치지직 UID 또는 URL"
+      autocomplete="off"
+    >
+
+    <button id="addChannelButton" class="add-button">
+      방송 추가
+    </button>
+
+    <button id="removeAllButton" class="danger-button">
+      전체 삭제
+    </button>
+
+  </footer>
+
+
+  <script src="multiview.js"></script>
+
+</body>
+</html>

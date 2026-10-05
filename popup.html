@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CZ 통제실</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <h1>CZ 통제실</h1>
+    <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
+
+    <div class="input-row">
+      <input id="uidInput" placeholder="방송 URL 또는 UID" autocomplete="off">
+      <button id="addList" class="secondary">목록 추가</button>
+    </div>
+
+    <div class="section-head"><strong>멀티뷰 목록</strong><button id="clearList" class="text-btn">전체 삭제</button></div>
+    <div id="multiList" class="multi-list"></div>
+
+    <div class="favorites-head">
+      <strong>즐겨찾기</strong>
+      <button id="removeFavorite" class="text-btn" title="선택한 즐겨찾기 삭제">삭제</button>
+    </div>
+    <select id="favorites" class="favorites-select">
+      <option value="">즐겨찾기한 방송 없음</option>
+    </select>
+    <button id="open" class="primary">멀티뷰 열기</button>
+    <p id="status" class="status"></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
