@@ -212,6 +212,10 @@
               <div id="favoriteList" class="favorite-list"></div>
             </div>
           </details>
+          <div class="add-area">
+            <input id="uidInput" placeholder="방송 URL 또는 UID">
+            <button id="addBtn" class="accent">방송 추가</button>
+          </div>
           <details id="channelManager" class="channel-manager">
             <summary>방송 목록</summary>
             <div class="channel-manager-panel">
@@ -219,10 +223,6 @@
               <div id="channelList" class="channel-list"></div>
             </div>
           </details>
-          <div class="add-area">
-            <input id="uidInput" placeholder="방송 URL 또는 UID">
-            <button id="addBtn" class="accent">방송 추가</button>
-          </div>
         </div>
 
         <div class="toolbar-center" aria-hidden="true"></div>

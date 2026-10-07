@@ -8,8 +8,13 @@
 </head>
 <body>
   <main class="popup">
-    <h1>CZ 통제실</h1>
-    <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
+    <div class="title-row">
+      <div>
+        <h1>CZ 통제실</h1>
+        <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
+      </div>
+      <span id="version" class="version-badge">v1.1.4</span>
+    </div>
 
     <div class="input-row">
       <input id="uidInput" placeholder="방송 URL 또는 UID" autocomplete="off">
@@ -21,11 +26,18 @@
 
     <div class="favorites-head">
       <strong>즐겨찾기</strong>
-      <button id="removeFavorite" class="text-btn" title="선택한 즐겨찾기 삭제">삭제</button>
+      <div class="favorite-actions">
+        <button id="addGroup" class="text-btn">그룹 추가</button>
+        <button id="removeFavorite" class="text-btn" title="선택한 즐겨찾기 삭제">삭제</button>
+      </div>
     </div>
-    <select id="favorites" class="favorites-select">
-      <option value="">즐겨찾기한 방송 없음</option>
-    </select>
+    <div class="favorite-filter-row">
+      <select id="groupFilter" class="group-filter">
+        <option value="__all__">전체 그룹</option>
+      </select>
+      <button id="refreshFavorites" class="refresh-btn" title="온라인 상태 새로고침">↻</button>
+    </div>
+    <div id="favorites" class="favorite-list"></div>
     <button id="open" class="primary">멀티뷰 열기</button>
     <p id="status" class="status"></p>
   </main>
