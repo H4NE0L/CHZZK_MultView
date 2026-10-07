@@ -48,19 +48,38 @@
     return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="${x}" y="4" width="6" height="16" rx="1" fill="currentColor" stroke="none"/></svg>`;
   }
 
-  function uidFromInput(value) {
+  function parseInput(value) {
     const raw = String(value || "").trim();
     if (!raw) return null;
 
-    if (/^[A-Za-z0-9_-]{6,}$/.test(raw)) return raw;
+    if (/^[A-Za-z0-9_-]{6,}$/.test(raw)) {
+      return { type: "live", id: raw, uid: raw, url: `https://chzzk.naver.com/live/${encodeURIComponent(raw)}` };
+    }
+
+    // Allow shorthand replay input such as `video/12345678` in addition to
+    // the full https://chzzk.naver.com/video/12345678 URL.
+    const shorthandVideo = raw.match(/^\/?video\/([^/?#]+)$/i);
+    if (shorthandVideo) {
+      const id = shorthandVideo[1];
+      return { type: "video", id, uid: `video:${id}`, url: `https://chzzk.naver.com/video/${encodeURIComponent(id)}` };
+    }
 
     try {
       const url = new URL(raw);
-      const match = url.pathname.match(/^\/live\/([^/?#]+)/);
-      return match ? match[1] : null;
-    } catch (_) {
-      return null;
-    }
+      const live = url.pathname.match(/^\/live\/([^/?#]+)/);
+      if (live) {
+        return { type: "live", id: live[1], uid: live[1], url: `https://chzzk.naver.com/live/${encodeURIComponent(live[1])}` };
+      }
+      const video = url.pathname.match(/^\/video\/([^/?#]+)/);
+      if (video) {
+        return { type: "video", id: video[1], uid: `video:${video[1]}`, url: `https://chzzk.naver.com/video/${encodeURIComponent(video[1])}` };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function uidFromInput(value) {
+    return parseInput(value)?.uid || null;
   }
 
   function safeTitle(uid) {
@@ -156,7 +175,10 @@
       state.layout = "grid";
     }
 
-    state.channels = state.channels.map(c => ({ ...c, volume: Number.isFinite(Number(c.volume)) ? Math.max(0, Math.min(1, Number(c.volume))) : 1, name: c.name || "" }));
+    state.channels = state.channels.map(c => {
+      const { streamInfo, ...clean } = c || {};
+      return { ...clean, volume: Number.isFinite(Number(clean.volume)) ? Math.max(0, Math.min(1, Number(clean.volume))) : 1, name: clean.name || "" };
+    });
     if (!state.selectedUid && state.channels[0]) {
       state.selectedUid = state.channels[0].uid;
     }
@@ -194,7 +216,6 @@
             <summary>방송 목록</summary>
             <div class="channel-manager-panel">
               <div class="channel-manager-head"><strong>현재 방송</strong><button id="clearBtn" class="manager-clear">전체 삭제</button></div>
-              <div id="streamInfoPanel" class="stream-info-panel"></div>
               <div id="channelList" class="channel-list"></div>
             </div>
           </details>
@@ -211,7 +232,10 @@
             <summary>볼륨</summary>
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
-                <label for="masterVolume">전체 볼륨 <output id="masterVolumeValue">100%</output></label>
+                <div class="master-volume-top">
+                  <button type="button" id="masterMuteBtn" class="tile-mute-btn" title="전체 음소거"></button>
+                  <label for="masterVolume">전체 볼륨 <output id="masterVolumeValue">100%</output></label>
+                </div>
                 <input id="masterVolume" type="range" min="0" max="100" value="100" step="1">
                 <p class="volume-help">확장프로그램 전체 음량입니다. 아래 방송별 볼륨에 곱해져 적용되며, 방송별 설정값은 바뀌지 않습니다.</p>
               </div>
@@ -271,6 +295,7 @@
     masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
     bindRangeDrag(masterInput);
     ui.querySelector("#mainOnlyCheck").addEventListener("change", e => setMainOnly(e.target.checked));
+    ui.querySelector("#masterMuteBtn").addEventListener("click", e => { e.preventDefault(); toggleMasterMute(); });
 
     ui.querySelector("#uidInput").addEventListener("keydown", e => {
       if (e.key === "Enter") addFromInput();
@@ -305,32 +330,35 @@
 
   function addFromInput() {
     const input = ui.querySelector("#uidInput");
-    const uid = uidFromInput(input.value);
+    const parsed = parseInput(input.value);
 
-    if (!uid) {
+    if (!parsed) {
       input.focus();
       input.classList.add("invalid");
       setTimeout(() => input.classList.remove("invalid"), 500);
       return;
     }
 
-    addChannel(uid);
+    addChannel(parsed.uid, parsed);
     input.value = "";
     input.focus();
   }
 
-  function addChannel(uid) {
+  function addChannel(uid, parsed = { type: "live", id: uid, uid, url: `https://chzzk.naver.com/live/${encodeURIComponent(uid)}` }) {
     if (state.channels.some(c => c.uid === uid)) {
       selectChannel(uid);
       return;
     }
 
-    const favorite = favorites.find(f => f.uid === uid);
+    const favorite = parsed.type === "live" ? favorites.find(f => f.uid === parsed.id) : null;
     const favoriteName = favorite?.name || favorite?.title || "";
     const channel = {
       uid,
-      title: favoriteName || safeTitle(uid),
-      linkTitle: favoriteName || safeTitle(uid),
+      type: parsed.type,
+      sourceId: parsed.id,
+      url: parsed.url,
+      title: favoriteName || (parsed.type === "video" ? `다시보기 ${parsed.id}` : safeTitle(parsed.id)),
+      linkTitle: favoriteName || (parsed.type === "video" ? `다시보기 ${parsed.id}` : safeTitle(parsed.id)),
       name: favoriteName,
       muted: true,
       volume: 1
@@ -357,7 +385,12 @@
 
     // Resolve the permanent channel name independently of the live title.
     // This works even when the player document title is not ready yet.
-    fetchChannelName(uid).then(name => {
+    if (channel.type !== "live") {
+      saveState();
+      return;
+    }
+
+    fetchChannelName(channel.sourceId).then(name => {
       if (!name) return;
       const current = state.channels.find(c => c.uid === uid);
       if (!current) return;
@@ -431,7 +464,7 @@
       </div>
       <div class="tile-content">
         <iframe
-          src="https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}"
+          src="${escapeHtml(channel.url || `https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}`)}"
           allow="autoplay; fullscreen"
           loading="eager"
           scrolling="no"
@@ -455,8 +488,7 @@
     tile.querySelector(".main-btn").addEventListener("click", e => {
       e.stopPropagation();
       if (channel.uid === state.selectedUid) return;
-      if (state.layout === "main-sub") promoteToMain(channel.uid);
-      else selectChannel(channel.uid);
+      selectChannel(channel.uid);
     });
 
     tile.addEventListener("mouseenter", () => {
@@ -486,7 +518,7 @@
     const addressBtn = tile.querySelector(".tile-address");
     addressBtn.addEventListener("click", async e => {
       e.stopPropagation();
-      const url = `https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}`;
+      const url = channel.url || `https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}`;
       const current = state.channels.find(c => c.uid === channel.uid) || channel;
       const streamerName = String(current.name || "").trim() || String(current.linkTitle || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || String(current.title || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || `CHZZK ${channel.uid}`;
       const linkTitle = `${streamerName} - CHZZK`;
@@ -630,6 +662,12 @@
     if (!state.channels.some(c => c.uid === uid)) return;
 
     state.selectedUid = uid;
+
+    // In raid view, the selected/main broadcast is always the large tile.
+    // Reorder the saved channel list so the large slot follows the selected
+    // broadcast without recreating the existing iframe elements.
+    if (state.layout === "main-sub") moveSelectedToFront();
+
     if (state.mainOnly) makeMainAudible();
 
     syncSelection();
@@ -770,6 +808,20 @@
     saveStateSoon();
   }
 
+  function toggleMasterMute() {
+    const current = clamp01(state.masterVolume ?? 1);
+    if (current <= 0) {
+      state.masterVolume = clamp01(state._previousMasterVolume ?? 1);
+      if (state.masterVolume <= 0) state.masterVolume = 1;
+    } else {
+      state._previousMasterVolume = current;
+      state.masterVolume = 0;
+    }
+    sendAllTileVolumes();
+    syncVolumeUI();
+    saveStateSoon();
+  }
+
   function makeMainAudible() {
     const main = state.channels.find(c => c.uid === mainUid());
     if (!main) return;
@@ -841,9 +893,16 @@
     const masterValue = ui.querySelector("#masterVolumeValue");
     const mainCheck = ui.querySelector("#mainOnlyCheck");
     const masterPct = Math.round(clamp01(state.masterVolume ?? 1) * 100);
+    const masterMuteBtn = ui.querySelector("#masterMuteBtn");
 
     if (master && activeRange !== master) master.value = String(masterPct);
     if (masterValue) masterValue.textContent = `${masterPct}%`;
+    if (masterMuteBtn) {
+      const muted = masterPct <= 0;
+      masterMuteBtn.innerHTML = muted ? ICON_SPEAKER_MUTED : ICON_SPEAKER;
+      masterMuteBtn.title = muted ? "전체 음소거 해제" : "전체 음소거";
+      masterMuteBtn.classList.toggle("is-muted", muted);
+    }
     if (mainCheck) mainCheck.checked = state.mainOnly === true;
 
     const list = buildVolumeList();
@@ -939,11 +998,12 @@
       tile.classList.remove("extra-main-sub");
 
       if (state.layout === "main-sub") {
+        const mainOnLeft = state.chatSide === "left";
         if (index === 0) {
-          tile.style.gridColumn = "2";
+          tile.style.gridColumn = mainOnLeft ? "1" : "2";
           tile.style.gridRow = "1 / 4";
         } else {
-          tile.style.gridColumn = "1";
+          tile.style.gridColumn = mainOnLeft ? "2" : "1";
           tile.style.gridRow = String(index);
         }
       }
@@ -981,7 +1041,11 @@
         const subW = subH * 16 / 9;
         const mainW = Math.max(1, rect.width - gap - subW);
 
-        videoGrid.style.gridTemplateColumns = `${subW}px ${mainW}px`;
+        if (state.chatSide === "left") {
+          videoGrid.style.gridTemplateColumns = `${mainW}px ${subW}px`;
+        } else {
+          videoGrid.style.gridTemplateColumns = `${subW}px ${mainW}px`;
+        }
         videoGrid.style.gridTemplateRows = `repeat(3, ${subH}px)`;
         videoGrid.style.justifyContent = "center";
         videoGrid.style.alignContent = "center";
@@ -1055,17 +1119,20 @@
       });
     }
 
-    const target = `https://chzzk.naver.com/live/${encodeURIComponent(uid)}/chat?multiview=1`;
+    const channel = state.channels.find(c => c.uid === uid);
+    const target = channel?.type === "video"
+      ? `${channel.url}${channel.url.includes("?") ? "&" : "?"}multiview=chat`
+      : `https://chzzk.naver.com/live/${encodeURIComponent(channel?.sourceId || uid)}/chat?multiview=1`;
 
     // Only reload chat when the selected channel changes.
     if (chatFrame.dataset.uid !== uid) {
       chatFrame.dataset.uid = uid;
       chatFrame.src = target;
-      waitForChatDom(chatFrame, uid);
+      waitForChatDom(chatFrame, uid, channel?.type === "video");
     }
   }
 
-  function waitForChatDom(frame, uid) {
+  function waitForChatDom(frame, uid, isReplay = false) {
     if (chatTimer) {
       clearInterval(chatTimer);
       chatTimer = null;
@@ -1085,7 +1152,10 @@
         const doc = frame.contentDocument;
         if (!doc) return;
 
-        const chatRoot = findChatRoot(doc);
+        // Replay pages contain both the replay chat and the normal comment
+        // area. Prefer the section explicitly labelled "라이브 채팅 다시보기"
+        // so the generic chat/comment detector cannot select the wrong panel.
+        const chatRoot = isReplay ? (findReplayChatRoot(doc) || findChatRoot(doc)) : findChatRoot(doc);
 
         if (chatRoot) {
           prepareChatOnlyFrame(doc, chatRoot);
@@ -1102,6 +1172,40 @@
     }, 250);
 
     chatTimer = timer;
+  }
+
+  function findReplayChatRoot(doc) {
+    const markers = Array.from(doc.querySelectorAll("body *")).filter(el => {
+      const text = String(el.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text || text.length > 120) return false;
+      return /라이브 채팅 다시보기|실시간 채팅 다시보기/i.test(text);
+    });
+
+    let best = null;
+    for (const marker of markers) {
+      let node = marker;
+      for (let depth = 0; node && node !== doc.body && depth < 8; depth++, node = node.parentElement) {
+        if (!isVisible(node)) continue;
+        const rect = node.getBoundingClientRect();
+        if (rect.width < 160 || rect.height < 120) continue;
+
+        const text = String(node.textContent || "").replace(/\s+/g, " ").trim();
+        let score = 20 - depth * 2;
+        if (/라이브 채팅 다시보기|실시간 채팅 다시보기/i.test(text)) score += 12;
+        if (node.querySelectorAll("li, [role='listitem']").length >= 3) score += 8;
+        if (node.querySelectorAll("button").length >= 1) score += 2;
+
+        // Avoid selecting the entire page shell when walking up the tree.
+        if (rect.width > doc.documentElement.clientWidth * 0.95 && rect.height > doc.documentElement.clientHeight * 0.9) score -= 12;
+
+        const area = rect.width * rect.height;
+        if (!best || score > best.score || (score === best.score && area < best.area)) {
+          best = { el: node, score, area };
+        }
+      }
+    }
+
+    return best?.el || null;
   }
 
   function findChatRoot(doc) {
@@ -1281,7 +1385,9 @@
       btn.title = state.chatSide === "left" ? "채팅창을 오른쪽으로 이동" : "채팅창을 왼쪽으로 이동";
       btn.setAttribute("aria-label", btn.title);
     }
-    requestAnimationFrame(() => resizeFixedAspectGrid());
+    // Chat side changes both the outer panel position and the 1+3 / 3+1
+    // raid arrangement. Re-apply the layout so gridColumn/gridRow follow it.
+    applyLayout();
     if (persist) saveState();
   }
 
@@ -1330,50 +1436,10 @@
     notice._hideTimer = setTimeout(() => notice.classList.remove("show"), 1400);
   }
 
-  function formatBitrate(value) {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) return "확인 불가";
-    if (n >= 1000000) return `${(n / 1000000).toFixed(1)} Mbps`;
-    return `${Math.round(n / 1000)} Kbps`;
-  }
-
-  function formatLatency(value) {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n < 0) return "확인 불가";
-    return `${n.toFixed(1)}초`;
-  }
-
-  function updateStreamInfo(uid, info = {}) {
-    const channel = state.channels.find(c => c.uid === uid);
-    if (!channel) return;
-    channel.streamInfo = { ...(channel.streamInfo || {}), ...info, updatedAt: Date.now() };
-    refreshChannelManager();
-  }
-
   function refreshChannelManager() {
     if (!ui) return;
     const list = ui.querySelector("#channelList");
     if (!list) return;
-    const infoPanel = ui.querySelector("#streamInfoPanel");
-    if (infoPanel) {
-      if (!state.channels.length) {
-        infoPanel.innerHTML = '<div class="stream-info-empty">현재 방송이 없습니다.</div>';
-      } else {
-        infoPanel.innerHTML = state.channels.map(channel => {
-          const info = channel.streamInfo || {};
-          return `
-            <div class="stream-info-row">
-              <div class="stream-info-name">${escapeHtml(displayChannelName(channel))}${channel.uid === state.selectedUid ? '<em>메인</em>' : ''}</div>
-              <div class="stream-info-values">
-                <span>지연 <b>${escapeHtml(formatLatency(info.latency))}</b></span>
-                <span>해상도 <b>${escapeHtml(info.width && info.height ? `${info.width}×${info.height}` : "확인 불가")}</b></span>
-                <span>FPS <b>${escapeHtml(Number.isFinite(Number(info.fps)) ? Number(info.fps).toFixed(1) : "확인 불가")}</b></span>
-                <span>비트레이트 <b>${escapeHtml(formatBitrate(info.bitrate))}</b></span>
-              </div>
-            </div>`;
-        }).join("");
-      }
-    }
     list.innerHTML = state.channels.map((channel, index) => `
       <div class="channel-list-row" data-uid="${escapeHtml(channel.uid)}">
         <div class="channel-list-select">
@@ -1762,6 +1828,8 @@
       position:absolute; z-index:60; top:calc(100% + 6px); right:0; width:300px; max-height:460px; overflow:auto;
       padding:10px; background:#171719; border:1px solid #343438; border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,.35);
     }
+    .master-volume-top { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+    .master-volume-top label { flex:1 1 auto; margin-bottom:0; }
     .volume-row label { display:flex; justify-content:space-between; gap:8px; margin-bottom:5px; color:#ddd; font-size:11px; }
     .volume-row input[type="range"], .tile-volume-row input[type="range"] { width:100%; accent-color:#00d26a; cursor:pointer; margin:0; }
     .volume-help { margin:6px 0 0; color:#888; font-size:10.5px; line-height:1.45; }
@@ -2341,8 +2409,11 @@
     }
 
     .tile-streamer-name {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 42%;
       min-width: 0;
-      flex: 1 1 auto;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2369,23 +2440,30 @@
     .tile-head-spacer { flex: 1 1 auto; min-width: 0; }
 
     .tile-address {
-      flex: 0 0 auto; min-width: 62px;
-      min-width: 72px;
-      max-width: 80px;
-      padding: 0 4px;
-      border: 0;
+      flex: 0 0 72px;
+      width: 72px;
+      height: 24px;
+      box-sizing: border-box;
+      padding: 0 5px;
+      border: 1px solid #3a3a3e;
+      border-radius: 5px;
       background: transparent;
       color: #bbb;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      text-align: left;
+      line-height: 22px;
+      text-align: center;
       cursor: pointer;
     }
 
-    .tile-address:hover { color: #00d26a; }
+    .tile-address:hover {
+      border-color: #00d26a;
+      background: #00d26a;
+      color: #06150d;
+    }
 
 
     .tile-btn {
