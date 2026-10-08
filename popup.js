@@ -1,5 +1,7 @@
-const FAVORITES_KEY = "chzzkMultiviewFavoritesV07";
-const FAVORITE_GROUPS_KEY = "chzzkMultiviewFavoriteGroupsV01";
+const FAVORITES_KEY = "chzzkMultiviewFavoritesV08";
+const FAVORITES_LEGACY_KEY = "chzzkMultiviewFavoritesV07";
+const FAVORITE_GROUPS_KEY = "chzzkMultiviewFavoriteGroupsV02";
+const FAVORITE_GROUPS_LEGACY_KEY = "chzzkMultiviewFavoriteGroupsV01";
 const DEFAULT_GROUP = "기본 그룹";
 
 const statusEl = document.getElementById("status");
@@ -281,11 +283,25 @@ function renderList() {
 }
 
 async function loadFavorites() {
-  const r = await chrome.storage.local.get([FAVORITES_KEY, FAVORITE_GROUPS_KEY]);
-  favorites = Array.isArray(r[FAVORITES_KEY]) ? r[FAVORITES_KEY].map(normalizeFavorite).filter(Boolean) : [];
-  favoriteGroups = Array.isArray(r[FAVORITE_GROUPS_KEY]) ? r[FAVORITE_GROUPS_KEY].filter(g => typeof g === "string" && g.trim()).map(g => g.trim()) : [DEFAULT_GROUP];
+  const r = await chrome.storage.local.get([
+    FAVORITES_KEY, FAVORITES_LEGACY_KEY,
+    FAVORITE_GROUPS_KEY, FAVORITE_GROUPS_LEGACY_KEY
+  ]);
+
+  const rawFavorites = Array.isArray(r[FAVORITES_KEY]) ? r[FAVORITES_KEY]
+    : (Array.isArray(r[FAVORITES_LEGACY_KEY]) ? r[FAVORITES_LEGACY_KEY] : []);
+  const rawGroups = Array.isArray(r[FAVORITE_GROUPS_KEY]) ? r[FAVORITE_GROUPS_KEY]
+    : (Array.isArray(r[FAVORITE_GROUPS_LEGACY_KEY]) ? r[FAVORITE_GROUPS_LEGACY_KEY] : [DEFAULT_GROUP]);
+
+  favorites = rawFavorites.map(normalizeFavorite).filter(Boolean);
+  favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
   ensureGroups();
+
+  // Persist the migrated/normalized data immediately so favorites survive
+  // browser/PC restarts and future versions do not depend on the old keys.
+  await saveFavorites();
   await refreshFavoriteOnlineStatus(false);
+  await saveFavorites();
   renderFavorites();
   renderList();
 }
@@ -337,6 +353,57 @@ async function addGroup() {
   groupFilterEl.value = group;
   renderFavorites();
   setStatus(`'${group}' 그룹을 만들었습니다.`);
+}
+
+async function manageGroups() {
+  ensureGroups();
+  const candidates = favoriteGroups.map((g, i) => `${i + 1}. ${g}`).join("\n");
+  const target = window.prompt(`관리할 그룹 이름을 입력하세요.\n\n${candidates}`);
+  if (target === null) return;
+  const group = target.trim();
+  if (!group || !favoriteGroups.includes(group)) {
+    setStatus("존재하는 그룹을 선택해주세요.", true);
+    return;
+  }
+
+  if (group === DEFAULT_GROUP) {
+    const rename = window.prompt("기본 그룹은 삭제할 수 없습니다.\n새 그룹 이름을 입력하세요.", group);
+    if (rename === null) return;
+    const next = rename.trim();
+    if (!next || next === DEFAULT_GROUP || favoriteGroups.includes(next)) {
+      setStatus("사용할 수 없는 그룹 이름입니다.", true);
+      return;
+    }
+    favoriteGroups = favoriteGroups.map(g => g === group ? next : g);
+    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = next; });
+    await saveFavorites();
+    renderFavorites();
+    setStatus(`'${group}' 그룹의 이름을 변경했습니다.`);
+    return;
+  }
+
+  const action = window.confirm(`'${group}' 그룹의 이름을 변경하시겠습니까?\n\n확인: 이름 변경\n취소: 삭제`);
+  if (action) {
+    const rename = window.prompt("새 그룹 이름을 입력하세요.", group);
+    if (rename === null) return;
+    const next = rename.trim();
+    if (!next || favoriteGroups.includes(next)) {
+      setStatus("사용할 수 없는 그룹 이름입니다.", true);
+      return;
+    }
+    favoriteGroups = favoriteGroups.map(g => g === group ? next : g);
+    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = next; });
+    await saveFavorites();
+    renderFavorites();
+    setStatus(`'${group}' → '${next}'으로 변경했습니다.`);
+  } else if (window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) {
+    favoriteGroups = favoriteGroups.filter(g => g !== group);
+    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = DEFAULT_GROUP; });
+    ensureGroups();
+    await saveFavorites();
+    renderFavorites();
+    setStatus(`'${group}' 그룹을 삭제했습니다.`);
+  }
 }
 
 function addToList(value = uidInput.value) {
@@ -394,8 +461,8 @@ async function openMultiView() {
 uidInput.addEventListener("keydown", e => { if (e.key === "Enter") addToList(); });
 document.getElementById("addList").addEventListener("click", () => addToList());
 document.getElementById("clearList").addEventListener("click", () => { multiList = []; renderList(); });
-document.getElementById("removeFavorite").addEventListener("click", removeFavorite);
 document.getElementById("addGroup").addEventListener("click", () => addGroup().catch(console.warn));
+document.getElementById("manageGroups").addEventListener("click", () => manageGroups().catch(console.warn));
 document.getElementById("refreshFavorites").addEventListener("click", async () => {
   await refreshFavoriteOnlineStatus(true);
   renderFavorites();

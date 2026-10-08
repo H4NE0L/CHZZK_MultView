@@ -32,6 +32,7 @@ button { border:0; border-radius:8px; cursor:pointer; }
 .primary { width:100%; margin-top:10px; padding:11px 12px; background:#00d26a; color:#07140c; font-weight:700; flex:0 0 auto; }
 .section-head, .favorites-head { display:flex; align-items:center; margin-top:12px; font-size:12px; flex:0 0 auto; }
 .favorite-actions { margin-left:auto; display:flex; gap:3px; }
+.favorite-actions .text-btn { white-space:nowrap; }
 .text-btn { padding:3px 6px; background:transparent; color:#888; }
 .text-btn:hover { color:#00d26a; }
 .multi-list { margin-top:6px; height:84px; flex:0 0 84px; overflow:auto; border:1px solid #2d2d30; border-radius:8px; background:#181819; }
