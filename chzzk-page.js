@@ -2303,13 +2303,19 @@
     .favorite-filter-row { margin-bottom:6px; }
     #favoriteGroupFilter { width:100%; height:30px; font-size:10px; }
     .favorite-list { display:flex; flex-direction:column; gap:5px; width:100%; height:250px; min-height:0; max-height:250px; overflow-y:scroll; overflow-x:hidden; padding:5px 3px 5px 5px; border:1px solid #2d2d31; border-radius:8px; background:#181819; box-sizing:border-box; scrollbar-gutter:stable; }
+    
+    // favorite list group should not shrink when the list is too small
+    .favorite-list > .favorite-list-group { flex-shrink: 0; }
+
     .favorite-list-group { border:1px solid #2d2d31; border-radius:7px; overflow:hidden; }
     .favorite-list-group-summary { list-style:none; display:flex; align-items:center; gap:6px; min-height:30px; padding:0 7px; background:#202023; cursor:grab; user-select:none; }
     .favorite-list-group-summary::-webkit-details-marker { display:none; }
     .favorite-list-group-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:800; }
     .favorite-list-group-count { color:#777; font-size:9px; }
     .favorite-group-drag-handle { color:#666; }
+    
     .favorite-list-group-items { padding:3px; }
+    
     .favorite-status-dot { flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:#555; }
     .favorite-status-dot.online { background:#00d26a; box-shadow:0 0 6px rgba(0,210,106,.5); }
     .favorite-online-badge { flex:0 0 auto; font-size:8px; font-weight:800; }
