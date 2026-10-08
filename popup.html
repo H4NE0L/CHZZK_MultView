@@ -13,7 +13,7 @@
         <h1>CZ 통제실</h1>
         <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
       </div>
-      <span id="version" class="version-badge">v1.1.4</span>
+      <span id="version" class="version-badge">v1.1.6</span>
     </div>
 
     <div class="input-row">
@@ -27,19 +27,29 @@
     <div class="favorites-head">
       <strong>즐겨찾기</strong>
       <div class="favorite-actions">
-        <button id="addGroup" class="text-btn">그룹 추가</button>
-        <button id="manageGroups" class="text-btn">그룹 관리</button>
+        <button id="manageGroups" class="text-btn" type="button">그룹 관리</button>
+        <button id="manageItems" class="text-btn" type="button">항목 관리</button>
+        <button id="refreshFavorites" class="refresh-btn" type="button" title="온라인 상태 새로고침">↻</button>
       </div>
-    </div>
-    <div class="favorite-filter-row">
-      <select id="groupFilter" class="group-filter">
-        <option value="__all__">전체 그룹</option>
-      </select>
-      <button id="refreshFavorites" class="refresh-btn" title="온라인 상태 새로고침">↻</button>
     </div>
     <div id="favorites" class="favorite-list"></div>
     <button id="open" class="primary">멀티뷰 열기</button>
     <p id="status" class="status"></p>
+
+    <div id="groupManageModal" class="manage-modal" aria-hidden="true">
+      <div class="manage-dialog">
+        <div class="manage-dialog-head"><strong>그룹 관리</strong><button type="button" data-close-modal="groups">✕</button></div>
+        <button id="groupAddFromModal" class="modal-add-btn" type="button">+ 그룹 추가</button>
+        <div id="groupManageList" class="manage-list"></div>
+      </div>
+    </div>
+    <div id="itemManageModal" class="manage-modal" aria-hidden="true">
+      <div class="manage-dialog">
+        <div class="manage-dialog-head"><strong>항목 관리</strong><button type="button" data-close-modal="items">✕</button></div>
+        <p class="manage-help">전체 즐겨찾기의 순서입니다. 그룹을 변경해도 번호 순서는 유지됩니다.</p>
+        <div id="itemManageList" class="manage-list"></div>
+      </div>
+    </div>
   </main>
   <script src="popup.js"></script>
 </body>

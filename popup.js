@@ -8,7 +8,6 @@ const statusEl = document.getElementById("status");
 const uidInput = document.getElementById("uidInput");
 const favoritesEl = document.getElementById("favorites");
 const multiListEl = document.getElementById("multiList");
-const groupFilterEl = document.getElementById("groupFilter");
 const versionEl = document.getElementById("version");
 let favorites = [];
 let favoriteGroups = [DEFAULT_GROUP];
@@ -58,11 +57,18 @@ function ensureGroups() {
   favoriteGroups = [...set];
 }
 
-function renderGroupFilter() {
-  const current = groupFilterEl.value || "__all__";
-  groupFilterEl.innerHTML = `<option value="__all__">전체 그룹</option>` + favoriteGroups.map(g =>
-    `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
-  groupFilterEl.value = favoriteGroups.includes(current) ? current : "__all__";
+function normalizeFavoriteOrders() {
+  const sorted = [...favorites].sort((a, b) => {
+    const ao = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+    const bo = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+    return ao - bo;
+  });
+  sorted.forEach((fav, i) => { fav.order = i + 1; });
+  favorites = sorted;
+}
+
+function reindexFavoriteOrders() {
+  favorites.forEach((fav, i) => { fav.order = i + 1; });
 }
 
 function escapeHtml(value) {
@@ -71,15 +77,13 @@ function escapeHtml(value) {
 
 function getGroupItems(group) {
   const items = favorites.filter(f => (f.group || DEFAULT_GROUP) === group);
-  // 온라인 방송을 우선하되, 온라인끼리/오프라인끼리는 저장된 배열 순서를 유지한다.
-  return items.sort((a, b) => Number(b.online === true) - Number(a.online === true));
+  // 온라인 여부를 최우선으로 하되, 같은 상태에서는 전역 순서를 유지한다.
+  return items.sort((a, b) => Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
 }
 
 function renderFavorites() {
   ensureGroups();
-  renderGroupFilter();
-  const filter = groupFilterEl.value || "__all__";
-  const groups = favoriteGroups.filter(g => filter === "__all__" || g === filter);
+  const groups = favoriteGroups;
 
   if (!favorites.length) {
     favoritesEl.innerHTML = `<div class="favorite-empty">즐겨찾기한 방송이 없습니다.</div>`;
@@ -88,34 +92,27 @@ function renderFavorites() {
 
   favoritesEl.innerHTML = groups.map(group => {
     const items = getGroupItems(group);
-    if (!items.length && filter === "__all__") return `<div class="favorite-group-empty" data-group="${escapeHtml(group)}">${escapeHtml(group)} <span>비어 있음</span></div>`;
-    if (!items.length) return "";
+    if (!items.length) return `<div class="favorite-group-empty" data-group="${escapeHtml(group)}">${escapeHtml(group)} <span>비어 있음</span></div>`;
     return `<details class="favorite-group" open data-group="${escapeHtml(group)}">
-      <summary class="favorite-group-summary" draggable="true">
-        <span class="group-drag-handle" title="드래그해서 그룹 순서 변경">⠿</span>
+      <summary class="favorite-group-summary">
         <span class="group-name">${escapeHtml(group)}</span>
         <span class="favorite-group-count">${items.length}</span>
-        <button class="group-delete" type="button" title="그룹 삭제" data-group="${escapeHtml(group)}" ${group === DEFAULT_GROUP ? "disabled" : ""}>✕</button>
+        ${items.some(f => f.online) ? `<button class="group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${items.filter(f=>f.online).length}개 멀티뷰</button>` : ''}
       </summary>
-      <div class="favorite-group-items" data-group-items="${escapeHtml(group)}">${items.map(renderFavoriteRow).join("")}</div>
+      <div class="favorite-group-items">${items.map(renderFavoriteRow).join("")}</div>
     </details>`;
-  }).join("") || `<div class="favorite-empty">선택한 그룹에 즐겨찾기가 없습니다.</div>`;
+  }).join("");
 
   bindFavoriteEvents();
 }
 
 function renderFavoriteRow(fav) {
-  return `<div class="favorite-row ${fav.online ? "online" : ""}" data-uid="${escapeHtml(fav.uid)}" draggable="true">
-    <span class="favorite-drag-handle" title="드래그해서 방송 순서 변경">⠿</span>
+  return `<div class="favorite-row ${fav.online ? "online" : ""}" data-uid="${escapeHtml(fav.uid)}">
     <button class="favorite-main" title="멀티뷰 목록에 추가">
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
       <span class="favorite-name">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>
-    <select class="favorite-group-select" title="그룹 변경">
-      ${favoriteGroups.map(g => `<option value="${escapeHtml(g)}" ${g === (fav.group || DEFAULT_GROUP) ? "selected" : ""}>${escapeHtml(g)}</option>`).join("")}
-    </select>
-    <button class="favorite-delete" title="즐겨찾기 삭제">✕</button>
   </div>`;
 }
 
@@ -151,119 +148,15 @@ function moveFavoriteWithinGroup(uid, targetUid) {
 }
 
 function bindFavoriteEvents() {
-  favoritesEl.querySelectorAll(".favorite-main").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const uid = btn.closest(".favorite-row")?.dataset.uid;
-      if (!uid) return;
-      selectedFavoriteUid = uid;
-      addToList(uid);
-    });
-  });
-
-  favoritesEl.querySelectorAll(".favorite-group-select").forEach(select => {
-    select.addEventListener("change", async () => {
-      const uid = select.closest(".favorite-row")?.dataset.uid;
-      const fav = favorites.find(f => f.uid === uid);
-      if (!fav) return;
-      fav.group = select.value || DEFAULT_GROUP;
-      ensureGroups();
-      await saveFavorites();
-      renderFavorites();
-      setStatus(`'${fav.name}'을(를) ${fav.group}으로 이동했습니다.`);
-    });
-  });
-
-  favoritesEl.querySelectorAll(".favorite-delete").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const uid = btn.closest(".favorite-row")?.dataset.uid;
-      if (!uid) return;
-      const fav = favorites.find(f => f.uid === uid);
-      favorites = favorites.filter(f => f.uid !== uid);
-      if (selectedFavoriteUid === uid) selectedFavoriteUid = "";
-      await saveFavorites();
-      renderFavorites();
-      setStatus(`${fav?.name || uid}을(를) 즐겨찾기에서 삭제했습니다.`);
-    });
-  });
-
-  favoritesEl.querySelectorAll(".group-delete").forEach(btn => {
-    btn.addEventListener("click", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      const group = btn.dataset.group;
-      if (!group || group === DEFAULT_GROUP) return;
-      if (!favoriteGroups.includes(group)) return;
-      favoriteGroups = favoriteGroups.filter(g => g !== group);
-      favorites.forEach(f => {
-        if ((f.group || DEFAULT_GROUP) === group) f.group = DEFAULT_GROUP;
-      });
-      ensureGroups();
-      await saveFavorites();
-      renderFavorites();
-      setStatus(`'${group}' 그룹을 삭제하고 방송을 기본 그룹으로 이동했습니다.`);
-    });
-  });
-
-  favoritesEl.querySelectorAll(".favorite-group-summary").forEach(summary => {
-    summary.addEventListener("dragstart", e => {
-      draggedGroup = summary.closest(".favorite-group")?.dataset.group || null;
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", draggedGroup || "");
-      }
-    });
-    summary.addEventListener("dragover", e => {
-      if (!draggedGroup) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    });
-    summary.addEventListener("drop", async e => {
-      e.preventDefault();
-      const target = summary.closest(".favorite-group")?.dataset.group;
-      if (!draggedGroup || !target || draggedGroup === target) return;
-      moveGroup(draggedGroup, target);
-      await saveFavorites();
-      renderFavorites();
-      setStatus(`그룹 순서를 변경했습니다.`);
-      draggedGroup = null;
-    });
-    summary.addEventListener("dragend", () => { draggedGroup = null; });
-  });
-
-  favoritesEl.querySelectorAll(".favorite-row").forEach(row => {
-    row.addEventListener("dragstart", e => {
-      draggedFavoriteUid = row.dataset.uid || null;
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", draggedFavoriteUid || "");
-      }
-    });
-    row.addEventListener("dragover", e => {
-      if (!draggedFavoriteUid || draggedFavoriteUid === row.dataset.uid) return;
-      const source = favorites.find(f => f.uid === draggedFavoriteUid);
-      const target = favorites.find(f => f.uid === row.dataset.uid);
-      if (!source || !target || (source.group || DEFAULT_GROUP) !== (target.group || DEFAULT_GROUP)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      row.classList.add("drag-over");
-    });
-    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
-    row.addEventListener("drop", async e => {
-      e.preventDefault();
-      row.classList.remove("drag-over");
-      const targetUid = row.dataset.uid;
-      if (!draggedFavoriteUid || !targetUid || draggedFavoriteUid === targetUid) return;
-      moveFavoriteWithinGroup(draggedFavoriteUid, targetUid);
-      await saveFavorites();
-      renderFavorites();
-      setStatus(`즐겨찾기 순서를 변경했습니다.`);
-      draggedFavoriteUid = null;
-    });
-    row.addEventListener("dragend", () => {
-      draggedFavoriteUid = null;
-      favoritesEl.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
-    });
-  });
+  favoritesEl.querySelectorAll('.favorite-main').forEach(btn => btn.addEventListener('click', () => {
+    const uid = btn.closest('.favorite-row')?.dataset.uid;
+    if (uid) addToList(uid);
+  }));
+  favoritesEl.querySelectorAll('.group-open-online').forEach(btn => btn.addEventListener('click', async e => {
+    e.preventDefault(); e.stopPropagation();
+    getGroupItems(btn.dataset.group).filter(f => f.online).forEach(f => addToList(f.uid));
+    await openMultiView();
+  }));
 }
 
 function renderList() {
@@ -296,6 +189,7 @@ async function loadFavorites() {
   favorites = rawFavorites.map(normalizeFavorite).filter(Boolean);
   favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
   ensureGroups();
+  normalizeFavoriteOrders();
 
   // Persist the migrated/normalized data immediately so favorites survive
   // browser/PC restarts and future versions do not depend on the old keys.
@@ -338,72 +232,146 @@ async function refreshFavoriteOnlineStatus(showStatus = true) {
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 갱신했습니다.");
 }
 
-async function addGroup() {
+async function addGroupFromModal() {
   const name = window.prompt("새 그룹 이름을 입력하세요.", "새 그룹");
   if (name === null) return;
   const group = name.trim();
-  if (!group) return;
-  if (favoriteGroups.includes(group)) {
-    setStatus("이미 존재하는 그룹입니다.", true);
+  if (!group || favoriteGroups.includes(group)) {
+    if (group) setStatus("이미 존재하는 그룹입니다.", true);
     return;
   }
   favoriteGroups.push(group);
   await saveFavorites();
+  renderGroupManager();
   renderFavorites();
-  groupFilterEl.value = group;
-  renderFavorites();
-  setStatus(`'${group}' 그룹을 만들었습니다.`);
 }
 
-async function manageGroups() {
+function showModal(kind) {
+  const modal = document.getElementById(kind === "items" ? "itemManageModal" : "groupManageModal");
+  if (!modal) return;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  if (kind === "items") renderItemManager();
+  else renderGroupManager();
+}
+
+function closeModal(kind) {
+  const modal = document.getElementById(kind === "items" ? "itemManageModal" : "groupManageModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function renderGroupManager() {
   ensureGroups();
-  const candidates = favoriteGroups.map((g, i) => `${i + 1}. ${g}`).join("\n");
-  const target = window.prompt(`관리할 그룹 이름을 입력하세요.\n\n${candidates}`);
-  if (target === null) return;
-  const group = target.trim();
-  if (!group || !favoriteGroups.includes(group)) {
-    setStatus("존재하는 그룹을 선택해주세요.", true);
-    return;
-  }
+  const list = document.getElementById("groupManageList");
+  if (!list) return;
+  list.innerHTML = favoriteGroups.map((group, i) => `
+    <div class="manage-group-row" data-group="${escapeHtml(group)}" draggable="true">
+      <span class="manage-drag">⠿</span>
+      <span class="manage-index">${i + 1}</span>
+      <span class="manage-name">${escapeHtml(group)}</span>
+      <button class="manage-rename" type="button">이름 변경</button>
+      <button class="manage-remove" type="button" ${group === DEFAULT_GROUP ? "disabled" : ""}>삭제</button>
+    </div>`).join("") || '<div class="manage-empty">그룹이 없습니다.</div>';
 
-  if (group === DEFAULT_GROUP) {
-    const rename = window.prompt("기본 그룹은 삭제할 수 없습니다.\n새 그룹 이름을 입력하세요.", group);
-    if (rename === null) return;
-    const next = rename.trim();
-    if (!next || next === DEFAULT_GROUP || favoriteGroups.includes(next)) {
-      setStatus("사용할 수 없는 그룹 이름입니다.", true);
-      return;
-    }
-    favoriteGroups = favoriteGroups.map(g => g === group ? next : g);
-    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = next; });
+  list.querySelectorAll(".manage-rename").forEach(btn => btn.addEventListener("click", async () => {
+    const row = btn.closest(".manage-group-row");
+    const old = row?.dataset.group;
+    if (!old) return;
+    const nextRaw = window.prompt("그룹 이름을 입력하세요.", old);
+    if (nextRaw === null) return;
+    const next = nextRaw.trim();
+    if (!next || (next !== old && favoriteGroups.includes(next))) return;
+    favoriteGroups = favoriteGroups.map(g => g === old ? next : g);
+    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === old) f.group = next; });
     await saveFavorites();
+    renderGroupManager();
     renderFavorites();
-    setStatus(`'${group}' 그룹의 이름을 변경했습니다.`);
-    return;
-  }
+  }));
 
-  const action = window.confirm(`'${group}' 그룹의 이름을 변경하시겠습니까?\n\n확인: 이름 변경\n취소: 삭제`);
-  if (action) {
-    const rename = window.prompt("새 그룹 이름을 입력하세요.", group);
-    if (rename === null) return;
-    const next = rename.trim();
-    if (!next || favoriteGroups.includes(next)) {
-      setStatus("사용할 수 없는 그룹 이름입니다.", true);
-      return;
-    }
-    favoriteGroups = favoriteGroups.map(g => g === group ? next : g);
-    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = next; });
-    await saveFavorites();
-    renderFavorites();
-    setStatus(`'${group}' → '${next}'으로 변경했습니다.`);
-  } else if (window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) {
+  list.querySelectorAll(".manage-remove").forEach(btn => btn.addEventListener("click", async () => {
+    const group = btn.closest(".manage-group-row")?.dataset.group;
+    if (!group || group === DEFAULT_GROUP) return;
+    if (!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) return;
     favoriteGroups = favoriteGroups.filter(g => g !== group);
     favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = DEFAULT_GROUP; });
     ensureGroups();
     await saveFavorites();
+    renderGroupManager();
     renderFavorites();
-    setStatus(`'${group}' 그룹을 삭제했습니다.`);
-  }
+  }));
+
+  let dragGroup = null;
+  list.querySelectorAll(".manage-group-row").forEach(row => {
+    row.addEventListener("dragstart", e => { dragGroup = row.dataset.group; e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragover", e => { if (dragGroup && dragGroup !== row.dataset.group) e.preventDefault(); });
+    row.addEventListener("drop", async e => {
+      e.preventDefault();
+      const target = row.dataset.group;
+      if (!dragGroup || !target || dragGroup === target) return;
+      moveGroup(dragGroup, target);
+      dragGroup = null;
+      await saveFavorites();
+      renderGroupManager();
+      renderFavorites();
+    });
+    row.addEventListener("dragend", () => { dragGroup = null; });
+  });
+}
+
+function renderItemManager() {
+  normalizeFavoriteOrders();
+  const list = document.getElementById("itemManageList");
+  if (!list) return;
+  list.innerHTML = favorites.map((fav, i) => `
+    <div class="manage-item-row" data-uid="${escapeHtml(fav.uid)}" draggable="true">
+      <span class="manage-drag">⠿</span>
+      <span class="manage-index">${i + 1}</span>
+      <span class="manage-item-name">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
+      <select class="manage-item-group">${favoriteGroups.map(g => `<option value="${escapeHtml(g)}" ${g === (fav.group || DEFAULT_GROUP) ? "selected" : ""}>${escapeHtml(g)}</option>`).join("")}</select>
+      <button class="manage-item-delete" type="button">삭제</button>
+    </div>`).join("") || '<div class="manage-empty">즐겨찾기한 방송이 없습니다.</div>';
+
+  list.querySelectorAll(".manage-item-group").forEach(sel => sel.addEventListener("change", async () => {
+    const fav = favorites.find(f => f.uid === sel.closest(".manage-item-row")?.dataset.uid);
+    if (!fav) return;
+    fav.group = sel.value || DEFAULT_GROUP;
+    await saveFavorites();
+    renderItemManager();
+    renderFavorites();
+  }));
+
+  list.querySelectorAll(".manage-item-delete").forEach(btn => btn.addEventListener("click", async () => {
+    const uid = btn.closest(".manage-item-row")?.dataset.uid;
+    if (!uid) return;
+    favorites = favorites.filter(f => f.uid !== uid);
+    reindexFavoriteOrders();
+    await saveFavorites();
+    renderItemManager();
+    renderFavorites();
+  }));
+
+  list.querySelectorAll(".manage-item-row").forEach(row => {
+    row.addEventListener("dragstart", e => { draggedFavoriteUid = row.dataset.uid; e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragover", e => { if (draggedFavoriteUid && draggedFavoriteUid !== row.dataset.uid) e.preventDefault(); });
+    row.addEventListener("drop", async e => {
+      e.preventDefault();
+      const targetUid = row.dataset.uid;
+      if (!draggedFavoriteUid || !targetUid || draggedFavoriteUid === targetUid) return;
+      const from = favorites.findIndex(f => f.uid === draggedFavoriteUid);
+      const to = favorites.findIndex(f => f.uid === targetUid);
+      if (from < 0 || to < 0) return;
+      const [moved] = favorites.splice(from, 1);
+      favorites.splice(to, 0, moved);
+      reindexFavoriteOrders();
+      draggedFavoriteUid = null;
+      await saveFavorites();
+      renderItemManager();
+      renderFavorites();
+    });
+    row.addEventListener("dragend", () => { draggedFavoriteUid = null; });
+  });
 }
 
 function addToList(value = uidInput.value) {
@@ -461,14 +429,31 @@ async function openMultiView() {
 uidInput.addEventListener("keydown", e => { if (e.key === "Enter") addToList(); });
 document.getElementById("addList").addEventListener("click", () => addToList());
 document.getElementById("clearList").addEventListener("click", () => { multiList = []; renderList(); });
-document.getElementById("addGroup").addEventListener("click", () => addGroup().catch(console.warn));
-document.getElementById("manageGroups").addEventListener("click", () => manageGroups().catch(console.warn));
-document.getElementById("refreshFavorites").addEventListener("click", async () => {
-  await refreshFavoriteOnlineStatus(true);
-  renderFavorites();
-});
-groupFilterEl.addEventListener("change", renderFavorites);
+document.getElementById("groupAddFromModal").addEventListener("click", addGroupFromModal);
 document.getElementById("open").addEventListener("click", openMultiView);
+
+// 관리 버튼은 팝업 전체 영역에서 위임 처리하여 동적으로 렌더링되는 UI와도 동일하게 동작하도록 한다.
+document.querySelector(".popup").addEventListener("click", async e => {
+  const manageGroups = e.target.closest("#manageGroups");
+  const manageItems = e.target.closest("#manageItems");
+  const refresh = e.target.closest("#refreshFavorites");
+  const close = e.target.closest("[data-close-modal]");
+
+  if (manageGroups) { e.preventDefault(); e.stopPropagation(); showModal("groups"); return; }
+  if (manageItems) { e.preventDefault(); e.stopPropagation(); showModal("items"); return; }
+  if (refresh) {
+    e.preventDefault(); e.stopPropagation();
+    await refreshFavoriteOnlineStatus(true);
+    renderFavorites();
+    return;
+  }
+  if (close) { e.preventDefault(); e.stopPropagation(); closeModal(close.dataset.closeModal); return; }
+
+  const modal = e.target.closest(".manage-modal");
+  if (modal && e.target === modal) {
+    closeModal(modal.id === "itemManageModal" ? "items" : "groups");
+  }
+});
 
 renderVersion();
 loadFavorites().catch(err => setStatus(String(err), true));

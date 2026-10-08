@@ -147,6 +147,16 @@
     saveTimer = setTimeout(saveState, 300);
   }
 
+  function normalizeFavoriteOrders() {
+    const sorted = [...favorites].sort((a,b) => {
+      const ao = Number.isFinite(a.order) ? a.order : Number.MAX_SAFE_INTEGER;
+      const bo = Number.isFinite(b.order) ? b.order : Number.MAX_SAFE_INTEGER;
+      return ao - bo;
+    });
+    sorted.forEach((fav,i) => { fav.order = i + 1; });
+    favorites.sort((a,b) => a.order - b.order);
+  }
+
   function ensureFavoriteGroups() {
     const set = new Set(favoriteGroups.filter(Boolean));
     set.add(DEFAULT_FAVORITE_GROUP);
@@ -168,7 +178,8 @@
       name: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
       title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
       group: String(f?.group || DEFAULT_FAVORITE_GROUP).trim() || DEFAULT_FAVORITE_GROUP,
-      online: f?.online === true
+      online: f?.online === true,
+      order: Number.isFinite(Number(f?.order)) ? Number(f.order) : null
     })).filter(f => f.uid);
     favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
     ensureFavoriteGroups();
@@ -235,14 +246,13 @@
             <summary>즐겨찾기</summary>
             <div class="favorite-manager-panel">
               <div class="favorite-manager-tools">
-                <button id="favoriteAddGroup" type="button">그룹 추가</button>
                 <button id="favoriteManageGroups" type="button">그룹 관리</button>
+                <button id="favoriteManageItems" type="button">항목 관리</button>
                 <button id="favoriteRefresh" type="button" title="온라인 상태 새로고침">↻</button>
               </div>
-              <div class="favorite-filter-row">
-                <select id="favoriteGroupFilter"><option value="__all__">전체 그룹</option></select>
-              </div>
               <div id="favoriteList" class="favorite-list"></div>
+              <div id="favoriteGroupModal" class="favorite-modal"><div class="favorite-dialog"><div class="favorite-dialog-head"><strong>그룹 관리</strong><button type="button" data-fav-close="groups">✕</button></div><button id="favoriteModalAddGroup" type="button" class="favorite-modal-add">+ 그룹 추가</button><div id="favoriteGroupManageList" class="favorite-manage-list"></div></div></div>
+              <div id="favoriteItemModal" class="favorite-modal"><div class="favorite-dialog"><div class="favorite-dialog-head"><strong>항목 관리</strong><button type="button" data-fav-close="items">✕</button></div><p class="favorite-modal-help">전체 즐겨찾기의 순서입니다. 그룹을 변경해도 전체 순번은 유지됩니다.</p><div id="favoriteItemManageList" class="favorite-manage-list"></div></div></div>
             </div>
           </details>
           <div class="add-area">
@@ -319,10 +329,11 @@
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
-    ui.querySelector("#favoriteAddGroup").addEventListener("click", () => addFavoriteGroup().catch(console.warn));
-    ui.querySelector("#favoriteManageGroups").addEventListener("click", () => manageFavoriteGroups().catch(console.warn));
+    ui.querySelector("#favoriteManageGroups").addEventListener("click", () => showFavoriteModal("groups"));
+    ui.querySelector("#favoriteManageItems").addEventListener("click", () => showFavoriteModal("items"));
     ui.querySelector("#favoriteRefresh").addEventListener("click", () => refreshFavoriteOnlineStatus(true).catch(console.warn));
-    ui.querySelector("#favoriteGroupFilter").addEventListener("change", refreshFavoriteList);
+    ui.querySelector("#favoriteModalAddGroup").addEventListener("click", async () => { const name=window.prompt("새 그룹 이름을 입력하세요.","새 그룹"); if(name===null)return; const group=name.trim(); if(!group||favoriteGroups.includes(group))return; favoriteGroups.push(group); await saveFavorites(); renderFavoriteGroupManager(); refreshFavoriteList(); });
+    ui.querySelectorAll("[data-fav-close]").forEach(btn => btn.addEventListener("click", () => closeFavoriteModal(btn.dataset.favClose)));
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
@@ -1510,130 +1521,71 @@
     return favorites.filter(f => (f.group || DEFAULT_FAVORITE_GROUP) === group);
   }
 
-  function renderFavoriteGroupFilter() {
-    const select = ui?.querySelector("#favoriteGroupFilter");
-    if (!select) return;
-    const current = select.value || "__all__";
-    select.innerHTML = `<option value="__all__">전체 그룹</option>` + favoriteGroups.map(g =>
-      `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
-    select.value = favoriteGroups.includes(current) ? current : "__all__";
-  }
-
   function refreshFavoriteList() {
     if (!ui) return;
     ensureFavoriteGroups();
-    renderFavoriteGroupFilter();
+    normalizeFavoriteOrders();
     const list = ui.querySelector("#favoriteList");
-    const filter = ui.querySelector("#favoriteGroupFilter")?.value || "__all__";
     if (!list) return;
-    if (!favorites.length) {
-      list.innerHTML = '<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>';
-      return;
-    }
+    if (!favorites.length) { list.innerHTML = '<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>'; return; }
 
-    const groups = favoriteGroups.filter(g => filter === "__all__" || g === filter);
-    list.innerHTML = groups.map(group => {
-      const items = favoriteItemsForGroup(group).sort((a, b) => Number(b.online === true) - Number(a.online === true));
+    list.innerHTML = favoriteGroups.map(group => {
+      const items = favoriteItemsForGroup(group).sort((a,b) => Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
+      const online = items.filter(f=>f.online);
       return `<details class="favorite-list-group" open data-group="${escapeHtml(group)}">
-        <summary class="favorite-list-group-summary" draggable="true">
-          <span class="favorite-group-drag-handle">⠿</span>
+        <summary class="favorite-list-group-summary">
           <span class="favorite-list-group-name">${escapeHtml(group)}</span>
           <span class="favorite-list-group-count">${items.length}</span>
+          ${online.length ? `<button class="favorite-group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${online.length}개 멀티뷰</button>` : ''}
         </summary>
         <div class="favorite-list-group-items">
-          ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}" draggable="true">
-            <span class="favorite-drag-handle">⠿</span>
-            <button class="favorite-list-add" title="방송 추가">
-              <span class="favorite-status-dot ${f.online ? "online" : ""}"></span>
-              <span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span>
-              <span class="favorite-online-badge ${f.online ? "online" : "offline"}">${f.online ? "ONLINE" : "OFFLINE"}</span>
-            </button>
-            <select class="favorite-row-group" title="그룹 변경">${favoriteGroups.map(g => `<option value="${escapeHtml(g)}" ${g === (f.group || DEFAULT_FAVORITE_GROUP) ? "selected" : ""}>${escapeHtml(g)}</option>`).join("")}</select>
-            <button class="favorite-list-toggle" title="즐겨찾기 삭제">★</button>
-          </div>`).join("") || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
+          ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
+            <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+          </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
-    }).join("");
+    }).join('');
 
-    const clearMarks = () => list.querySelectorAll(".drop-before,.drop-after").forEach(el => el.classList.remove("drop-before","drop-after"));
-    list.querySelectorAll(".favorite-list-add").forEach(btn => btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const uid = btn.closest(".favorite-list-row")?.dataset.uid;
-      if (!uid) return;
-      ui.querySelector("#uidInput").value = uid;
-      addFromInput();
-      ui.querySelector("#favoriteManager")?.removeAttribute("open");
+    list.querySelectorAll('.favorite-list-add').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation(); const uid=btn.closest('.favorite-list-row')?.dataset.uid; if(!uid)return;
+      const fav=favorites.find(f=>f.uid===uid); addToListFromFavorite(fav); ui.querySelector('#favoriteManager')?.removeAttribute('open');
     }));
-    list.querySelectorAll(".favorite-list-toggle").forEach(btn => btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const uid = btn.closest(".favorite-list-row")?.dataset.uid;
-      if (uid) toggleFavorite(uid);
+    list.querySelectorAll('.favorite-group-open-online').forEach(btn=>btn.addEventListener('click',e=>{
+      e.preventDefault(); e.stopPropagation();
+      favoriteItemsForGroup(btn.dataset.group).filter(f=>f.online).forEach(f=>addToListFromFavorite(f));
     }));
-    list.querySelectorAll(".favorite-row-group").forEach(select => select.addEventListener("change", async e => {
-      e.stopPropagation();
-      const uid = select.closest(".favorite-list-row")?.dataset.uid;
-      const fav = favorites.find(f => f.uid === uid);
-      if (!fav) return;
-      fav.group = select.value || DEFAULT_FAVORITE_GROUP;
-      ensureFavoriteGroups();
-      await saveFavorites();
-      refreshFavoriteList();
-    }));
+  }
 
-    list.querySelectorAll(".favorite-list-group-summary").forEach(summary => {
-      summary.addEventListener("dragstart", e => {
-        favDragGroup = summary.closest(".favorite-list-group")?.dataset.group || null;
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", `group:${favDragGroup || ""}`);
-      });
-      summary.addEventListener("dragover", e => {
-        if (!favDragGroup) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-      });
-      summary.addEventListener("drop", async e => {
-        e.preventDefault();
-        const target = summary.closest(".favorite-list-group")?.dataset.group;
-        if (!favDragGroup || !target || favDragGroup === target) return;
-        moveFavoriteGroup(favDragGroup, target);
-        favDragGroup = null;
-        await saveFavorites();
-        refreshFavoriteList();
-      });
-      summary.addEventListener("dragend", () => { favDragGroup = null; });
-    });
+  function addToListFromFavorite(fav) {
+    if (!fav) return;
+    const exists = state.channels.some(c=>c.uid===fav.uid);
+    if (!exists) addChannel(fav.uid, {type:"live", id:fav.uid, uid:fav.uid, url:`https://chzzk.naver.com/live/${encodeURIComponent(fav.uid)}`});
+  }
 
-    list.querySelectorAll(".favorite-list-row").forEach(row => {
-      row.addEventListener("dragstart", e => {
-        favDragUid = row.dataset.uid || null;
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", favDragUid || "");
-      });
-      row.addEventListener("dragover", e => {
-        if (!favDragUid || favDragUid === row.dataset.uid) return;
-        const source = favorites.find(f => f.uid === favDragUid);
-        const target = favorites.find(f => f.uid === row.dataset.uid);
-        if (!source || !target || (source.group || DEFAULT_FAVORITE_GROUP) !== (target.group || DEFAULT_FAVORITE_GROUP)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        clearMarks();
-        const rect = row.getBoundingClientRect();
-        row.classList.add(e.clientY > rect.top + rect.height / 2 ? "drop-after" : "drop-before");
-      });
-      row.addEventListener("drop", async e => {
-        e.preventDefault();
-        const targetUid = row.dataset.uid;
-        if (!favDragUid || !targetUid || favDragUid === targetUid) return;
-        const rect = row.getBoundingClientRect();
-        const after = e.clientY > rect.top + rect.height / 2;
-        reorderFavoriteWithinGroup(favDragUid, targetUid, after);
-        favDragUid = null;
-        clearMarks();
-        await saveFavorites();
-        refreshFavoriteList();
-      });
-      row.addEventListener("dragend", () => { favDragUid = null; clearMarks(); });
-    });
+  function showFavoriteModal(kind) {
+    const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
+    if (!modal) return;
+    modal.classList.add('open');
+    if (kind === 'items') renderFavoriteItemManager(); else renderFavoriteGroupManager();
+  }
+  function closeFavoriteModal(kind) {
+    const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
+    if (modal) modal.classList.remove('open');
+  }
+  function renderFavoriteGroupManager() {
+    const list=ui?.querySelector('#favoriteGroupManageList'); if(!list)return;
+    list.innerHTML=favoriteGroups.map((g,i)=>`<div class="favorite-manage-row" data-group="${escapeHtml(g)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(g)}</span><button class="favorite-manage-rename">이름 변경</button><button class="favorite-manage-delete" ${g===DEFAULT_FAVORITE_GROUP?'disabled':''}>삭제</button></div>`).join('');
+    list.querySelectorAll('.favorite-manage-rename').forEach(btn=>btn.onclick=async()=>{const row=btn.closest('.favorite-manage-row'),old=row?.dataset.group;if(!old)return;const next=window.prompt('그룹 이름을 입력하세요.',old);if(next===null)return;const name=next.trim();if(!name||name!==old&&favoriteGroups.includes(name))return;favoriteGroups=favoriteGroups.map(g=>g===old?name:g);favorites.forEach(f=>{if((f.group||DEFAULT_FAVORITE_GROUP)===old)f.group=name;});await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});
+    list.querySelectorAll('.favorite-manage-delete').forEach(btn=>btn.onclick=async()=>{const group=btn.closest('.favorite-manage-row')?.dataset.group;if(!group||group===DEFAULT_FAVORITE_GROUP)return;if(!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`))return;favoriteGroups=favoriteGroups.filter(g=>g!==group);favorites.forEach(f=>{if((f.group||DEFAULT_FAVORITE_GROUP)===group)f.group=DEFAULT_FAVORITE_GROUP;});ensureFavoriteGroups();await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});
+    list.querySelectorAll('.favorite-manage-row').forEach(row=>{row.addEventListener('dragstart',e=>{favDragGroup=row.dataset.group;e.dataTransfer.effectAllowed='move';});row.addEventListener('dragover',e=>{if(favDragGroup&&favDragGroup!==row.dataset.group)e.preventDefault();});row.addEventListener('drop',async e=>{e.preventDefault();const target=row.dataset.group;if(!favDragGroup||!target||favDragGroup===target)return;moveFavoriteGroup(favDragGroup,target);favDragGroup=null;await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});row.addEventListener('dragend',()=>favDragGroup=null);});
+  }
+  function renderFavoriteItemManager() {
+    normalizeFavoriteOrders(); const list=ui?.querySelector('#favoriteItemManageList'); if(!list)return;
+    list.innerHTML=favorites.map((f,i)=>`<div class="favorite-manage-row" data-uid="${escapeHtml(f.uid)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(f.name||f.title||f.uid)}</span><select class="favorite-manage-group">${favoriteGroups.map(g=>`<option value="${escapeHtml(g)}" ${g===(f.group||DEFAULT_FAVORITE_GROUP)?'selected':''}>${escapeHtml(g)}</option>`).join('')}</select><button class="favorite-manage-delete-item">삭제</button></div>`).join('')||'<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>';
+    list.querySelectorAll('.favorite-manage-group').forEach(sel=>sel.onchange=async()=>{const f=favorites.find(x=>x.uid===sel.closest('.favorite-manage-row')?.dataset.uid);if(!f)return;f.group=sel.value||DEFAULT_FAVORITE_GROUP;await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});
+    list.querySelectorAll('.favorite-manage-delete-item').forEach(btn=>btn.onclick=async()=>{const uid=btn.closest('.favorite-manage-row')?.dataset.uid;if(!uid)return;favorites=favorites.filter(f=>f.uid!==uid);favorites.forEach((f,i)=>{f.order=i+1;});await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});
+    list.querySelectorAll('.favorite-manage-row').forEach(row=>{row.addEventListener('dragstart',e=>{favDragUid=row.dataset.uid;e.dataTransfer.effectAllowed='move';});row.addEventListener('dragover',e=>{if(favDragUid&&favDragUid!==row.dataset.uid)e.preventDefault();});row.addEventListener('drop',async e=>{e.preventDefault();const target=row.dataset.uid;if(!favDragUid||!target||favDragUid===target)return;const a=favorites.findIndex(f=>f.uid===favDragUid),b=favorites.findIndex(f=>f.uid===target);if(a<0||b<0)return;const[m]=favorites.splice(a,1);favorites.splice(b,0,m);favorites.forEach((f,i)=>{f.order=i+1;});favDragUid=null;await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});row.addEventListener('dragend',()=>favDragUid=null);});
   }
 
   function moveFavoriteGroup(fromGroup, toGroup) {
@@ -1663,6 +1615,7 @@
 
   async function saveFavorites() {
     ensureFavoriteGroups();
+    normalizeFavoriteOrders();
     await chrome.storage.local.set({ [FAVORITES_KEY]: favorites, [FAVORITE_GROUPS_KEY]: favoriteGroups });
   }
 
@@ -1729,7 +1682,7 @@
 
   function toggleFavorite(uid, title = uid) {
     if (isFavorite(uid)) favorites = favorites.filter(f => f.uid !== uid);
-    else favorites.push({ uid, name: title || uid, title: title || uid, group: DEFAULT_FAVORITE_GROUP, online: false });
+    else { const nextOrder=favorites.reduce((max,f)=>Math.max(max,Number(f.order)||0),0)+1; favorites.push({ uid, name:title||uid, title:title||uid, group:DEFAULT_FAVORITE_GROUP, online:false, order:nextOrder }); }
     ensureFavoriteGroups();
     saveFavorites().catch(console.warn);
     refreshFavoriteList();
@@ -2284,6 +2237,27 @@
 
     .channel-list-favorite:hover { background: #2b2b2e; }
 
+    .favorite-group-open-online { margin-left:auto; height:24px; padding:0 7px; border:1px solid #315f47; border-radius:6px; background:#193224; color:#62e59a; font-size:9px; cursor:pointer; }
+    .favorite-group-open-online:hover { background:#21412f; }
+    .favorite-modal { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:12px; background:rgba(0,0,0,.62); }
+    .favorite-modal.open { display:flex; }
+    .favorite-dialog { width:360px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); padding:10px; border:1px solid #3b3b40; border-radius:9px; background:#171719; box-shadow:0 18px 45px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
+    .favorite-dialog-head { display:flex; align-items:center; justify-content:space-between; padding:2px 2px 8px; color:#eee; font-size:12px; }
+    .favorite-dialog-head button { width:26px; height:26px; background:transparent; color:#888; cursor:pointer; }
+    .favorite-dialog-head button:hover { color:#ff6473; }
+    .favorite-modal-add { height:29px; margin-bottom:7px; border:1px solid #38383d; border-radius:6px; background:#252529; color:#ddd; cursor:pointer; }
+    .favorite-modal-help { margin:0 0 7px; color:#888; font-size:9px; line-height:1.4; }
+    .favorite-manage-list { min-height:0; overflow:auto; border:1px solid #2d2d31; border-radius:7px; }
+    .favorite-manage-row { display:flex; align-items:center; gap:6px; min-height:34px; padding:4px 6px; border-bottom:1px solid #29292d; }
+    .favorite-manage-row:last-child { border-bottom:0; }
+    .favorite-manage-row[draggable=true] { cursor:grab; }
+    .favorite-manage-drag { color:#666; }
+    .favorite-manage-index { width:22px; text-align:center; color:#777; font-size:9px; }
+    .favorite-manage-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+    .favorite-manage-row button { height:25px; padding:0 6px; border-radius:5px; background:#252529; color:#aaa; font-size:9px; cursor:pointer; }
+    .favorite-manage-row button:hover { color:#ff6473; }
+    .favorite-manage-row button:disabled { opacity:.3; cursor:not-allowed; }
+    .favorite-manage-group { width:78px; height:25px; font-size:9px; }
     .favorite-manager {
       position: relative;
       flex: 0 0 auto;
@@ -2328,7 +2302,7 @@
     .favorite-manager-tools button:last-child { margin-left:auto; width:30px; padding:0; }
     .favorite-filter-row { margin-bottom:6px; }
     #favoriteGroupFilter { width:100%; height:30px; font-size:10px; }
-    .favorite-list { display: flex; flex-direction: column; gap: 5px; max-height:350px; overflow:auto; }
+    .favorite-list { display:flex; flex-direction:column; gap:5px; width:100%; height:250px; min-height:0; max-height:250px; overflow-y:scroll; overflow-x:hidden; padding:5px 3px 5px 5px; border:1px solid #2d2d31; border-radius:8px; background:#181819; box-sizing:border-box; scrollbar-gutter:stable; }
     .favorite-list-group { border:1px solid #2d2d31; border-radius:7px; overflow:hidden; }
     .favorite-list-group-summary { list-style:none; display:flex; align-items:center; gap:6px; min-height:30px; padding:0 7px; background:#202023; cursor:grab; user-select:none; }
     .favorite-list-group-summary::-webkit-details-marker { display:none; }
@@ -2352,7 +2326,7 @@
     }
 
     .favorite-list-row:hover { background: #242427; }
-    .favorite-list-row { position: relative; cursor: grab; }
+    .favorite-list-row { position: relative; }
     .favorite-list-row.dragging { opacity: .45; cursor: grabbing; }
     .favorite-list-row.drop-before::before,
     .favorite-list-row.drop-after::after {
