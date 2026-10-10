@@ -42,8 +42,6 @@
   let activeRange = null;
   const lastVolumeSent = new Map();
 
-  const ICON_SUN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
-  const ICON_MOON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
   const ICON_CHEVRON_UP = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
   const ICON_CHEVRON_DOWN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   const ICON_SPEAKER = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -179,6 +177,8 @@
       title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
       group: String(f?.group || DEFAULT_FAVORITE_GROUP).trim() || DEFAULT_FAVORITE_GROUP,
       online: f?.online === true,
+      openAt: Number.isFinite(Number(f?.openAt)) && Number(f.openAt) > 0 ? Number(f.openAt) : null,
+      category: String(f?.category || "").trim(),
       order: Number.isFinite(Number(f?.order)) ? Number(f.order) : null
     })).filter(f => f.uid);
     favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
@@ -271,6 +271,20 @@
         <div class="toolbar-center" aria-hidden="true"></div>
 
         <div class="toolbar-right">
+          <details id="syncManager" class="volume-manager sync-manager">
+            <summary>싱크<span id="syncBadge" class="sync-badge" hidden></span></summary>
+            <div class="volume-manager-panel sync-panel">
+              <div class="sync-summary">
+                <div class="sync-summary-head">
+                  <strong>싱크 조정 현황</strong>
+                  <button id="syncResetAll" type="button" class="manager-clear" disabled>전체 초기화</button>
+                </div>
+                <div id="syncSummaryList" class="sync-summary-list"></div>
+              </div>
+              <p class="volume-help">- 버튼은 방송을 뒤로 당기고(되감기, 지연 증가), + 버튼은 앞으로 밀어 라이브에 더 가깝게 합니다. 조정값은 저장되지 않으며 방송이 다시 로드되면 0으로 돌아갑니다.</p>
+              <div id="syncList" class="sync-list"></div>
+            </div>
+          </details>
           <details id="volumeManager" class="volume-manager">
             <summary>볼륨</summary>
             <div class="volume-manager-panel">
@@ -343,6 +357,24 @@
     masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
     bindRangeDrag(masterInput);
     ui.querySelector("#mainOnlyCheck").addEventListener("change", e => setMainOnly(e.target.checked));
+
+    // Only one of the sync / volume panels is open at a time (both are right-aligned).
+    ui.querySelector("#syncManager").addEventListener("toggle", e => {
+      if (!e.target.open) return;
+      ui.querySelector("#volumeManager")?.removeAttribute("open");
+      renderSyncUI();
+    });
+    ui.querySelector("#volumeManager").addEventListener("toggle", e => {
+      if (e.target.open) ui.querySelector("#syncManager")?.removeAttribute("open");
+    });
+    ui.querySelector("#syncResetAll").addEventListener("click", resetAllSync);
+    ui.querySelector("#syncList").addEventListener("click", e => {
+      const btn = e.target.closest("button");
+      const uid = btn?.closest(".sync-row")?.dataset.uid;
+      if (!btn || !uid || btn.disabled) return;
+      if (btn.dataset.step) adjustSync(uid, Number(btn.dataset.step));
+      else if (btn.dataset.reset !== undefined) resetSync(uid);
+    });
     ui.querySelector("#masterMuteBtn").addEventListener("click", e => { e.preventDefault(); toggleMasterMute(); });
 
     ui.querySelector("#uidInput").addEventListener("keydown", e => {
@@ -372,6 +404,8 @@
     setScreenLock(state.screenLocked === true, false);
     updateToolbarToggleUI();
     syncVolumeUI();
+    renderSyncUI();
+    setInterval(updateFavoriteMeta, 30000);
     opened = true;
     showPageLauncher(false);
   }
@@ -470,6 +504,7 @@
     }
 
     tileMap.delete(uid);
+    clearSyncState(uid);
     state.channels = state.channels.filter(c => c.uid !== uid);
 
     if (state.selectedUid === uid) {
@@ -614,6 +649,8 @@
 
     const tileFrame = tile.querySelector("iframe");
     tileFrame?.addEventListener("load", () => {
+      // A freshly loaded player starts at its own default position.
+      clearSyncState(channel.uid);
       try {
         tileFrame.contentWindow.postMessage({
           source: "chzzk-multiview", type: "ENTER_THEATER"
@@ -987,6 +1024,194 @@
   function refreshVolumeManager() {
     syncVolumeUI();
   }
+
+  /* ------------------------------------------------------------------
+     Manual sync (싱크 조정)
+     Each broadcast's playhead can be pulled back (-) or pushed forward (+)
+     in 0.1 / 0.5 second steps. The adjustment is the sum of what the player
+     really applied (it can be limited by the live edge or the start of the
+     seekable window). It is runtime-only: a reloaded player starts at 0.
+  ------------------------------------------------------------------ */
+  const syncOffsets = new Map();   // uid -> applied adjustment (ms)
+  const syncDelays = new Map();    // uid -> { delay, canSeek, t }
+  const syncPending = new Map();   // requestId -> { uid, reset }
+  const SYNC_STATE_STALE_MS = 5000;
+  let syncRequestSeq = 0;
+  let syncSig = "";
+  let syncFrame = 0;
+
+  function formatSyncSeconds(ms) {
+    if (!ms) return "0초";
+    const seconds = Number((Math.abs(ms) / 1000).toFixed(2));
+    return `${ms < 0 ? "-" : "+"}${seconds}초`;
+  }
+
+  function syncState(channel) {
+    if (channel.type === "video") return { supported: false, note: "다시보기는 싱크 조정을 지원하지 않습니다." };
+    if (!tileMap.has(channel.uid)) return { supported: false, note: "화면에 표시 중인 방송이 아닙니다." };
+    return { supported: true, note: "" };
+  }
+
+  function requestSync(uid, deltaSeconds, reset = false) {
+    const iframe = tileMap.get(uid)?.querySelector("iframe");
+    if (!iframe?.contentWindow) return;
+    const requestId = ++syncRequestSeq;
+    syncPending.set(requestId, { uid, reset });
+    setTimeout(() => {
+      if (syncPending.delete(requestId)) showNotice("싱크 조정 응답이 없습니다. 방송이 아직 로딩 중일 수 있습니다.");
+    }, 2500);
+    try {
+      iframe.contentWindow.postMessage({
+        source: "chzzk-multiview", type: "SYNC_SEEK", requestId, delta: deltaSeconds
+      }, "https://chzzk.naver.com");
+    } catch (_) {
+      syncPending.delete(requestId);
+    }
+  }
+
+  function adjustSync(uid, deltaSeconds) {
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds === 0) return;
+    requestSync(uid, deltaSeconds, false);
+  }
+
+  function resetSync(uid) {
+    const offset = syncOffsets.get(uid) || 0;
+    if (!offset) return;
+    requestSync(uid, -offset / 1000, true);
+  }
+
+  function resetAllSync() {
+    for (const [uid, offset] of [...syncOffsets]) {
+      if (offset) resetSync(uid);
+    }
+  }
+
+  function clearSyncState(uid) {
+    syncOffsets.delete(uid);
+    syncDelays.delete(uid);
+    scheduleSyncRender();
+  }
+
+  function handleSyncResult(data) {
+    const pending = syncPending.get(data.requestId);
+    if (!pending || pending.uid !== data.uid) return;
+    syncPending.delete(data.requestId);
+
+    if (data.ok !== true) {
+      showNotice(data.reason === "not-seekable"
+        ? "이 방송은 아직 싱크를 조정할 수 없습니다. 재생이 시작된 뒤 다시 시도하세요."
+        : "싱크를 조정하지 못했습니다.");
+      return;
+    }
+
+    const applied = Math.round((Number(data.applied) || 0) * 1000);
+    let next = (syncOffsets.get(data.uid) || 0) + applied;
+    if (Math.abs(next) < 10) next = 0;
+    if (next === 0) syncOffsets.delete(data.uid); else syncOffsets.set(data.uid, next);
+
+    if (typeof data.delay === "number" && Number.isFinite(data.delay)) {
+      syncDelays.set(data.uid, { delay: data.delay, canSeek: true, t: Date.now() });
+    }
+
+    if (data.clamped) {
+      const forward = Number(data.requested) > 0;
+      showNotice(applied === 0
+        ? (forward ? "더 이상 앞으로 당길 수 없습니다. (라이브에 가장 가깝습니다)" : "더 이상 뒤로 돌릴 수 없습니다.")
+        : "한계에 도달하여 일부만 적용되었습니다.");
+    }
+    scheduleSyncRender();
+  }
+
+  function handleSyncState(data) {
+    const num = typeof data.delay === "number" && Number.isFinite(data.delay) ? data.delay : null;
+    syncDelays.set(data.uid, { delay: num, canSeek: data.canSeek === true, t: Date.now() });
+    if (ui?.querySelector("#syncManager")?.open) scheduleSyncRender();
+  }
+
+  function scheduleSyncRender() {
+    if (syncFrame || !ui) return;
+    syncFrame = requestAnimationFrame(() => {
+      syncFrame = 0;
+      renderSyncUI();
+    });
+  }
+
+  function renderSyncUI() {
+    if (!ui) return;
+
+    // Always keep the toolbar badge and the top summary up to date.
+    const adjusted = state.channels.filter(c => syncOffsets.get(c.uid));
+    const badge = ui.querySelector("#syncBadge");
+    if (badge) {
+      badge.hidden = adjusted.length === 0;
+      badge.textContent = String(adjusted.length);
+      badge.title = `싱크 조정된 방송 ${adjusted.length}개`;
+    }
+    const resetAll = ui.querySelector("#syncResetAll");
+    if (resetAll) resetAll.disabled = adjusted.length === 0;
+
+    const summary = ui.querySelector("#syncSummaryList");
+    if (summary) {
+      summary.innerHTML = adjusted.length
+        ? adjusted.map(c => `<span class="sync-chip"><b>${escapeHtml(displayChannelName(c))}</b>${formatSyncSeconds(syncOffsets.get(c.uid))}</span>`).join("")
+        : '<span class="sync-summary-empty">싱크를 조정한 방송이 없습니다.</span>';
+    }
+
+    const panel = ui.querySelector("#syncManager");
+    const list = ui.querySelector("#syncList");
+    if (!panel?.open || !list) return;
+
+    const sig = state.channels.map(c => `${c.uid}\u0000${displayChannelName(c)}\u0000${c.uid === state.selectedUid ? 1 : 0}\u0000${syncState(c).supported ? 1 : 0}`).join("\n");
+    if (sig !== syncSig) {
+      syncSig = sig;
+      list.innerHTML = state.channels.length ? state.channels.map(c => {
+        const info = syncState(c);
+        const dis = info.supported ? "" : " disabled";
+        return `
+        <div class="sync-row${c.uid === state.selectedUid ? " is-main" : ""}" data-uid="${escapeHtml(c.uid)}">
+          <div class="sync-row-top">
+            <span class="sync-name">${escapeHtml(displayChannelName(c))}${c.uid === state.selectedUid ? ' <em class="channel-list-main">메인</em>' : ""}</span>
+            <span class="sync-values"><span>싱크 <i data-k="offset">0초</i></span><span>지연 <i data-k="delay">-</i></span></span>
+          </div>
+          ${info.supported ? "" : `<div class="sync-note">${info.note}</div>`}
+          <div class="sync-btns">
+            <button type="button" data-step="-0.5" title="0.5초 뒤로 당기기"${dis}>-0.5</button>
+            <button type="button" data-step="-0.1" title="0.1초 뒤로 당기기"${dis}>-0.1</button>
+            <button type="button" data-step="0.1" title="0.1초 앞으로 밀기"${dis}>+0.1</button>
+            <button type="button" data-step="0.5" title="0.5초 앞으로 밀기"${dis}>+0.5</button>
+            <button type="button" data-reset title="이 방송의 싱크 조정을 초기화"${dis}>초기화</button>
+          </div>
+        </div>`;
+      }).join("") : '<div class="volume-empty">방송을 추가하면 싱크를 조정할 수 있습니다.</div>';
+    }
+
+    list.querySelectorAll(".sync-row").forEach(row => {
+      const uid = row.dataset.uid;
+      const offset = syncOffsets.get(uid) || 0;
+      const stat = syncDelays.get(uid);
+      const fresh = stat && Date.now() - stat.t <= SYNC_STATE_STALE_MS && Number.isFinite(stat.delay);
+
+      const offsetEl = row.querySelector('[data-k="offset"]');
+      const delayEl = row.querySelector('[data-k="delay"]');
+      const offsetText = formatSyncSeconds(offset);
+      const delayText = fresh ? `${stat.delay.toFixed(1)}초` : "-";
+      if (offsetEl.textContent !== offsetText) offsetEl.textContent = offsetText;
+      offsetEl.classList.toggle("is-adjusted", offset !== 0);
+      if (delayEl.textContent !== delayText) delayEl.textContent = delayText;
+
+      const resetBtn = row.querySelector("[data-reset]");
+      if (resetBtn && !row.querySelector(".sync-note")) resetBtn.disabled = offset === 0;
+    });
+  }
+
+  window.addEventListener("message", event => {
+    if (event.origin !== "https://chzzk.naver.com") return;
+    const data = event.data;
+    if (!data || data.source !== "chzzk-multiview" || !data.uid) return;
+    if (!tileMap.has(data.uid)) return;
+    if (data.type === "SYNC_STATE") handleSyncState(data);
+    else if (data.type === "SYNC_RESULT") handleSyncResult(data);
+  });
 
   function updateLayoutToggle() {
     if (!ui) return;
@@ -1486,6 +1711,7 @@
 
   function refreshChannelManager() {
     if (!ui) return;
+    scheduleSyncRender();
     const list = ui.querySelector("#channelList");
     if (!list) return;
     list.innerHTML = state.channels.map((channel, index) => `
@@ -1517,6 +1743,38 @@
     });
   }
 
+  // openDate comes from the API as a KST string ("YYYY-MM-DD HH:mm:ss").
+  function parseOpenDate(value) {
+    if (!value) return null;
+    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5], +m[6]);
+    const t = Date.parse(value);
+    return Number.isFinite(t) ? t : null;
+  }
+
+  function formatBroadcastDuration(openAt) {
+    if (!openAt) return "";
+    const minutes = Math.floor(Math.max(0, Date.now() - openAt) / 60000);
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+  }
+
+  function favoriteMetaText(fav) {
+    if (!fav?.online) return "";
+    return [fav.category, formatBroadcastDuration(fav.openAt)].filter(Boolean).join(" · ");
+  }
+
+  // The broadcast time keeps growing, so refresh it from the stored start time.
+  function updateFavoriteMeta() {
+    if (!ui) return;
+    ui.querySelectorAll(".favorite-list-row").forEach(row => {
+      const fav = favorites.find(f => f.uid === row.dataset.uid);
+      const meta = row.querySelector(".favorite-list-meta");
+      if (fav && meta) meta.textContent = favoriteMetaText(fav);
+    });
+  }
+
   function favoriteItemsForGroup(group) {
     return favorites.filter(f => (f.group || DEFAULT_FAVORITE_GROUP) === group);
   }
@@ -1541,7 +1799,7 @@
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span>${favoriteMetaText(f) ? `<span class="favorite-list-meta" title="방송 카테고리 · 방송 시간">${escapeHtml(favoriteMetaText(f))}</span>` : ''}</span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -1619,22 +1877,33 @@
     await chrome.storage.local.set({ [FAVORITES_KEY]: favorites, [FAVORITE_GROUPS_KEY]: favoriteGroups });
   }
 
-  async function fetchFavoriteOnline(uid) {
+  async function fetchFavoriteLive(uid) {
+    const offline = { online: false, openAt: null, category: "" };
     try {
       const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
         credentials: "include",
         headers: { Accept: "application/json, text/plain, */*", "Front-Client-Platform-Type": "PC", "Front-Client-Product-Type": "web" }
       });
-      if (!response.ok) return false;
+      if (!response.ok) return offline;
       const data = await response.json();
-      return data?.code === 200 && data?.content?.status === "OPEN";
-    } catch (_) { return false; }
+      const content = data?.content;
+      if (!(data?.code === 200 && content?.status === "OPEN")) return offline;
+      return {
+        online: true,
+        openAt: parseOpenDate(content.openDate),
+        category: String(content.liveCategoryValue || content.liveCategory || "").trim()
+      };
+    } catch (_) { return offline; }
   }
 
   async function refreshFavoriteOnlineStatus(notify = true) {
     if (!favorites.length) return;
-    const results = await Promise.all(favorites.map(f => fetchFavoriteOnline(f.uid)));
-    favorites.forEach((f, i) => { f.online = results[i] === true; });
+    const results = await Promise.all(favorites.map(f => fetchFavoriteLive(f.uid)));
+    favorites.forEach((f, i) => {
+      f.online = results[i].online === true;
+      f.openAt = f.online ? results[i].openAt : null;
+      f.category = f.online ? results[i].category : "";
+    });
     await saveFavorites();
     refreshFavoriteList();
     if (notify) showNotice("즐겨찾기 온라인 상태를 갱신했습니다.");
@@ -1682,7 +1951,7 @@
 
   function toggleFavorite(uid, title = uid) {
     if (isFavorite(uid)) favorites = favorites.filter(f => f.uid !== uid);
-    else { const nextOrder=favorites.reduce((max,f)=>Math.max(max,Number(f.order)||0),0)+1; favorites.push({ uid, name:title||uid, title:title||uid, group:DEFAULT_FAVORITE_GROUP, online:false, order:nextOrder }); }
+    else { const nextOrder=favorites.reduce((max,f)=>Math.max(max,Number(f.order)||0),0)+1; favorites.push({ uid, name:title||uid, title:title||uid, group:DEFAULT_FAVORITE_GROUP, online:false, openAt:null, category:"", order:nextOrder }); }
     ensureFavoriteGroups();
     saveFavorites().catch(console.warn);
     refreshFavoriteList();
@@ -1696,6 +1965,8 @@
       tile.remove();
     }
     tileMap.clear();
+    syncOffsets.clear();
+    syncDelays.clear();
     state.channels = [];
     state.selectedUid = null;
     refreshChannelManager();
@@ -1806,17 +2077,6 @@
         syncVolumeUI();
         saveStateSoon();
       }
-      return;
-    }
-
-    if (message.type === "STREAM_INFO" && message.uid) {
-      updateStreamInfo(message.uid, {
-        width: Number(message.width) || 0,
-        height: Number(message.height) || 0,
-        fps: Number(message.fps) || 0,
-        bitrate: Number(message.bitrate) || 0,
-        latency: Number(message.latency)
-      });
       return;
     }
 
@@ -2923,8 +3183,8 @@ select:hover {
     min-width: 0;
     flex: 1 1 auto;
 
-    height: 34px;
-    padding: 0 7px;
+    min-height: 34px;
+    padding: 3px 7px;
 
     display: flex;
     align-items: center;
@@ -2935,6 +3195,29 @@ select:hover {
     color: #eee;
 
     text-align: left;
+}
+
+.favorite-list-text {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* 방송 카테고리 · 방송 시간 (온라인 방송만 표시) */
+.favorite-list-meta {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #8d8d94;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.25;
 }
 
 .favorite-list-name {
@@ -3858,6 +4141,178 @@ select:hover {
 /* =========================================================
    31. Notice
    ========================================================= */
+
+/* =========================================================
+   Sync (싱크 조정)
+   ========================================================= */
+
+.sync-panel {
+    width: 360px;
+}
+
+.sync-badge {
+    margin-left: 6px;
+    padding: 1px 6px;
+
+    border-radius: 9px;
+
+    background: #00d26a;
+    color: #06150d;
+
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.sync-badge[hidden] {
+    display: none;
+}
+
+.sync-summary {
+    padding-bottom: 9px;
+    border-bottom: 1px solid #2c2c30;
+}
+
+.sync-summary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    margin-bottom: 6px;
+}
+
+.sync-summary-head strong {
+    color: #eee;
+    font-size: 12px;
+}
+
+.sync-summary-head .manager-clear:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+.sync-summary-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.sync-chip {
+    padding: 3px 8px;
+
+    border: 1px solid rgba(0, 210, 106, .5);
+    border-radius: 12px;
+
+    background: rgba(0, 210, 106, .1);
+    color: #00d26a;
+
+    font-size: 11px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.sync-chip b {
+    margin-right: 5px;
+
+    color: #fff;
+    font-weight: 700;
+}
+
+.sync-summary-empty {
+    color: #777;
+    font-size: 11px;
+}
+
+.sync-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    margin-top: 10px;
+}
+
+.sync-row {
+    padding: 8px;
+
+    border: 1px solid #2c2c30;
+    border-radius: 8px;
+
+    background: #1c1c1f;
+}
+
+.sync-row.is-main {
+    border-color: rgba(0, 210, 106, .45);
+}
+
+.sync-row-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+
+    min-width: 0;
+    margin-bottom: 7px;
+}
+
+.sync-name {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #eee;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.sync-values {
+    flex: 0 0 auto;
+
+    display: flex;
+    gap: 10px;
+
+    color: #888;
+    font-size: 11px;
+}
+
+.sync-values i {
+    color: #ddd;
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+}
+
+.sync-values i.is-adjusted {
+    color: #00d26a;
+    font-weight: 800;
+}
+
+.sync-note {
+    margin-bottom: 6px;
+
+    color: #777;
+    font-size: 10.5px;
+}
+
+.sync-btns {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) 1.5fr;
+    gap: 5px;
+}
+
+.sync-btns button {
+    height: 28px;
+    padding: 0;
+
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.sync-btns button:disabled {
+    opacity: .4;
+    cursor: default;
+}
 
 .mv-notice {
     position: fixed;

@@ -93,11 +93,7 @@
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
     video.addEventListener("volumechange", () => reportVideoState(video));
-    video.addEventListener("loadedmetadata", () => reportStreamInfo(video));
-    video.addEventListener("playing", () => reportStreamInfo(video));
     reportVideoState(video);
-    reportStreamInfo(video);
-    startStats(video);
   }
 
   function bindObserver() {
@@ -159,61 +155,71 @@
     // MultiView currently keeps chat closed in video tiles. This exists for future use.
   }
 
-  let statsTimer = null;
-  let lastDecodedBytes = null;
-  let lastStatsAt = 0;
+  /* ------------------------------------------------------------------
+     Manual sync (싱크 조정)
+       SYNC_SEEK  (page -> frame): move the playhead by `delta` seconds.
+                  negative = pull back (rewind, more delay)
+                  positive = push forward (closer to the live edge)
+       SYNC_RESULT (frame -> page): what was actually applied
+       SYNC_STATE  (frame -> page, 1/s): current delay behind the live edge
+  ------------------------------------------------------------------ */
+  const SYNC_EDGE_MARGIN = 0.3;   // never jump closer than this to the live edge
+  const SYNC_START_MARGIN = 0.2;  // never jump closer than this to the start of the seekable window
 
-  function getStreamStats(video) {
-    if (!video) return {};
-    const width = Number(video.videoWidth) || 0;
-    const height = Number(video.videoHeight) || 0;
-    let fps = 0;
+  function seekRange(video) {
+    const pick = ranges => (ranges && ranges.length ? [ranges.start(0), ranges.end(ranges.length - 1)] : null);
     try {
-      const quality = video.getVideoPlaybackQuality?.();
-      const total = Number(quality?.totalVideoFrames) || 0;
-      const now = performance.now();
-      if (getStreamStats.lastFrames != null && getStreamStats.lastAt) {
-        const dt = (now - getStreamStats.lastAt) / 1000;
-        if (dt > 0.1) fps = Math.max(0, (total - getStreamStats.lastFrames) / dt);
-      }
-      getStreamStats.lastFrames = total;
-      getStreamStats.lastAt = now;
-    } catch (_) {}
-
-    let bitrate = 0;
-    const decodedBytes = Number(video.webkitVideoDecodedByteCount);
-    const now = performance.now();
-    if (Number.isFinite(decodedBytes) && decodedBytes >= 0 && lastDecodedBytes != null && lastStatsAt) {
-      const dt = (now - lastStatsAt) / 1000;
-      if (dt > 0.1 && decodedBytes >= lastDecodedBytes) bitrate = ((decodedBytes - lastDecodedBytes) * 8) / dt;
+      return pick(video.seekable) || pick(video.buffered);
+    } catch (_) {
+      return null;
     }
-    if (Number.isFinite(decodedBytes)) { lastDecodedBytes = decodedBytes; lastStatsAt = now; }
-
-    let latency = NaN;
-    try {
-      if (video.buffered?.length) {
-        const end = video.buffered.end(video.buffered.length - 1);
-        const gap = end - video.currentTime;
-        if (Number.isFinite(gap) && gap >= 0) latency = gap;
-      }
-    } catch (_) {}
-    return { width, height, fps, bitrate, latency };
   }
 
-  function reportStreamInfo(video) {
-    if (!frameUid || !video || chatMode) return;
-    const stats = getStreamStats(video);
-    window.parent.postMessage({ source: "chzzk-multiview", type: "STREAM_INFO", uid: frameUid, ...stats }, "*");
+  function currentDelay(video) {
+    const range = seekRange(video);
+    if (!range) return null;
+    const delay = range[1] - video.currentTime;
+    return Number.isFinite(delay) ? Math.max(0, delay) : null;
   }
 
-  function startStats(video) {
-    if (statsTimer) clearInterval(statsTimer);
-    reportStreamInfo(video);
-    statsTimer = setInterval(() => {
-      const current = findVideo();
-      if (current) reportStreamInfo(current);
-    }, 1000);
+  function seekBy(delta) {
+    const video = findVideo();
+    if (!video) return { ok: false, reason: "no-video" };
+    const range = seekRange(video);
+    if (!range) return { ok: false, reason: "not-seekable" };
+
+    const [start, end] = range;
+    const now = video.currentTime;
+    const upper = Math.max(now, end - SYNC_EDGE_MARGIN);
+    const lower = Math.min(now, start + SYNC_START_MARGIN);
+    const target = Math.min(Math.max(now + delta, lower), upper);
+
+    let applied = target - now;
+    if (Math.abs(applied) < 0.005) applied = 0;
+    if (applied !== 0) {
+      try { video.currentTime = target; } catch (_) { return { ok: false, reason: "seek-failed" }; }
+    }
+    return {
+      ok: true,
+      applied,
+      requested: delta,
+      clamped: Math.abs(applied - delta) > 0.02,
+      delay: Math.max(0, end - (applied !== 0 ? target : now))
+    };
   }
+
+  function reportSyncState() {
+    if (!frameUid || chatMode) return;
+    const video = findVideo();
+    if (!video) return;
+    window.parent.postMessage({
+      source: "chzzk-multiview", type: "SYNC_STATE", uid: frameUid,
+      delay: currentDelay(video),
+      canSeek: !!seekRange(video)
+    }, "https://chzzk.naver.com");
+  }
+
+  setInterval(reportSyncState, 1000);
 
   let theaterApplied = false;
   let theaterTimer = null;
@@ -310,6 +316,15 @@
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);
     if (event.data.type === "SET_VOLUME") setVolume(event.data.volume, typeof event.data.muted === "boolean" ? event.data.muted : null);
     if (event.data.type === "ENTER_THEATER" && !chatMode) scheduleTheater();
+    if (event.data.type === "SYNC_SEEK" && frameUid && !chatMode) {
+      const delta = Number(event.data.delta);
+      const result = Number.isFinite(delta) ? seekBy(delta) : { ok: false, reason: "bad-delta" };
+      window.parent.postMessage({
+        source: "chzzk-multiview", type: "SYNC_RESULT", uid: frameUid,
+        requestId: event.data.requestId, ...result
+      }, "https://chzzk.naver.com");
+      reportSyncState();
+    }
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

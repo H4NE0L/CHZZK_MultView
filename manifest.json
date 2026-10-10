@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CZ 통제실",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "CHZZK 방송 통합관제 시스템. 여러 방송을 한 화면에서 동시에 시청하고 관리할 수 있습니다.",
   "permissions": [
     "storage",

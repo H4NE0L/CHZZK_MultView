@@ -46,8 +46,32 @@ function normalizeFavorite(fav) {
     name: String(fav?.name || fav?.title || uid).replace(/\s*-\s*CHZZK\s*$/i, "").trim() || uid,
     title: String(fav?.title || fav?.name || uid).replace(/\s*-\s*CHZZK\s*$/i, "").trim() || uid,
     group: String(fav?.group || DEFAULT_GROUP).trim() || DEFAULT_GROUP,
-    online: fav?.online === true
+    online: fav?.online === true,
+    openAt: Number.isFinite(Number(fav?.openAt)) && Number(fav.openAt) > 0 ? Number(fav.openAt) : null,
+    category: String(fav?.category || "").trim()
   };
+}
+
+// 방송 시작 시각(openDate)은 KST 문자열("YYYY-MM-DD HH:mm:ss")로 내려온다.
+function parseOpenDate(value) {
+  if (!value) return null;
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5], +m[6]);
+  const t = Date.parse(value);
+  return Number.isFinite(t) ? t : null;
+}
+
+function formatBroadcastDuration(openAt) {
+  if (!openAt) return "";
+  const minutes = Math.floor(Math.max(0, Date.now() - openAt) / 60000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+}
+
+function favoriteMetaText(fav) {
+  if (!fav.online) return "";
+  return [fav.category, formatBroadcastDuration(fav.openAt)].filter(Boolean).join(" · ");
 }
 
 function ensureGroups() {
@@ -110,7 +134,10 @@ function renderFavoriteRow(fav) {
   return `<div class="favorite-row ${fav.online ? "online" : ""}" data-uid="${escapeHtml(fav.uid)}">
     <button class="favorite-main" title="멀티뷰 목록에 추가">
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
-      <span class="favorite-name">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
+      <span class="favorite-text">
+        <span class="favorite-name">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
+        ${favoriteMetaText(fav) ? `<span class="favorite-meta" title="방송 카테고리 · 방송 시간">${escapeHtml(favoriteMetaText(fav))}</span>` : ""}
+      </span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>
   </div>`;
@@ -208,7 +235,8 @@ async function saveFavorites() {
   });
 }
 
-async function fetchOnline(uid) {
+async function fetchLiveInfo(uid) {
+  const offline = { online: false, openAt: null, category: "" };
   try {
     const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
       credentials: "include",
@@ -218,17 +246,27 @@ async function fetchOnline(uid) {
         "Front-Client-Product-Type": "web"
       }
     });
-    if (!response.ok) return false;
+    if (!response.ok) return offline;
     const data = await response.json();
-    return data?.code === 200 && data?.content?.status === "OPEN";
-  } catch (_) { return false; }
+    const content = data?.content;
+    if (!(data?.code === 200 && content?.status === "OPEN")) return offline;
+    return {
+      online: true,
+      openAt: parseOpenDate(content.openDate),
+      category: String(content.liveCategoryValue || content.liveCategory || "").trim()
+    };
+  } catch (_) { return offline; }
 }
 
 async function refreshFavoriteOnlineStatus(showStatus = true) {
   if (!favorites.length) return;
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 확인하는 중...");
-  const results = await Promise.all(favorites.map(f => fetchOnline(f.uid)));
-  favorites.forEach((f, i) => { f.online = results[i] === true; });
+  const results = await Promise.all(favorites.map(f => fetchLiveInfo(f.uid)));
+  favorites.forEach((f, i) => {
+    f.online = results[i].online === true;
+    f.openAt = f.online ? results[i].openAt : null;
+    f.category = f.online ? results[i].category : "";
+  });
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 갱신했습니다.");
 }
 
@@ -454,6 +492,15 @@ document.querySelector(".popup").addEventListener("click", async e => {
     closeModal(modal.id === "itemManageModal" ? "items" : "groups");
   }
 });
+
+// 방송 시간은 시간이 지남에 따라 늘어나므로, 새로 조회하지 않고 저장된 시작 시각으로 갱신한다.
+setInterval(() => {
+  favoritesEl.querySelectorAll(".favorite-row").forEach(row => {
+    const fav = favorites.find(f => f.uid === row.dataset.uid);
+    const meta = row.querySelector(".favorite-meta");
+    if (fav && meta) meta.textContent = favoriteMetaText(fav);
+  });
+}, 30000);
 
 renderVersion();
 loadFavorites().catch(err => setStatus(String(err), true));

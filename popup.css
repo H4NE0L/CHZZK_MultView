@@ -284,11 +284,11 @@ button {
     margin-top: 6px;
 
     width: 100%;
-    height: 200px;
-    min-height: 200px;
-    max-height: 200px;
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
 
-    flex: 0 0 200px;
+    flex: 0 0 220px;
 
     overflow-y: auto;
     overflow-x: hidden;
@@ -491,8 +491,8 @@ button {
     align-items: center;
     gap: 7px;
 
-    height: 32px;
-    padding: 0 5px;
+    min-height: 32px;
+    padding: 3px 5px;
 
     border: 0;
 
@@ -518,6 +518,15 @@ button {
     box-shadow: 0 0 6px rgba(0, 210, 106, .55);
 }
 
+.favorite-text {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
 .favorite-name {
     min-width: 0;
 
@@ -526,6 +535,19 @@ button {
     white-space: nowrap;
 
     font-size: 12px;
+}
+
+/* 방송 카테고리 · 방송 시간 (온라인 방송만 표시) */
+.favorite-meta {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #8d8d94;
+    font-size: 10px;
+    line-height: 1.25;
 }
 
 .online-badge {
