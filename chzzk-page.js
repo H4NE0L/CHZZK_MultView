@@ -123,8 +123,16 @@
     return t !== uid ? t : uid;
   }
 
-  function saveState() {
-    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+function saveState() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+
+  try {
+    // 확장 프로그램 컨텍스트가 유효하지 않으면 저장을 시도하지 않는다.
+    if (!chrome?.runtime?.id || !chrome?.storage?.local) return;
+
     chrome.storage.local.set({
       [STORAGE_KEY]: {
         channels: state.channels.map(({ _mainOnlyMuted, ...channel }) => channel),
@@ -136,8 +144,22 @@
         mainOnly: state.mainOnly === true,
         masterVolume: clamp01(state.masterVolume ?? 1)
       }
-    }).catch(console.warn);
+    }).catch(error => {
+      const message = String(error?.message || error);
+
+      // 확장 프로그램이 다시 로드된 경우 발생할 수 있는 오류
+      if (message.includes("Extension context invalidated")) return;
+
+      console.warn("멀티뷰 상태 저장 실패:", error);
+    });
+  } catch (error) {
+    const message = String(error?.message || error);
+
+    if (message.includes("Extension context invalidated")) return;
+
+    console.warn("멀티뷰 상태 저장 실패:", error);
   }
+}
 
   // Slider drags fire many events; write to storage once the drag settles.
   function saveStateSoon() {
@@ -345,7 +367,27 @@
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
     ui.querySelector("#favoriteManageGroups").addEventListener("click", () => showFavoriteModal("groups"));
     ui.querySelector("#favoriteManageItems").addEventListener("click", () => showFavoriteModal("items"));
-    ui.querySelector("#favoriteRefresh").addEventListener("click", () => refreshFavoriteOnlineStatus(true).catch(console.warn));
+    
+    ui.querySelector("#favoriteRefresh").addEventListener("click", async () => {
+      try {
+        if (!favorites.length) {
+          showNotice("새로고침할 즐겨찾기 방송이 없습니다.");
+          return;
+        }
+
+        const btn = ui.querySelector("#favoriteRefresh");
+        btn.disabled = true;
+
+        await refreshFavoriteOnlineStatus(true);
+      } catch (error) {
+        console.error("즐겨찾기 새로고침 실패:", error);
+        showNotice("즐겨찾기 새로고침에 실패했습니다. 콘솔을 확인해 주세요.");
+      } finally {
+        const btn = ui.querySelector("#favoriteRefresh");
+        if (btn) btn.disabled = false;
+      }
+    });    
+    
     ui.querySelector("#favoriteModalAddGroup").addEventListener("click", async () => { const name=window.prompt("새 그룹 이름을 입력하세요.","새 그룹"); if(name===null)return; const group=name.trim(); if(!group||favoriteGroups.includes(group))return; favoriteGroups.push(group); await saveFavorites(); renderFavoriteGroupManager(); refreshFavoriteList(); });
     ui.querySelectorAll("[data-fav-close]").forEach(btn => btn.addEventListener("click", () => closeFavoriteModal(btn.dataset.favClose)));
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
