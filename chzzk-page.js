@@ -185,27 +185,9 @@ function saveState() {
   }
 
   async function loadFavorites() {
-    const favResult = await chrome.storage.local.get([
-      FAVORITES_KEY, FAVORITES_LEGACY_KEY,
-      FAVORITE_GROUPS_KEY, FAVORITE_GROUPS_LEGACY_KEY
-    ]);
-    const rawFavorites = Array.isArray(favResult[FAVORITES_KEY]) ? favResult[FAVORITES_KEY]
-      : (Array.isArray(favResult[FAVORITES_LEGACY_KEY]) ? favResult[FAVORITES_LEGACY_KEY] : []);
-    const rawGroups = Array.isArray(favResult[FAVORITE_GROUPS_KEY]) ? favResult[FAVORITE_GROUPS_KEY]
-      : (Array.isArray(favResult[FAVORITE_GROUPS_LEGACY_KEY]) ? favResult[FAVORITE_GROUPS_LEGACY_KEY] : [DEFAULT_FAVORITE_GROUP]);
-    favorites = rawFavorites.map(f => ({
-      uid: f?.uid || "",
-      name: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
-      title: String(f?.name || f?.title || f?.uid || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || f?.uid || "",
-      group: String(f?.group || DEFAULT_FAVORITE_GROUP).trim() || DEFAULT_FAVORITE_GROUP,
-      online: f?.online === true,
-      openAt: Number.isFinite(Number(f?.openAt)) && Number(f.openAt) > 0 ? Number(f.openAt) : null,
-      category: String(f?.category || "").trim(),
-      order: Number.isFinite(Number(f?.order)) ? Number(f.order) : null
-    })).filter(f => f.uid);
-    favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
-    ensureFavoriteGroups();
-    await saveFavorites();
+    const snapshot = await CZFavoritesStore.read();
+    favorites = snapshot.favorites;
+    favoriteGroups = snapshot.groups;
   }
 
   async function loadState() {
@@ -368,8 +350,26 @@ function saveState() {
     ui.querySelector("#favoriteManageGroups").addEventListener("click", () => showFavoriteModal("groups"));
     ui.querySelector("#favoriteManageItems").addEventListener("click", () => showFavoriteModal("items"));
     
+    // Storage is shared across popup and multiview; never write on change notification.
+    let syncPending = false;
+    CZFavoritesStore.subscribe(() => {
+      if (syncPending) return;
+      syncPending = true;
+      queueMicrotask(async () => {
+        syncPending = false;
+        try {
+          await loadFavorites();
+          refreshFavoriteList();
+          if (ui.querySelector("#favoriteGroupModal")?.classList.contains("open")) renderFavoriteGroupManager();
+          if (ui.querySelector("#favoriteItemModal")?.classList.contains("open")) renderFavoriteItemManager();
+        } catch (err) { console.warn("즐겨찾기 동기화 실패:", err); }
+      });
+    });
+
     ui.querySelector("#favoriteRefresh").addEventListener("click", async () => {
       try {
+        await loadFavorites();
+        refreshFavoriteList();
         if (!favorites.length) {
           showNotice("새로고침할 즐겨찾기 방송이 없습니다.");
           return;
@@ -1916,7 +1916,7 @@ function saveState() {
   async function saveFavorites() {
     ensureFavoriteGroups();
     normalizeFavoriteOrders();
-    await chrome.storage.local.set({ [FAVORITES_KEY]: favorites, [FAVORITE_GROUPS_KEY]: favoriteGroups });
+    await CZFavoritesStore.write(favorites, favoriteGroups);
   }
 
   async function fetchFavoriteLive(uid) {

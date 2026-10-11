@@ -202,37 +202,19 @@ function renderList() {
   });
 }
 
-async function loadFavorites() {
-  const r = await chrome.storage.local.get([
-    FAVORITES_KEY, FAVORITES_LEGACY_KEY,
-    FAVORITE_GROUPS_KEY, FAVORITE_GROUPS_LEGACY_KEY
-  ]);
-
-  const rawFavorites = Array.isArray(r[FAVORITES_KEY]) ? r[FAVORITES_KEY]
-    : (Array.isArray(r[FAVORITES_LEGACY_KEY]) ? r[FAVORITES_LEGACY_KEY] : []);
-  const rawGroups = Array.isArray(r[FAVORITE_GROUPS_KEY]) ? r[FAVORITE_GROUPS_KEY]
-    : (Array.isArray(r[FAVORITE_GROUPS_LEGACY_KEY]) ? r[FAVORITE_GROUPS_LEGACY_KEY] : [DEFAULT_GROUP]);
-
-  favorites = rawFavorites.map(normalizeFavorite).filter(Boolean);
-  favoriteGroups = rawGroups.filter(g => typeof g === "string" && g.trim()).map(g => g.trim());
-  ensureGroups();
-  normalizeFavoriteOrders();
-
-  // Persist the migrated/normalized data immediately so favorites survive
-  // browser/PC restarts and future versions do not depend on the old keys.
-  await saveFavorites();
-  await refreshFavoriteOnlineStatus(false);
-  await saveFavorites();
+async function loadFavorites({refreshOnline = false} = {}) {
+  const snapshot = await CZFavoritesStore.read();
+  favorites = snapshot.favorites;
+  favoriteGroups = snapshot.groups;
+  if (refreshOnline) await refreshFavoriteOnlineStatus(false);
   renderFavorites();
   renderList();
 }
 
 async function saveFavorites() {
   ensureGroups();
-  await chrome.storage.local.set({
-    [FAVORITES_KEY]: favorites,
-    [FAVORITE_GROUPS_KEY]: favoriteGroups
-  });
+  normalizeFavoriteOrders();
+  await CZFavoritesStore.write(favorites, favoriteGroups);
 }
 
 async function fetchLiveInfo(uid) {
@@ -481,7 +463,9 @@ document.querySelector(".popup").addEventListener("click", async e => {
   if (manageItems) { e.preventDefault(); e.stopPropagation(); showModal("items"); return; }
   if (refresh) {
     e.preventDefault(); e.stopPropagation();
+    await loadFavorites();
     await refreshFavoriteOnlineStatus(true);
+    await saveFavorites();
     renderFavorites();
     return;
   }
@@ -503,4 +487,18 @@ setInterval(() => {
 }, 30000);
 
 renderVersion();
-loadFavorites().catch(err => setStatus(String(err), true));
+// Apply remote changes without echoing writes to storage.
+let favoritesReloadPending = false;
+CZFavoritesStore.subscribe(() => {
+  if (favoritesReloadPending) return;
+  favoritesReloadPending = true;
+  queueMicrotask(async () => {
+    favoritesReloadPending = false;
+    try {
+      await loadFavorites();
+      if (document.getElementById("groupManageModal")?.classList.contains("open")) renderGroupManager();
+      if (document.getElementById("itemManageModal")?.classList.contains("open")) renderItemManager();
+    } catch (err) { console.warn("즐겨찾기 동기화 실패", err); }
+  });
+});
+loadFavorites({refreshOnline: true}).catch(err => setStatus(String(err), true));
