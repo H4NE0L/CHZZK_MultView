@@ -86,23 +86,7 @@
     return `CHZZK ${uid}`;
   }
 
-  async function fetchChannelName(uid) {
-    try {
-      const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
-        credentials: "include",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Front-Client-Platform-Type": "PC",
-          "Front-Client-Product-Type": "web"
-        }
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data?.content?.channel?.channelName || data?.content?.channelName || null;
-    } catch (_) {
-      return null;
-    }
-  }
+  const fetchChannelName = CZFavoritesStore.fetchChannelName;
 
   function displayChannelName(channel) {
     return channel?.name || (channel?.title && !channel.title.startsWith("CHZZK ") ? channel.title : channel?.uid || "");
@@ -349,8 +333,8 @@ function saveState() {
         try {
           await loadFavorites();
           refreshFavoriteList();
-          if (ui.querySelector("#favoriteGroupModal")?.classList.contains("open")) renderFavoriteGroupManager();
-          if (ui.querySelector("#favoriteItemModal")?.classList.contains("open")) renderFavoriteItemManager();
+          if (ui.querySelector("#favoriteGroupModal")?.classList.contains("open") && !favDragGroup) renderFavoriteGroupManager();
+          if (ui.querySelector("#favoriteItemModal")?.classList.contains("open") && !favDragUid) renderFavoriteItemManager();
         } catch (err) { console.warn("즐겨찾기 동기화 실패:", err); }
       });
     });
@@ -522,7 +506,13 @@ function saveState() {
       return;
     }
 
-    fetchChannelName(channel.sourceId).then(name => {
+    resolveChannelName(channel);
+  }
+
+  function resolveChannelName(channel) {
+    if (channel.type === "video") return;
+    const uid = channel.uid;
+    fetchChannelName(channel.sourceId || uid).then(async name => {
       if (!name) return;
       const current = state.channels.find(c => c.uid === uid);
       if (!current) return;
@@ -535,7 +525,9 @@ function saveState() {
       if (fav) {
         fav.name = name;
         fav.title = name;
-        saveFavorites().catch(console.warn);
+        try {
+          applyFavoriteSnapshot(await CZFavoritesStore.writeInfo({[uid]: {name, title: name}}));
+        } catch (error) { console.warn("방송 이름 저장 실패:", error); }
         refreshFavoriteList();
         refreshChannelManager();
       }
@@ -1827,6 +1819,9 @@ function saveState() {
   function showFavoriteModal(kind) {
     const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
     if (!modal) return;
+    for (const id of ['syncManager', 'volumeManager', 'channelManager']) {
+      ui.querySelector(`#${id}`)?.removeAttribute('open');
+    }
     modal.classList.add('open');
     if (kind === 'items') renderFavoriteItemManager(); else renderFavoriteGroupManager();
   }
@@ -1834,6 +1829,36 @@ function saveState() {
     const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
     if (modal) modal.classList.remove('open');
   }
+  function bindFavoriteDragFeedback(list) {
+    const rows = () => list.querySelectorAll('[draggable="true"]');
+    const clear = () => rows().forEach(row => row.classList.remove('favorite-dragging', 'favorite-drop-target'));
+    list.ondragstart = e => {
+      const row = e.target.closest('[draggable="true"]');
+      if (!row) return;
+      list.dataset.dragging = 'true';
+      row.classList.add('favorite-dragging');
+      e.dataTransfer.setData('text/plain', row.dataset.uid || row.dataset.group);
+    };
+    list.ondragover = e => {
+      const row = e.target.closest('[draggable="true"]');
+      if (!list.dataset.dragging || !row || row.classList.contains('favorite-dragging')) return;
+      e.preventDefault();
+      rows().forEach(item => item.classList.toggle('favorite-drop-target', item === row));
+    };
+    list.ondragleave = e => {
+      const row = e.target.closest('[draggable="true"]');
+      if (row && !row.contains(e.relatedTarget)) row.classList.remove('favorite-drop-target');
+    };
+    list.ondrop = list.ondragend = () => { delete list.dataset.dragging; clear(); };
+    if (list._movedUid) {
+      const row = [...rows()].find(row => (row.dataset.uid || row.dataset.group) === list._movedUid);
+      if (row && Date.now() < list._movedUntil) {
+        row.classList.add('favorite-moved');
+        setTimeout(() => row.classList.remove('favorite-moved'), list._movedUntil - Date.now());
+      }
+    }
+  }
+
   function renderFavoriteGroupManager() {
     const list=ui?.querySelector('#favoriteGroupManageList'); if(!list)return;
     list.innerHTML=favoriteGroups.map((g,i)=>`<div class="favorite-manage-row" data-group="${escapeHtml(g)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(g)}</span><button class="favorite-manage-rename">이름 변경</button><button class="favorite-manage-delete" ${g===DEFAULT_FAVORITE_GROUP?'disabled':''}>삭제</button></div>`).join('');
@@ -1874,6 +1899,8 @@ function saveState() {
         e.preventDefault();
         const target = row.dataset.group;
         if (!favDragGroup || !target || favDragGroup === target) return;
+        list._movedUid = favDragGroup;
+        list._movedUntil = Date.now() + 650;
         moveFavoriteGroup(favDragGroup, target);
         favDragGroup = null;
         await saveFavorites();
@@ -1882,6 +1909,7 @@ function saveState() {
       });
       row.addEventListener('dragend', () => { favDragGroup = null; });
     });
+    bindFavoriteDragFeedback(list);
   }
 
   function renderFavoriteItemManager() {
@@ -1921,6 +1949,8 @@ function saveState() {
         e.preventDefault();
         const target = row.dataset.uid;
         if (!favDragUid || !target || favDragUid === target) return;
+        list._movedUid = favDragUid;
+        list._movedUntil = Date.now() + 650;
         applyFavoriteSnapshot(CZFavoritesStore.moveFavorite(favorites, favoriteGroups, favDragUid, target));
         favDragUid = null;
         await saveFavorites();
@@ -1929,6 +1959,7 @@ function saveState() {
       });
       row.addEventListener('dragend', () => { favDragUid = null; });
     });
+    bindFavoriteDragFeedback(list);
   }
 
   function moveFavoriteGroup(fromGroup, toGroup) {
@@ -1937,7 +1968,14 @@ function saveState() {
 
   async function saveFavorites() {
     applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
-    await CZFavoritesStore.write(favorites, favoriteGroups);
+    try {
+      await CZFavoritesStore.write(favorites, favoriteGroups);
+      return true;
+    } catch (error) {
+      if (!isExtensionContextInvalidated(error)) throw error;
+      showNotice("확장 연결이 끊겨 변경은 현재 화면에만 적용됩니다. 저장·다른 화면 동기화는 사용할 수 없습니다.");
+      return false;
+    }
   }
 
   const fetchFavoriteLive = CZFavoritesStore.fetchLiveInfo;
@@ -1948,15 +1986,13 @@ function saveState() {
 
   async function refreshFavoriteOnlineStatus(notify = true, { persist = true } = {}) {
     if (!favorites.length) return;
-    const results = await Promise.all(favorites.map(f => fetchFavoriteLive(f.uid, { throwOnError: true })));
-    favorites.forEach((f, i) => {
-      f.online = results[i].online === true;
-      f.openAt = f.online ? results[i].openAt : null;
-      f.category = f.online ? results[i].category : "";
-    });
+    const uids = favorites.map(f => f.uid);
+    const results = await Promise.all(uids.map(uid => fetchFavoriteLive(uid, { throwOnError: true })));
+    const updates = Object.fromEntries(uids.map((uid, i) => [uid, results[i]]));
+    favorites = CZFavoritesStore.mergeInfo(favorites, updates);
     if (persist) {
       try {
-        await saveFavorites();
+        applyFavoriteSnapshot(await CZFavoritesStore.writeInfo(updates));
       } catch (error) {
         if (!isExtensionContextInvalidated(error)) throw error;
         // The context may also expire while the API requests are in flight.
@@ -2018,13 +2054,14 @@ function saveState() {
       // previous session.
       const nextChannels = [];
       for (const input of popupInputs) {
-        const uid = uidFromInput(input);
+        const parsed = parseInput(input);
+        const uid = parsed?.uid;
         if (!uid || nextChannels.some(c => c.uid === uid)) continue;
         const previous = state.channels.find(c => c.uid === uid);
         const favorite = favorites.find(f => f.uid === uid);
         const favoriteName = favorite?.name || favorite?.title || "";
         nextChannels.push({
-          uid,
+          uid, type: parsed.type, sourceId: parsed.id, url: parsed.url,
           title: previous?.title || favoriteName || safeTitle(uid),
           linkTitle: previous?.linkTitle || favoriteName || safeTitle(uid),
           name: previous?.name || favoriteName || "",
@@ -2054,6 +2091,7 @@ function saveState() {
     createUI();
     refreshFavoriteList();
     refreshFavoriteOnlineStatus(false).catch(console.warn);
+    state.channels.forEach(resolveChannelName);
 
     syncSelection();
     applyLayout();
@@ -2120,7 +2158,9 @@ function saveState() {
           if (fav) {
             fav.title = streamerName;
             fav.name = streamerName;
-            saveFavorites().catch(console.warn);
+            CZFavoritesStore.writeInfo({[message.uid]: {name: streamerName, title: streamerName}})
+              .then(snapshot => { applyFavoriteSnapshot(snapshot); refreshFavoriteList(); })
+              .catch(console.warn);
             refreshFavoriteList();
           }
         }
@@ -4384,5 +4424,12 @@ select:hover {
         grid-template-columns: 260px minmax(0, 1fr);
     }
 }
+
+/* Favorite manager drag feedback */
+.favorite-dragging { opacity: .45; }
+.favorite-drop-target { outline: 2px solid #00dc9b; outline-offset: -2px; background: rgba(0,220,155,.12); }
+.favorite-moved { animation: favorite-moved-pulse .65s ease-out; }
+@keyframes favorite-moved-pulse { from { background: rgba(0,220,155,.3); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .favorite-moved { animation: none; outline: 2px solid #00dc9b; } }
   `;
 })();

@@ -21,6 +21,8 @@ async function run() {
     };
     let writes = 0;
     let liveStatus = 'OPEN';
+    let liveGate = null;
+    let notifyLiveGate = null;
     await context.exposeBinding('__storageGet', (_source, keys) => {
       const names = typeof keys === 'string' ? [keys] : keys;
       return Object.fromEntries(names.filter(k => k in storage).map(k => [k, structuredClone(storage[k])]));
@@ -58,6 +60,7 @@ async function run() {
         return route.fulfill({body: fs.readFileSync(path.join(root, file)), contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
+        if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', channel: {channelName: '테스트 방송'}}}});
       }
@@ -89,6 +92,7 @@ async function run() {
     }));
     assert.equal(opened.ok, true, opened.error);
     console.log('Checked MultiView initialization');
+    await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
     // Fallback injection may repeat both scripts in an already-open view.
     for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
@@ -109,6 +113,15 @@ async function run() {
     await popup.locator('.manage-item-row[data-uid="bbbbbb"] select').selectOption('변경 그룹');
     await main.locator('.favorite-list-group[data-group="변경 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor();
     assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['aaaaaa','bbbbbb']);
+    const dragData = await popup.evaluateHandle(() => new DataTransfer());
+    const dragSource = popup.locator('.manage-item-row[data-uid="aaaaaa"]');
+    const dragTarget = popup.locator('.manage-item-row[data-uid="bbbbbb"]');
+    await dragSource.dispatchEvent('dragstart', {dataTransfer: dragData});
+    await dragTarget.dispatchEvent('dragover', {dataTransfer: dragData});
+    assert((await dragSource.getAttribute('class')).includes('favorite-dragging'));
+    assert((await dragTarget.getAttribute('class')).includes('favorite-drop-target'));
+    assert.equal(await dragTarget.evaluate(el => getComputedStyle(el).outlineWidth), '2px');
+    await dragSource.dispatchEvent('dragend', {dataTransfer: dragData});
     await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
     await popup.waitForFunction(() => document.querySelector('.manage-item-row')?.dataset.uid === 'bbbbbb');
     assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['bbbbbb','aaaaaa']);
@@ -187,6 +200,36 @@ async function run() {
     assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').count(), 1);
     assert.equal(writes, writesBeforeFailure);
     console.log('PASS: refresh OFFLINE→ONLINE on the same screen with invalidated storage, retained frames/store, write-time invalidation, and truthful network/storage failures.');
+
+    await main.locator('#favoriteManageItems').click();
+    await main.locator('.favorite-manage-row[data-uid="bbbbbb"] select').selectOption('새 그룹');
+    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor({state: 'attached'});
+    assert((await main.locator('.mv-notice').textContent()).includes('현재 화면에만 적용'));
+    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group, '기본 그룹');
+    await main.locator('[data-fav-close="items"]').click();
+
+    await main.evaluate(() => { window.__invalidWrite = ''; window.__invalidRead = ''; });
+    assert.equal(await main.locator('#syncManager').getAttribute('open'), null);
+    let releaseLive;
+    const requestStarted = new Promise(resolve => { notifyLiveGate = resolve; });
+    liveGate = new Promise(resolve => { releaseLive = resolve; });
+    // Start a delayed refresh, then add a favorite and edit its group/order.
+    await main.locator('#favoriteRefresh').click();
+    await requestStarted;
+    await main.locator('#channelManager > summary').click();
+    await main.locator('.channel-list-row[data-uid="aaaaaa"] .channel-list-favorite').click();
+    await popup.waitForFunction(() => document.querySelectorAll('.manage-item-row').length === 2);
+    await popup.locator('.manage-item-row[data-uid="aaaaaa"] select').selectOption('새 그룹');
+    await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
+    await popup.waitForFunction(() => document.querySelector('.manage-item-row').dataset.uid === 'aaaaaa');
+    const orderDuringRefresh = storage.chzzkMultiviewFavoritesV08.map(f => f.uid);
+    releaseLive();
+    liveGate = null;
+    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#favoriteRefresh').disabled);
+    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), orderDuringRefresh);
+    assert.equal(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').group, '새 그룹');
+    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="aaaaaa"]').waitFor({state: 'attached'});
+    console.log('PASS: new favorite, group assignment and drag order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, login and live playback are not tested by this harness.');

@@ -121,6 +121,45 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
       return offline;
     }
   }
+  async function fetchChannelName(uid) {
+    // Channel details remain available when the broadcaster is offline.
+    for (const endpoint of [`service/v1/channels/${encodeURIComponent(uid)}`, `service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`]) {
+      try {
+        const response = await fetch(`https://api.chzzk.naver.com/${endpoint}`, {
+          credentials: 'include',
+          headers: {Accept: 'application/json, text/plain, */*', 'Front-Client-Platform-Type': 'PC', 'Front-Client-Product-Type': 'web'}
+        });
+        if (!response.ok) continue;
+        const data = await response.json();
+        if (data.code !== 200) continue;
+        const name = data.content?.channel?.channelName || data.content?.channelName;
+        if (name) return String(name).trim();
+      } catch (_) {}
+    }
+    return null;
+  }
+  function mergeInfo(favorites, updates) {
+    return favorites.map(f => {
+      const info = updates[f.uid];
+      if (!info) return {...f};
+      // Metadata updates must never change membership, group or global order.
+      const next = {...f};
+      for (const key of ['online', 'openAt', 'category', 'name', 'title']) {
+        if (Object.hasOwn(info, key)) next[key] = info[key];
+      }
+      return next;
+    });
+  }
+  let infoWriteQueue = Promise.resolve();
+  function writeInfo(updates) {
+    // Several streamer-name requests can finish together in the same view.
+    const task = infoWriteQueue.catch(() => {}).then(async () => {
+      const latest = await read();
+      return write(mergeInfo(latest.favorites, updates), latest.groups);
+    });
+    infoWriteQueue = task;
+    return task;
+  }
   async function read() { return normalize(await chrome.storage.local.get(keys)); }
   async function write(favorites, groups) {
     const payload = snapshot(favorites, groups);
@@ -136,5 +175,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
     moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
-    parseOpenDate, favoriteMetaText, fetchLiveInfo, FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
+    parseOpenDate, favoriteMetaText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
+    FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
 })();

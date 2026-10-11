@@ -148,3 +148,44 @@ test('strict live refresh distinguishes a failed request from an offline broadca
     assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: ''});
   }
 });
+
+test('delayed metadata matches UIDs and retains newly added items, groups and drag order', async () => {
+  const f = fixture();
+  await f.store.write(favorites, groups);
+  const updates = {aaaaaa: {online: true}, bbbbbb: {name: '방송 B', group: 'wrong', order: 100}};
+  let latest = f.store.moveFavorite(favorites, groups, 'cccccc', 'aaaaaa');
+  latest = f.store.setFavoriteGroup(latest.favorites, latest.groups, 'bbbbbb', '빈 그룹');
+  latest.favorites.push({uid: 'dddddd', name: 'new', group: '빈 그룹', order: 4});
+  await f.store.write(latest.favorites, latest.groups);
+  const result = plain(await f.store.writeInfo(updates));
+  assert.deepEqual(result.favorites.map(f => f.uid), ['cccccc','aaaaaa','bbbbbb','dddddd']);
+  assert.equal(result.favorites[1].online, true);
+  assert.equal(result.favorites[2].name, '방송 B');
+  assert.equal(result.favorites[2].group, '빈 그룹');
+  assert.equal(result.favorites[2].order, 3);
+  assert.equal(result.favorites[3].name, 'new');
+  assert.deepEqual(result.groups, groups);
+  await f.store.write(result.favorites.filter(f => f.uid !== 'aaaaaa'), result.groups);
+  assert(!(await f.store.writeInfo(updates)).favorites.some(f => f.uid === 'aaaaaa'));
+});
+
+test('channel name is available from channel details while offline, with live-detail fallback', async () => {
+  const urls = [];
+  const f = fixture({}, async url => { urls.push(url); return {ok: true, json: async () => ({code: 200, content: {channelName: '오프라인 스트리머'}})}; });
+  assert.equal(await f.store.fetchChannelName('aaaaaa'), '오프라인 스트리머');
+  assert(urls[0].includes('/service/v1/channels/aaaaaa'));
+  const fallback = fixture({}, async url => url.includes('/service/v1/') ? {ok: false} : {ok: true, json: async () => ({code: 200, content: {channel: {channelName: '라이브 스트리머'}}})});
+  assert.equal(await fallback.store.fetchChannelName('aaaaaa'), '라이브 스트리머');
+});
+
+test('simultaneous streamer-name responses retain both names', async () => {
+  const f = fixture();
+  await f.store.write(favorites, groups);
+  await Promise.all([
+    f.store.writeInfo({aaaaaa: {name: '스트리머 A'}}),
+    f.store.writeInfo({bbbbbb: {name: '스트리머 B'}})
+  ]);
+  const state = await f.store.read();
+  assert.equal(state.favorites[0].name, '스트리머 A');
+  assert.equal(state.favorites[1].name, '스트리머 B');
+});

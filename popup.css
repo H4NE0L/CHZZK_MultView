@@ -860,3 +860,9 @@ button {
     text-align: center;
     font-size: 11px;
 }
+/* Favorite manager drag feedback */
+.favorite-dragging { opacity: .45; }
+.favorite-drop-target { outline: 2px solid #00dc9b; outline-offset: -2px; background: rgba(0,220,155,.12); }
+.favorite-moved { animation: favorite-moved-pulse .65s ease-out; }
+@keyframes favorite-moved-pulse { from { background: rgba(0,220,155,.3); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .favorite-moved { animation: none; outline: 2px solid #00dc9b; } }

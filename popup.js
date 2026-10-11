@@ -137,15 +137,14 @@ async function saveFavorites() {
 
 const fetchLiveInfo = CZFavoritesStore.fetchLiveInfo;
 
-async function refreshFavoriteOnlineStatus(showStatus = true) {
+async function refreshFavoriteOnlineStatus(showStatus = true, {persist = showStatus} = {}) {
   if (!favorites.length) return;
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 확인하는 중...");
-  const results = await Promise.all(favorites.map(f => fetchLiveInfo(f.uid)));
-  favorites.forEach((f, i) => {
-    f.online = results[i].online === true;
-    f.openAt = f.online ? results[i].openAt : null;
-    f.category = f.online ? results[i].category : "";
-  });
+  const uids = favorites.map(f => f.uid);
+  const results = await Promise.all(uids.map(uid => fetchLiveInfo(uid, {throwOnError: true})));
+  const updates = Object.fromEntries(uids.map((uid, i) => [uid, results[i]]));
+  if (persist) applyFavoriteSnapshot(await CZFavoritesStore.writeInfo(updates));
+  else favorites = CZFavoritesStore.mergeInfo(favorites, updates);
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 갱신했습니다.");
 }
 
@@ -177,6 +176,36 @@ function closeModal(kind) {
   if (!modal) return;
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
+}
+
+function bindFavoriteDragFeedback(list) {
+  const rows = () => list.querySelectorAll('[draggable="true"]');
+  const clear = () => rows().forEach(row => row.classList.remove('favorite-dragging', 'favorite-drop-target'));
+  list.ondragstart = e => {
+    const row = e.target.closest('[draggable="true"]');
+    if (!row) return;
+    list.dataset.dragging = 'true';
+    row.classList.add('favorite-dragging');
+    e.dataTransfer.setData('text/plain', row.dataset.uid || row.dataset.group);
+  };
+  list.ondragover = e => {
+    const row = e.target.closest('[draggable="true"]');
+    if (!list.dataset.dragging || !row || row.classList.contains('favorite-dragging')) return;
+    e.preventDefault();
+    rows().forEach(item => item.classList.toggle('favorite-drop-target', item === row));
+  };
+  list.ondragleave = e => {
+    const row = e.target.closest('[draggable="true"]');
+    if (row && !row.contains(e.relatedTarget)) row.classList.remove('favorite-drop-target');
+  };
+  list.ondrop = list.ondragend = () => { delete list.dataset.dragging; clear(); };
+  if (list._movedUid) {
+    const row = [...rows()].find(row => (row.dataset.uid || row.dataset.group) === list._movedUid);
+    if (row && Date.now() < list._movedUntil) {
+      row.classList.add('favorite-moved');
+      setTimeout(() => row.classList.remove('favorite-moved'), list._movedUntil - Date.now());
+    }
+  }
 }
 
 function renderGroupManager() {
@@ -224,6 +253,8 @@ function renderGroupManager() {
       e.preventDefault();
       const target = row.dataset.group;
       if (!dragGroup || !target || dragGroup === target) return;
+      list._movedUid = dragGroup;
+      list._movedUntil = Date.now() + 650;
       moveGroup(dragGroup, target);
       dragGroup = null;
       await saveFavorites();
@@ -232,6 +263,7 @@ function renderGroupManager() {
     });
     row.addEventListener("dragend", () => { dragGroup = null; });
   });
+  bindFavoriteDragFeedback(list);
 }
 
 function renderItemManager() {
@@ -272,6 +304,8 @@ function renderItemManager() {
       e.preventDefault();
       const targetUid = row.dataset.uid;
       if (!draggedFavoriteUid || !targetUid || draggedFavoriteUid === targetUid) return;
+      list._movedUid = draggedFavoriteUid;
+      list._movedUntil = Date.now() + 650;
       applyFavoriteSnapshot(CZFavoritesStore.moveFavorite(favorites, favoriteGroups, draggedFavoriteUid, targetUid));
       draggedFavoriteUid = null;
       await saveFavorites();
@@ -280,6 +314,7 @@ function renderItemManager() {
     });
     row.addEventListener("dragend", () => { draggedFavoriteUid = null; });
   });
+  bindFavoriteDragFeedback(list);
 }
 
 function addToList(value = uidInput.value) {
@@ -327,10 +362,14 @@ document.querySelector(".popup").addEventListener("click", async e => {
   if (manageItems) { e.preventDefault(); e.stopPropagation(); showModal("items"); return; }
   if (refresh) {
     e.preventDefault(); e.stopPropagation();
-    await loadFavorites();
-    await refreshFavoriteOnlineStatus(true);
-    await saveFavorites();
-    renderFavorites();
+    refresh.disabled = true;
+    try {
+      await loadFavorites();
+      await refreshFavoriteOnlineStatus(true);
+      renderFavorites();
+    } catch (error) {
+      setStatus("온라인 상태 조회에 실패했습니다. 기존 상태를 유지합니다.", true);
+    } finally { refresh.disabled = false; }
     return;
   }
   if (close) { e.preventDefault(); e.stopPropagation(); closeModal(close.dataset.closeModal); return; }
@@ -360,8 +399,8 @@ CZFavoritesStore.subscribe(() => {
     favoritesReloadPending = false;
     try {
       await loadFavorites();
-      if (document.getElementById("groupManageModal")?.classList.contains("open")) renderGroupManager();
-      if (document.getElementById("itemManageModal")?.classList.contains("open")) renderItemManager();
+      if (document.getElementById("groupManageModal")?.classList.contains("open") && !document.getElementById("groupManageList")?.dataset.dragging) renderGroupManager();
+      if (document.getElementById("itemManageModal")?.classList.contains("open") && !document.getElementById("itemManageList")?.dataset.dragging) renderItemManager();
     } catch (err) { console.warn("즐겨찾기 동기화 실패", err); }
   });
 });
