@@ -99,7 +99,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     if (!fav?.online || !fav.openAt) return '--';
     const minutes = Math.floor(Math.max(0, now - fav.openAt) / 60000);
     const h = Math.floor(minutes / 60), m = minutes % 60;
-    return `${String(h).padStart(2, '0')}-${String(m).padStart(2, '0')}`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
   function favoriteMetaText(fav, now = Date.now()) {
     if (!fav?.online) return '';

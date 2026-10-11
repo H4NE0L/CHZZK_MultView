@@ -26,7 +26,10 @@ async function checkCompactFavorites(page, prefix) {
   }), prefix);
   assert(Math.max(...fields.map(f => f.top)) < Math.min(...fields.map(f => f.bottom)), 'favorite fields must share one line');
   assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left);
-  assert(fields[2].text === '--' || /^\d{2,}-\d{2}$/.test(fields[2].text));
+  assert(fields[1].left - fields[0].right <= 5 && fields[2].left - fields[1].right <= 5, 'fields must stay close together');
+  const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
+  assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
+  assert(fields[2].text === '--' || /^\d{2,}:\d{2}$/.test(fields[2].text));
 }
 
 async function run() {
@@ -187,7 +190,7 @@ async function run() {
     await main.locator('#favoriteManager > summary').click();
     liveStatus = 'CLOSE';
     await main.locator('#favoriteRefresh').click();
-    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.offline').waitFor();
+    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.offline').waitFor({state: 'attached'});
     assert.equal(storage.chzzkMultiviewFavoritesV08[0].online, false);
     await checkCompactFavorites(main, 'favorite-list');
     await checkCompactFavorites(popup, 'favorite');
@@ -199,7 +202,7 @@ async function run() {
     });
     liveStatus = 'OPEN';
     await main.locator('#favoriteRefresh').click();
-    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor();
+    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor({state: 'attached'});
     assert((await main.locator('.mv-notice').textContent()).includes('현재 화면의 온라인 상태를 갱신'));
     assert.equal(writes, writesBeforeFailure);
     assert.deepEqual(storage, storedBeforeFailure, 'expired context must not overwrite the shared store');

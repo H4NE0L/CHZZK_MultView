@@ -1793,7 +1793,7 @@ function saveState() {
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span><span class="favorite-list-meta" title="방송 시간 (hh-mm)">${escapeHtml(favoriteDuration(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span><span class="favorite-list-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -4431,11 +4431,14 @@ select:hover {
 @keyframes favorite-moved-pulse { from { background: rgba(0,220,155,.3); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .favorite-moved { animation: none; outline: 2px solid #00dc9b; } }
 
+.favorite-list-add .favorite-online-badge { display: none; }
+
 /* Single-line favorite rows and left-aligned group counts. */
-.favorite-list-text { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) max-content; align-items: center; gap: 6px; white-space: nowrap; }
+.favorite-list-text { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 4px; white-space: nowrap; }
 .favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.favorite-list-category { color: #8d8d94; font-size: 10px; }
-.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.favorite-list-name { flex: 0 1 auto; max-width: 50%; font-size: 12px; }
+.favorite-list-category { flex: 0 1 auto; color: #8d8d94; font-size: 12px; }
+.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex: 0 0 auto; font-size: 12px; }
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 
