@@ -120,8 +120,8 @@ test('KST timestamps and elapsed-time text match existing behavior', () => {
 
 test('live-info request retains headers, credentials and category/date extraction', async () => {
   let request;
-  const {store} = fixture({}, async (...args) => { request = args; return {ok: true, json: async () => ({code: 200, content: {status: 'OPEN', openDate: '2026-10-11 09:00:00', liveCategoryValue: ' 게임 '}})}; });
-  assert.deepEqual(plain(await store.fetchLiveInfo('a/b')), {online: true, openAt: Date.UTC(2026,9,11), category: '게임'});
+  const {store} = fixture({}, async (...args) => { request = args; return {ok: true, json: async () => ({code: 200, content: {status: 'OPEN', openDate: '2026-10-11 09:00:00', liveCategoryValue: ' 게임 ', concurrentUserCount: 1234}})}; });
+  assert.deepEqual(plain(await store.fetchLiveInfo('a/b')), {online: true, openAt: Date.UTC(2026,9,11), category: '게임', viewerCount: 1234});
   assert(request[0].includes('a%2Fb'));
   assert.equal(request[1].credentials, 'include');
   assert.equal(request[1].headers['Front-Client-Product-Type'], 'web');
@@ -129,7 +129,7 @@ test('live-info request retains headers, credentials and category/date extractio
 
 test('network errors, HTTP errors and closed streams become offline', async () => {
   const responses = [async () => {throw Error('offline');}, async () => ({ok: false}), async () => ({ok: true, json: async () => ({code: 200, content: {status: 'CLOSE'}})})];
-  for (const fetch of responses) assert.deepEqual(plain(await fixture({}, fetch).store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: ''});
+  for (const fetch of responses) assert.deepEqual(plain(await fixture({}, fetch).store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null});
 });
 
 test('reinjecting the shared adapter preserves its identity and subscriptions', () => {
@@ -145,7 +145,7 @@ test('strict live refresh distinguishes a failed request from an offline broadca
   for (const fetch of [async () => {throw Error('network denied');}, async () => ({ok: false, status: 403})]) {
     const {store} = fixture({}, fetch);
     await assert.rejects(store.fetchLiveInfo('aaaaaa', {throwOnError: true}));
-    assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: ''});
+    assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null});
   }
 });
 
@@ -195,4 +195,16 @@ test('compact favorite duration pads hours/minutes and omits offline elapsed tim
   assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 5 * 60000), '00:05');
   assert.equal(store.favoriteDuration({online: false, openAt: 1}), '--');
   assert.equal(store.favoriteDuration({online: true, openAt: null}), '--');
+});
+
+test('viewer counts format zero and unknown values and merge without changing group/order', () => {
+  const {store} = fixture();
+  assert.equal(store.favoriteViewerText({online: true, viewerCount: 1234}), '1,234명');
+  assert.equal(store.favoriteViewerText({online: true, viewerCount: 0}), '0명');
+  for (const value of [null, undefined, -1, 'bad']) assert.equal(store.favoriteViewerText({online: true, viewerCount: value}), '--');
+  assert.equal(store.favoriteViewerText({online: false, viewerCount: 1234}), '--');
+  const result = store.mergeInfo([{uid: 'a', group: '그룹', order: 2}], {a: {viewerCount: 1234}})[0];
+  assert.equal(result.viewerCount, 1234);
+  assert.equal(result.group, '그룹');
+  assert.equal(result.order, 2);
 });

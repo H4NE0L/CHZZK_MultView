@@ -75,8 +75,8 @@ function renderFavoriteRow(fav) {
     <button class="favorite-main" title="멀티뷰 목록에 추가">
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
       <span class="favorite-text">
-        <span class="favorite-name" title="${escapeHtml(fav.name || fav.title || fav.uid)}">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
-        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span><span class="favorite-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(fav))}</span>
+        <span class="favorite-identity"><span class="favorite-name" title="${escapeHtml(fav.name || fav.title || fav.uid)}">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
+        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span></span><span class="favorite-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(fav))}</span><span class="favorite-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(fav))}</span>
       </span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>

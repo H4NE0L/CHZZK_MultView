@@ -18,6 +18,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     online: f.online === true,
     openAt: Number(f.openAt) > 0 ? Number(f.openAt) : null,
     category: String(f.category || '').trim(),
+    viewerCount: normalizeViewerCount(f.viewerCount),
     order: Number.isFinite(Number(f.order)) && Number(f.order) > 0 ? Number(f.order) : null
   });
   const normalize = data => {
@@ -95,6 +96,13 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const t = Date.parse(value);
     return Number.isFinite(t) ? t : null;
   }
+  function normalizeViewerCount(value) {
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : null;
+  }
+  function favoriteViewerText(fav) {
+    const count = normalizeViewerCount(fav?.viewerCount);
+    return fav?.online && count !== null ? `${count.toLocaleString('ko-KR')}명` : '--';
+  }
   function favoriteDuration(fav, now = Date.now()) {
     if (!fav?.online || !fav.openAt) return '--';
     const minutes = Math.floor(Math.max(0, now - fav.openAt) / 60000);
@@ -107,7 +115,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     return [fav.category, duration].filter(Boolean).join(' · ');
   }
   async function fetchLiveInfo(uid, { throwOnError = false } = {}) {
-    const offline = {online: false, openAt: null, category: ''};
+    const offline = {online: false, openAt: null, category: '', viewerCount: null};
     try {
       const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
         credentials: 'include',
@@ -119,7 +127,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
       }
       const data = await response.json(), content = data?.content;
       if (!(data?.code === 200 && content?.status === 'OPEN')) return offline;
-      return {online: true, openAt: parseOpenDate(content.openDate), category: String(content.liveCategoryValue || content.liveCategory || '').trim()};
+      return {online: true, openAt: parseOpenDate(content.openDate), category: String(content.liveCategoryValue || content.liveCategory || '').trim(), viewerCount: normalizeViewerCount(content.concurrentUserCount)};
     } catch (error) {
       if (throwOnError) throw error;
       return offline;
@@ -148,7 +156,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
       if (!info) return {...f};
       // Metadata updates must never change membership, group or global order.
       const next = {...f};
-      for (const key of ['online', 'openAt', 'category', 'name', 'title']) {
+      for (const key of ['online', 'openAt', 'category', 'viewerCount', 'name', 'title']) {
         if (Object.hasOwn(info, key)) next[key] = info[key];
       }
       return next;
@@ -179,6 +187,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
     moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
-    parseOpenDate, favoriteMetaText, favoriteDuration, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
+    parseOpenDate, favoriteMetaText, favoriteDuration, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
     FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
 })();

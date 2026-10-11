@@ -1793,7 +1793,7 @@ function saveState() {
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span><span class="favorite-list-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -4433,12 +4433,14 @@ select:hover {
 
 .favorite-list-add .favorite-online-badge { display: none; }
 
-/* Single-line favorite rows and left-aligned group counts. */
-.favorite-list-text { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 4px; white-space: nowrap; }
+/* Three equal favorite columns and left-aligned group counts. */
+.favorite-list-text { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; white-space: nowrap; }
+.favorite-list-identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.favorite-list-name { flex: 0 1 auto; max-width: 50%; font-size: 12px; }
-.favorite-list-category { flex: 0 1 auto; color: #d4d4dc; font-size: 12px; }
-.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex: 0 0 auto; font-size: 12px; }
+.favorite-list-name { font-size: 12px; }
+.favorite-list-category { color: #00dc9b; font-size: 10px; }
+.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; text-align: center; }
+.favorite-list-viewers { color: #ff7474; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 

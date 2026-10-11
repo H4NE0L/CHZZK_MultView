@@ -869,12 +869,14 @@ button {
 
 .favorite-main .online-badge, .favorite-main .offline-badge { display: none; }
 
-/* Single-line favorite rows and left-aligned group counts. */
-.favorite-text { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 4px; white-space: nowrap; }
+/* Three equal favorite columns and left-aligned group counts. */
+.favorite-text { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; white-space: nowrap; }
+.favorite-identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .favorite-name, .favorite-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.favorite-name { flex: 0 1 auto; max-width: 50%; font-size: 12px; }
-.favorite-category { flex: 0 1 auto; color: #d4d4dc; font-size: 12px; }
-.favorite-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex: 0 0 auto; font-size: 12px; }
+.favorite-name { font-size: 12px; }
+.favorite-category { color: #00dc9b; font-size: 10px; }
+.favorite-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; text-align: center; }
+.favorite-viewers { color: #ff7474; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .group-name { flex: 0 1 auto; }
 .favorite-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 

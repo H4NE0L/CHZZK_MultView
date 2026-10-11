@@ -20,16 +20,19 @@ async function checkCompactFavorites(page, prefix) {
   }, nameClass);
   assert(countGap >= 0 && countGap <= 12, 'count must sit beside the group name');
   const row = group.locator(`.${prefix}-row`).first();
-  const fields = await row.evaluate((el, p) => ['name', 'category', 'meta'].map(part => {
+  const fields = await row.evaluate((el, p) => ['identity', 'meta', 'viewers', 'name', 'category'].map(part => {
     const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
     return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
   }), prefix);
-  assert(Math.max(...fields.map(f => f.top)) < Math.min(...fields.map(f => f.bottom)), 'favorite fields must share one line');
-  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left);
-  assert(fields[1].left - fields[0].right <= 5 && fields[2].left - fields[1].right <= 5, 'fields must stay close together');
+  assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
+  assert(fields[3].bottom <= fields[4].top, 'category sits below streamer name');
+  const widths = fields.slice(0,3).map(f => f.right - f.left);
+  assert(Math.max(...widths) - Math.min(...widths) < 2, 'three columns have equal width');
+  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).color), 'rgb(0, 220, 155)');
+  assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).color), 'rgb(255, 116, 116)');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[2].text === '--' || /^\d{2,}:\d{2}$/.test(fields[2].text));
+  assert(fields[1].text === '--' || /^\d{2,}:\d{2}$/.test(fields[1].text));
 }
 
 async function run() {
@@ -88,7 +91,7 @@ async function run() {
       if (url.host === 'api.chzzk.naver.com') {
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
-        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', channel: {channelName: '테스트 방송'}}}});
+        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: 1234, channel: {channelName: '테스트 방송'}}}});
       }
       return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>CHZZK fixture</title></head><body></body></html>'});
     });
@@ -203,6 +206,8 @@ async function run() {
     liveStatus = 'OPEN';
     await main.locator('#favoriteRefresh').click();
     await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor({state: 'attached'});
+    await checkCompactFavorites(main, 'favorite-list');
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-list-viewers').textContent(), '1,234명');
     assert((await main.locator('.mv-notice').textContent()).includes('현재 화면의 온라인 상태를 갱신'));
     assert.equal(writes, writesBeforeFailure);
     assert.deepEqual(storage, storedBeforeFailure, 'expired context must not overwrite the shared store');
