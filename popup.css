@@ -886,4 +886,4 @@ button {
 .favorite-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 
 .favorite-group-summary .favorite-group-count { margin-left: 0; }
-.favorite-main { min-height: 24px; gap: 4px; }
+.favorite-main { min-height: 24px; gap: 8px; }

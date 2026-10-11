@@ -4460,6 +4460,7 @@ select:hover {
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 
+.favorite-list-row { gap: 8px; }
 .favorite-list-add { min-height: 24px; padding-left: 0; }
   `;
 })();

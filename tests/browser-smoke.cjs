@@ -35,7 +35,7 @@ async function checkCompactFavorites(page, prefix) {
   assert(Math.abs(fields[4].left - fields[3].right - 4) <= 1, 'category has a 4px gap beside name');
   assert(Math.abs(fields[2].left - fields[1].right - 12) <= 1, 'duration and viewers have a 12px gap');
   const dotGap = await row.evaluate((el, p) => { const dot = el.querySelector(p === 'favorite' ? '.favorite-status' : '.favorite-status-dot').getBoundingClientRect(); const name = el.querySelector(`.${p}-name`).getBoundingClientRect(); return name.left - dot.right; }, prefix);
-  assert(Math.abs(dotGap - 4) <= 1, 'dot and name have a 4px gap');
+  assert(Math.abs(dotGap - 8) <= 1, 'dot and name have an 8px gap');
   assert.equal(await row.locator(`.${prefix}-name`).evaluate(el => getComputedStyle(el).fontSize), '14px');
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).fontSize), '10px');
   for (const part of ['meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).fontSize), '12px');
