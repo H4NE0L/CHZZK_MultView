@@ -1763,7 +1763,7 @@ function saveState() {
     });
   }
 
-  const favoriteDuration = CZFavoritesStore.favoriteDuration;
+  const favoriteStreamText = CZFavoritesStore.favoriteStreamText;
 
   // The broadcast time keeps growing, so refresh it from the stored start time.
   function updateFavoriteMeta() {
@@ -1771,7 +1771,7 @@ function saveState() {
     ui.querySelectorAll(".favorite-list-row").forEach(row => {
       const fav = favorites.find(f => f.uid === row.dataset.uid);
       const meta = row.querySelector(".favorite-list-meta");
-      if (fav && meta) meta.textContent = favoriteDuration(fav);
+      if (fav && meta) meta.textContent = favoriteStreamText(fav);
     });
   }
 
@@ -1797,7 +1797,7 @@ function saveState() {
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row ${f.online ? 'online' : 'offline'}" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-viewers" title="현재 시청자 수"><svg class="viewer-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="4" r="3"/><path d="M2 15v-2a6 6 0 0 1 12 0v2z"/></svg><span class="favorite-list-viewer-count">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteStreamText(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -4446,16 +4446,16 @@ select:hover {
 
 .favorite-list-row.offline .favorite-list-category, .favorite-list-row.offline .favorite-list-meta, .favorite-list-row.offline .favorite-list-viewers { display: none; }
 .favorite-list-row.offline .favorite-list-text { grid-template-columns: minmax(0, 1fr); }
-.favorite-list-row.offline .favorite-status-dot { display: none; }
 
-/* Three equal favorite columns and left-aligned group counts. */
-.favorite-list-text { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; white-space: nowrap; }
+/* Fixed 30:25:45 columns reserve more room for the streaming-time label. */
+.favorite-list-text { display: grid; grid-template-columns: minmax(0, 30fr) minmax(0, 25fr) minmax(0, 45fr); align-items: center; gap: 4px; white-space: nowrap; }
 .favorite-list-identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .favorite-list-name { font-size: 12px; }
-.favorite-list-category { color: #00dc9b; font-size: 10px; padding-left: 2px; }
+.favorite-list-category { color: #00dc9b; font-size: 10px; padding-left: 1px; }
 .favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; text-align: left; }
-.favorite-list-viewers { color: #ff7474; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.favorite-list-viewers { display: inline-flex; justify-content: flex-end; align-items: center; gap: 3px; color: #ff7474; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.favorite-list-viewers .viewer-icon { flex: 0 0 12px; }
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 

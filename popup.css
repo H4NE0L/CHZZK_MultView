@@ -871,16 +871,16 @@ button {
 
 .favorite-row.offline .favorite-category, .favorite-row.offline .favorite-meta, .favorite-row.offline .favorite-viewers { display: none; }
 .favorite-row.offline .favorite-text { grid-template-columns: minmax(0, 1fr); }
-.favorite-row.offline .favorite-status { display: none; }
 
-/* Three equal favorite columns and left-aligned group counts. */
-.favorite-text { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; white-space: nowrap; }
+/* Fixed 30:25:45 columns reserve more room for the streaming-time label. */
+.favorite-text { display: grid; grid-template-columns: minmax(0, 30fr) minmax(0, 25fr) minmax(0, 45fr); align-items: center; gap: 4px; white-space: nowrap; }
 .favorite-identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .favorite-name, .favorite-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .favorite-name { font-size: 12px; }
-.favorite-category { color: #00dc9b; font-size: 10px; padding-left: 2px; }
+.favorite-category { color: #00dc9b; font-size: 10px; padding-left: 1px; }
 .favorite-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; text-align: left; }
-.favorite-viewers { color: #ff7474; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.favorite-viewers { display: inline-flex; justify-content: flex-end; align-items: center; gap: 3px; color: #ff7474; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.favorite-viewers .viewer-icon { flex: 0 0 12px; }
 .group-name { flex: 0 1 auto; }
 .favorite-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 

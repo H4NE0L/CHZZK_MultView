@@ -23,25 +23,33 @@ async function checkCompactFavorites(page, prefix) {
   if (await row.evaluate(el => el.classList.contains('offline'))) {
     for (const part of ['category', 'meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).display), 'none');
     assert(await row.locator(`.${prefix}-name`).isVisible());
+    assert(await row.locator(prefix === 'favorite' ? '.favorite-status' : '.favorite-status-dot').isVisible());
     return;
   }
-  const fields = await row.evaluate((el, p) => ['identity', 'meta', 'viewers', 'name', 'category'].map(part => {
+  const fields = await row.evaluate((el, p) => ['identity', 'viewers', 'meta', 'name', 'category'].map(part => {
     const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
     return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
   }), prefix);
   assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
   assert(fields[3].bottom <= fields[4].top, 'category sits below streamer name');
-  const widths = fields.slice(0,3).map(f => f.right - f.left);
-  assert(Math.max(...widths) - Math.min(...widths) < 2, 'three columns have equal width');
+  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left, 'viewer column precedes duration');
+  const widths = fields.slice(0, 3).map(f => f.right - f.left);
+  assert(Math.abs(widths[0] / widths[2] - 30 / 45) < .01 && Math.abs(widths[1] / widths[2] - 25 / 45) < .01, 'columns use fixed 30:25:45 proportions');
+  for (const part of ['viewers', 'meta']) {
+    assert(await row.locator(`.${prefix}-${part}`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'viewer and duration columns must fit their content');
+    assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap');
+  }
+  assert(await row.locator(`.${prefix}-text`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'favorite columns must fit the panel');
+  assert.equal(await row.locator(`.${prefix}-viewers .viewer-icon`).count(), 1);
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).color), 'rgb(0, 220, 155)');
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).color), 'rgb(255, 116, 116)');
   assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).textAlign), 'left');
   assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).fontWeight), '700');
-  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '2px');
+  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '1px');
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
+  assert(fields[2].text === '--' || /^\d{2,}:\d{2}:\d{2} 스트리밍 중$/.test(fields[2].text));
 }
 
 async function run() {
@@ -59,6 +67,7 @@ async function run() {
     };
     let writes = 0;
     let liveStatus = 'OPEN';
+    let liveViewers = 1234;
     let liveGate = null;
     let notifyLiveGate = null;
     await context.exposeBinding('__storageGet', (_source, keys) => {
@@ -106,7 +115,7 @@ async function run() {
       if (url.host === 'api.chzzk.naver.com') {
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
-        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: 1234, channel: {channelName: '테스트 방송'}}}});
+        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
       return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>CHZZK fixture</title></head><body></body></html>'});
     });
@@ -222,7 +231,7 @@ async function run() {
     await main.locator('#favoriteRefresh').click();
     await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor({state: 'attached'});
     await checkCompactFavorites(main, 'favorite-list');
-    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-list-viewers').textContent(), '1,234명');
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-list-viewers').textContent(), '1,234');
     assert((await main.locator('.mv-notice').textContent()).includes('현재 화면의 온라인 상태를 갱신'));
     assert.equal(writes, writesBeforeFailure);
     assert.deepEqual(storage, storedBeforeFailure, 'expired context must not overwrite the shared store');
@@ -291,9 +300,10 @@ async function run() {
     await checkCompactFavorites(popup, 'favorite');
     liveStatus = 'OPEN';
     assert.equal(await popup.evaluate(() => window.__statusPolls.length), 1);
+    liveViewers = 1234567;
     await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
-    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and online three-column styles.');
+    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and online fixed-ratio columns, viewer icon and streaming label.');
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, login and live playback are not tested by this harness.');

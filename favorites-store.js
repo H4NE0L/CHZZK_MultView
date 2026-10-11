@@ -101,13 +101,16 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   function favoriteViewerText(fav) {
     const count = normalizeViewerCount(fav?.viewerCount);
-    return fav?.online && count !== null ? `${count.toLocaleString('ko-KR')}명` : '--';
+    return fav?.online && count !== null ? count.toLocaleString('ko-KR') : '--';
   }
   function favoriteDuration(fav, now = Date.now()) {
     if (!fav?.online || !fav.openAt) return '--';
     const seconds = Math.floor(Math.max(0, now - fav.openAt) / 1000);
     const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = seconds % 60;
     return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
+  }
+  function favoriteStreamText(fav, now = Date.now()) {
+    return fav?.online ? `${favoriteDuration(fav, now)} 스트리밍 중` : '--';
   }
   function favoriteMetaText(fav, now = Date.now()) {
     if (!fav?.online) return '';
@@ -187,6 +190,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
     moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
-    parseOpenDate, favoriteMetaText, favoriteDuration, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
+    parseOpenDate, favoriteMetaText, favoriteDuration, favoriteStreamText, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
     FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
 })();

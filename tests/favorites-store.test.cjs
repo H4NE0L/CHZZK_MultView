@@ -194,14 +194,16 @@ test('compact favorite duration pads hours/minutes and omits offline elapsed tim
   const {store} = fixture();
   assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 5 * 60000), '00:05:00');
   assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 3661000), '01:01:01');
+  assert.equal(store.favoriteStreamText({online: true, openAt: 1}, 1 + 3661000), '01:01:01 스트리밍 중');
+  assert.equal(store.favoriteStreamText({online: false, openAt: 1}), '--');
   assert.equal(store.favoriteDuration({online: false, openAt: 1}), '--');
   assert.equal(store.favoriteDuration({online: true, openAt: null}), '--');
 });
 
 test('viewer counts format zero and unknown values and merge without changing group/order', () => {
   const {store} = fixture();
-  assert.equal(store.favoriteViewerText({online: true, viewerCount: 1234}), '1,234명');
-  assert.equal(store.favoriteViewerText({online: true, viewerCount: 0}), '0명');
+  assert.equal(store.favoriteViewerText({online: true, viewerCount: 1234}), '1,234');
+  assert.equal(store.favoriteViewerText({online: true, viewerCount: 0}), '0');
   for (const value of [null, undefined, -1, 'bad']) assert.equal(store.favoriteViewerText({online: true, viewerCount: value}), '--');
   assert.equal(store.favoriteViewerText({online: false, viewerCount: 1234}), '--');
   const result = store.mergeInfo([{uid: 'a', group: '그룹', order: 2}], {a: {viewerCount: 1234}})[0];

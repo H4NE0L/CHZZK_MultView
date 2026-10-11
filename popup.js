@@ -31,7 +31,7 @@ function renderVersion() {
   versionEl.textContent = `v${manifest.version}`;
 }
 
-const favoriteDuration = CZFavoritesStore.favoriteDuration;
+const favoriteStreamText = CZFavoritesStore.favoriteStreamText;
 
 function applyFavoriteSnapshot(snapshot) {
   favorites = snapshot.favorites;
@@ -76,7 +76,7 @@ function renderFavoriteRow(fav) {
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
       <span class="favorite-text">
         <span class="favorite-identity"><span class="favorite-name" title="${escapeHtml(fav.name || fav.title || fav.uid)}">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
-        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span></span><span class="favorite-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(fav))}</span><span class="favorite-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(fav))}</span>
+        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span></span><span class="favorite-viewers" title="현재 시청자 수"><svg class="viewer-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="4" r="3"/><path d="M2 15v-2a6 6 0 0 1 12 0v2z"/></svg><span class="favorite-viewer-count">${escapeHtml(CZFavoritesStore.favoriteViewerText(fav))}</span></span><span class="favorite-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteStreamText(fav))}</span>
       </span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>
@@ -386,7 +386,7 @@ setInterval(() => {
   favoritesEl.querySelectorAll(".favorite-row").forEach(row => {
     const fav = favorites.find(f => f.uid === row.dataset.uid);
     const meta = row.querySelector(".favorite-meta");
-    if (fav && meta) meta.textContent = favoriteDuration(fav);
+    if (fav && meta) meta.textContent = favoriteStreamText(fav);
   });
 }, 1000);
 
