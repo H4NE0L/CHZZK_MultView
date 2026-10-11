@@ -32,9 +32,10 @@ async function checkCompactFavorites(page, prefix) {
   }), prefix);
   assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
   assert(Math.max(fields[3].top, fields[4].top) < Math.min(fields[3].bottom, fields[4].bottom) && fields[3].right <= fields[4].left, 'category sits beside streamer name');
-  assert(Math.abs(fields[4].left - fields[3].right) <= 1, 'category stays directly beside name');
-  assert(Math.abs(fields[2].left - fields[1].right - 4) <= 1, 'duration and viewers have a 4px gap');
-  assert.equal(await row.locator(`.${prefix}-identity`).evaluate(el => getComputedStyle(el).paddingLeft), '1px');
+  assert(Math.abs(fields[4].left - fields[3].right - 4) <= 1, 'category has a 4px gap beside name');
+  assert(Math.abs(fields[2].left - fields[1].right - 12) <= 1, 'duration and viewers have a 12px gap');
+  const dotGap = await row.evaluate((el, p) => { const dot = el.querySelector(p === 'favorite' ? '.favorite-status' : '.favorite-status-dot').getBoundingClientRect(); const name = el.querySelector(`.${p}-name`).getBoundingClientRect(); return name.left - dot.right; }, prefix);
+  assert(Math.abs(dotGap - 4) <= 1, 'dot and name have a 4px gap');
   assert.equal(await row.locator(`.${prefix}-name`).evaluate(el => getComputedStyle(el).fontSize), '14px');
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).fontSize), '10px');
   for (const part of ['meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).fontSize), '12px');
