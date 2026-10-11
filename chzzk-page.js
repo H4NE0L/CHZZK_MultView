@@ -3275,7 +3275,7 @@ select:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    color: #8d8d94;
+    color: #d4d4dc;
     font-size: 10px;
     font-weight: 400;
     line-height: 1.25;
@@ -4437,7 +4437,7 @@ select:hover {
 .favorite-list-text { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 4px; white-space: nowrap; }
 .favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .favorite-list-name { flex: 0 1 auto; max-width: 50%; font-size: 12px; }
-.favorite-list-category { flex: 0 1 auto; color: #8d8d94; font-size: 12px; }
+.favorite-list-category { flex: 0 1 auto; color: #d4d4dc; font-size: 12px; }
 .favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex: 0 0 auto; font-size: 12px; }
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
