@@ -109,9 +109,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = seconds % 60;
     return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
   }
-  function favoriteStreamText(fav, now = Date.now()) {
-    return fav?.online ? `${favoriteDuration(fav, now)} 스트리밍 중` : '--';
-  }
   function favoriteMetaText(fav, now = Date.now()) {
     if (!fav?.online) return '';
     const duration = fav.openAt ? favoriteDuration(fav, now) : '';
@@ -190,6 +187,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
     moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
-    parseOpenDate, favoriteMetaText, favoriteDuration, favoriteStreamText, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
+    parseOpenDate, favoriteMetaText, favoriteDuration, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
     FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
 })();

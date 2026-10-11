@@ -194,8 +194,6 @@ test('compact favorite duration pads hours/minutes and omits offline elapsed tim
   const {store} = fixture();
   assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 5 * 60000), '00:05:00');
   assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 3661000), '01:01:01');
-  assert.equal(store.favoriteStreamText({online: true, openAt: 1}, 1 + 3661000), '01:01:01 스트리밍 중');
-  assert.equal(store.favoriteStreamText({online: false, openAt: 1}), '--');
   assert.equal(store.favoriteDuration({online: false, openAt: 1}), '--');
   assert.equal(store.favoriteDuration({online: true, openAt: null}), '--');
 });

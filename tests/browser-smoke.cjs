@@ -31,10 +31,11 @@ async function checkCompactFavorites(page, prefix) {
     return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
   }), prefix);
   assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
-  assert(fields[3].bottom <= fields[4].top, 'category sits below streamer name');
+  assert(Math.max(fields[3].top, fields[4].top) < Math.min(fields[3].bottom, fields[4].bottom) && fields[3].right <= fields[4].left, 'category sits beside streamer name');
+  assert.equal(await row.locator(`.${prefix}-name`).evaluate(el => getComputedStyle(el).fontSize), '14px');
+  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).fontSize), '10px');
+  for (const part of ['meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).fontSize), '12px');
   assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left, 'duration column precedes viewers');
-  const widths = fields.slice(0, 3).map(f => f.right - f.left);
-  assert(Math.abs(widths[0] / widths[1] - 30 / 45) < .01 && Math.abs(widths[2] / widths[1] - 25 / 45) < .01, 'columns use fixed 30:45:25 proportions');
   for (const part of ['viewers', 'meta']) {
     assert(await row.locator(`.${prefix}-${part}`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'viewer and duration columns must fit their content');
     assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap');
@@ -49,7 +50,7 @@ async function checkCompactFavorites(page, prefix) {
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2} 스트리밍 중$/.test(fields[1].text));
+  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
 }
 
 async function run() {
@@ -303,7 +304,7 @@ async function run() {
     liveViewers = 1234567;
     await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
-    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and online fixed-ratio columns, viewer icon and streaming label.');
+    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, login and live playback are not tested by this harness.');
