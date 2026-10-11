@@ -26,15 +26,15 @@ async function checkCompactFavorites(page, prefix) {
     assert(await row.locator(prefix === 'favorite' ? '.favorite-status' : '.favorite-status-dot').isVisible());
     return;
   }
-  const fields = await row.evaluate((el, p) => ['identity', 'viewers', 'meta', 'name', 'category'].map(part => {
+  const fields = await row.evaluate((el, p) => ['identity', 'meta', 'viewers', 'name', 'category'].map(part => {
     const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
     return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
   }), prefix);
   assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
   assert(fields[3].bottom <= fields[4].top, 'category sits below streamer name');
-  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left, 'viewer column precedes duration');
+  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left, 'duration column precedes viewers');
   const widths = fields.slice(0, 3).map(f => f.right - f.left);
-  assert(Math.abs(widths[0] / widths[2] - 30 / 45) < .01 && Math.abs(widths[1] / widths[2] - 25 / 45) < .01, 'columns use fixed 30:25:45 proportions');
+  assert(Math.abs(widths[0] / widths[1] - 30 / 45) < .01 && Math.abs(widths[2] / widths[1] - 25 / 45) < .01, 'columns use fixed 30:45:25 proportions');
   for (const part of ['viewers', 'meta']) {
     assert(await row.locator(`.${prefix}-${part}`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'viewer and duration columns must fit their content');
     assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap');
@@ -49,7 +49,7 @@ async function checkCompactFavorites(page, prefix) {
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[2].text === '--' || /^\d{2,}:\d{2}:\d{2} 스트리밍 중$/.test(fields[2].text));
+  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2} 스트리밍 중$/.test(fields[1].text));
 }
 
 async function run() {
