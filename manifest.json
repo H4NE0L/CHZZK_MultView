@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "CZ 통제실",
+  "name": "치지직 통합관제실",
   "version": "1.1.9",
   "description": "CHZZK 방송 통합관제 시스템. 여러 방송을 한 화면에서 동시에 시청하고 관리할 수 있습니다.",
   "permissions": [
@@ -18,7 +18,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "CZ 통제실",
+    "default_title": "치지직 통합관제실",
     "default_popup": "popup.html"
   },
   "content_scripts": [

@@ -1,13 +1,7 @@
 /*
- * CHZZK MultiView v0.4
- * Cookie bridge
- *
- * The uploaded reference implementation mirrors NID_AUT/NID_SES into
- * partitioned storage. We keep the same core idea, but use the extension
- * origin dynamically instead of hard-coding another viewer's domain.
- *
- * The main v0.4 UI is opened on a top-level CHZZK page, so this bridge is
- * a compatibility layer rather than the only authentication mechanism.
+ * 치지직 통합관제실 — Naver 로그인 쿠키 연동
+ * 확장 origin을 사용해 NID_AUT/NID_SES를 파티션 쿠키로 복제합니다.
+ * 메인 UI는 CHZZK 최상위 페이지에서 실행되며, 이 처리는 프레임 호환성을 보완합니다.
  */
 
 const COOKIE_DEFS = [
@@ -66,7 +60,7 @@ async function mirrorCookie(cookie, def) {
       partitionKey: extensionPartitionKey()
     });
   } catch (err) {
-    console.warn("[CHZZK MultiView] partition cookie mirror failed:", err);
+    console.warn("[치지직 통합관제실] partition cookie mirror failed:", err);
   }
 }
 
@@ -82,7 +76,7 @@ async function seedCookieBridge() {
         await mirrorCookie(base, def);
       }
     } catch (err) {
-      console.warn("[CHZZK MultiView] cookie seed failed:", err);
+      console.warn("[치지직 통합관제실] cookie seed failed:", err);
     }
   }
 }
@@ -135,7 +129,7 @@ async function ensurePageContentScript(tabId) {
     });
     return true;
   } catch (err) {
-    console.warn("[CHZZK MultiView] page content script injection failed:", err);
+    console.warn("[치지직 통합관제실] page content script injection failed:", err);
     return false;
   }
 }
@@ -153,7 +147,7 @@ async function openMultiViewFromPopup(initialInputs) {
       active: true
     });
   } catch (err) {
-    console.error("[CHZZK MultiView] failed to create tab:", err);
+    console.error("[치지직 통합관제실] failed to create tab:", err);
     return { ok: false, error: "TAB_CREATE_FAILED" };
   }
 

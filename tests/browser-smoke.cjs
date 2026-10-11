@@ -55,6 +55,9 @@ async function run() {
     await popup.goto('https://popup.invalid/popup.html');
     await popup.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 2);
     assert.equal(await popup.locator('#version').textContent(), `v${manifest.version}`);
+    assert.equal(await popup.title(), manifest.name);
+    assert.equal(await popup.locator('h1').textContent(), manifest.name);
+    assert.equal(manifest.action.default_title, manifest.name);
     assert.equal(writes, 0, 'opening popup must never write favorites');
     console.log('Checked popup initial read');
     await popup.locator('#uidInput').fill('https://chzzk.naver.com/live/cccccc');
