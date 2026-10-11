@@ -20,6 +20,7 @@ async function run() {
       chzzkMultiviewFavoriteGroupsV02: ['기본 그룹', '첫 그룹', '둘째 그룹', '빈 그룹']
     };
     let writes = 0;
+    let liveStatus = 'OPEN';
     await context.exposeBinding('__storageGet', (_source, keys) => {
       const names = typeof keys === 'string' ? [keys] : keys;
       return Object.fromEntries(names.filter(k => k in storage).map(k => [k, structuredClone(storage[k])]));
@@ -36,7 +37,16 @@ async function run() {
       window.chrome = {
         runtime: {id: 'mock-extension', getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
-          local: {get: keys => window.__storageGet(keys), set: values => window.__storageSet(values)},
+          local: {
+            get: keys => {
+              if (window.__invalidRead) throw Error(window.__invalidRead);
+              return window.__storageGet(keys);
+            },
+            set: values => {
+              if (window.__invalidWrite) throw Error(window.__invalidWrite);
+              return window.__storageSet(values);
+            }
+          },
           onChanged: {addListener: f => window.__storageListeners.push(f), removeListener: f => { window.__storageListeners = window.__storageListeners.filter(x => x !== f); }}
         }
       };
@@ -47,7 +57,10 @@ async function run() {
         const file = path.basename(url.pathname);
         return route.fulfill({body: fs.readFileSync(path.join(root, file)), contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
-      if (url.host === 'api.chzzk.naver.com') return route.fulfill({json: {code: 200, content: {status: 'OPEN', openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', channel: {channelName: '테스트 방송'}}}});
+      if (url.host === 'api.chzzk.naver.com') {
+        if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
+        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', channel: {channelName: '테스트 방송'}}}});
+      }
       return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>CHZZK fixture</title></head><body></body></html>'});
     });
     const popup = await context.newPage();
@@ -132,6 +145,48 @@ async function run() {
     await main.locator('#syncList .sync-row').first().waitFor();
     assert.equal(await main.locator('#syncList .sync-row').count(), 2);
     assert.equal(await main.locator('#syncResetAll').count(), 1);
+
+    await main.locator('#favoriteManager > summary').click();
+    liveStatus = 'CLOSE';
+    await main.locator('#favoriteRefresh').click();
+    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.offline').waitFor();
+    assert.equal(storage.chzzkMultiviewFavoritesV08[0].online, false);
+    const storedBeforeFailure = structuredClone(storage);
+    const writesBeforeFailure = writes;
+    await main.evaluate(() => {
+      window.__invalidRead = 'Extension context invalidated.';
+      window.__invalidWrite = 'Extension context invalidated.';
+    });
+    liveStatus = 'OPEN';
+    await main.locator('#favoriteRefresh').click();
+    await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor();
+    assert((await main.locator('.mv-notice').textContent()).includes('현재 화면의 온라인 상태를 갱신'));
+    assert.equal(writes, writesBeforeFailure);
+    assert.deepEqual(storage, storedBeforeFailure, 'expired context must not overwrite the shared store');
+    assert(await main.evaluate(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')].every((f,i) => f === window.__originalFrames[i])));
+
+    // A real HTTP failure must retain displayed status rather than mark it offline.
+    liveStatus = 'ERROR';
+    await main.locator('#favoriteRefresh').click();
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.mv-notice').textContent.includes('실패했습니다'));
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').count(), 1);
+    assert.equal(writes, writesBeforeFailure);
+
+    // Storage errors other than context expiration must not silently use cached data.
+    await main.evaluate(() => { window.__invalidRead = 'storage unavailable'; });
+    liveStatus = 'CLOSE';
+    await main.locator('#favoriteRefresh').click();
+    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#favoriteRefresh').disabled);
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').count(), 1);
+
+    // Context invalidation after reading, during the eventual write, also keeps UI usable.
+    await main.evaluate(() => { window.__invalidRead = ''; });
+    liveStatus = 'OPEN';
+    await main.locator('#favoriteRefresh').click();
+    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#favoriteRefresh').disabled);
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').count(), 1);
+    assert.equal(writes, writesBeforeFailure);
+    console.log('PASS: refresh OFFLINE→ONLINE on the same screen with invalidated storage, retained frames/store, write-time invalidation, and truthful network/storage failures.');
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, login and live playback are not tested by this harness.');

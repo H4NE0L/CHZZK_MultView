@@ -140,3 +140,11 @@ test('reinjecting the shared adapter preserves its identity and subscriptions', 
   vm.runInContext(source, context);
   assert.equal(vm.runInContext('CZFavoritesStore', context), original);
 });
+
+test('strict live refresh distinguishes a failed request from an offline broadcast', async () => {
+  for (const fetch of [async () => {throw Error('network denied');}, async () => ({ok: false, status: 403})]) {
+    const {store} = fixture({}, fetch);
+    await assert.rejects(store.fetchLiveInfo('aaaaaa', {throwOnError: true}));
+    assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: ''});
+  }
+});

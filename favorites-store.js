@@ -102,18 +102,24 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const duration = fav.openAt ? (h > 0 ? `${h}시간 ${m}분` : `${m}분`) : '';
     return [fav.category, duration].filter(Boolean).join(' · ');
   }
-  async function fetchLiveInfo(uid) {
+  async function fetchLiveInfo(uid, { throwOnError = false } = {}) {
     const offline = {online: false, openAt: null, category: ''};
     try {
       const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
         credentials: 'include',
         headers: {Accept: 'application/json, text/plain, */*', 'Front-Client-Platform-Type': 'PC', 'Front-Client-Product-Type': 'web'}
       });
-      if (!response.ok) return offline;
+      if (!response.ok) {
+        if (throwOnError) throw new Error(`방송 상태 조회 HTTP ${response.status}`);
+        return offline;
+      }
       const data = await response.json(), content = data?.content;
       if (!(data?.code === 200 && content?.status === 'OPEN')) return offline;
       return {online: true, openAt: parseOpenDate(content.openDate), category: String(content.liveCategoryValue || content.liveCategory || '').trim()};
-    } catch (_) { return offline; }
+    } catch (error) {
+      if (throwOnError) throw error;
+      return offline;
+    }
   }
   async function read() { return normalize(await chrome.storage.local.get(keys)); }
   async function write(favorites, groups) {

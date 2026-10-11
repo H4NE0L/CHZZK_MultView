@@ -356,23 +356,33 @@ function saveState() {
     });
 
     ui.querySelector("#favoriteRefresh").addEventListener("click", async () => {
+      const btn = ui.querySelector("#favoriteRefresh");
+      btn.disabled = true;
+      let persist = true;
       try {
-        await loadFavorites();
+        try {
+          await loadFavorites();
+        } catch (error) {
+          if (!isExtensionContextInvalidated(error)) throw error;
+          // The extension connection cannot be revived by retrying it. Keep
+          // the visible list and fetch live status without writing stale data.
+          persist = false;
+        }
         refreshFavoriteList();
         if (!favorites.length) {
-          showNotice("새로고침할 즐겨찾기 방송이 없습니다.");
+          showNotice(persist
+            ? "새로고침할 즐겨찾기 방송이 없습니다."
+            : "확장 연결이 끊겼으며 현재 화면에 조회할 즐겨찾기가 없습니다.");
           return;
         }
 
-        const btn = ui.querySelector("#favoriteRefresh");
-        btn.disabled = true;
-
-        await refreshFavoriteOnlineStatus(true);
+        await refreshFavoriteOnlineStatus(true, { persist });
       } catch (error) {
         console.error("즐겨찾기 새로고침 실패:", error);
-        showNotice("즐겨찾기 새로고침에 실패했습니다. 콘솔을 확인해 주세요.");
+        showNotice(persist
+          ? "즐겨찾기 새로고침에 실패했습니다. 기존 표시 상태를 유지합니다."
+          : "확장 연결이 끊긴 상태에서 방송 상태 조회도 실패했습니다. 기존 표시 상태를 유지합니다.");
       } finally {
-        const btn = ui.querySelector("#favoriteRefresh");
         if (btn) btn.disabled = false;
       }
     });    
@@ -1932,17 +1942,31 @@ function saveState() {
 
   const fetchFavoriteLive = CZFavoritesStore.fetchLiveInfo;
 
-  async function refreshFavoriteOnlineStatus(notify = true) {
+  function isExtensionContextInvalidated(error) {
+    return String(error?.message || error).includes("Extension context invalidated");
+  }
+
+  async function refreshFavoriteOnlineStatus(notify = true, { persist = true } = {}) {
     if (!favorites.length) return;
-    const results = await Promise.all(favorites.map(f => fetchFavoriteLive(f.uid)));
+    const results = await Promise.all(favorites.map(f => fetchFavoriteLive(f.uid, { throwOnError: true })));
     favorites.forEach((f, i) => {
       f.online = results[i].online === true;
       f.openAt = f.online ? results[i].openAt : null;
       f.category = f.online ? results[i].category : "";
     });
-    await saveFavorites();
+    if (persist) {
+      try {
+        await saveFavorites();
+      } catch (error) {
+        if (!isExtensionContextInvalidated(error)) throw error;
+        // The context may also expire while the API requests are in flight.
+        persist = false;
+      }
+    }
     refreshFavoriteList();
-    if (notify) showNotice("즐겨찾기 온라인 상태를 갱신했습니다.");
+    if (notify) showNotice(persist
+      ? "즐겨찾기 온라인 상태를 갱신했습니다."
+      : "현재 화면의 온라인 상태를 갱신했습니다. 확장 연결이 끊겨 저장·다른 화면 동기화는 사용할 수 없습니다.");
   }
 
   function isFavorite(uid) { return favorites.some(f => f.uid === uid); }
