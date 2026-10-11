@@ -106,10 +106,6 @@
     document.querySelectorAll("video").forEach(bindVideo);
   }
 
-  function matchesText(el, re) {
-    const text = `${el.getAttribute?.("aria-label") || ""} ${el.getAttribute?.("title") || ""} ${el.textContent || ""}`;
-    return re.test(text.trim());
-  }
 
   function setHidden(el, hidden) {
     if (!el) return;

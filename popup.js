@@ -1,8 +1,4 @@
-const FAVORITES_KEY = "chzzkMultiviewFavoritesV08";
-const FAVORITES_LEGACY_KEY = "chzzkMultiviewFavoritesV07";
-const FAVORITE_GROUPS_KEY = "chzzkMultiviewFavoriteGroupsV02";
-const FAVORITE_GROUPS_LEGACY_KEY = "chzzkMultiviewFavoriteGroupsV01";
-const DEFAULT_GROUP = "기본 그룹";
+const DEFAULT_GROUP = CZFavoritesStore.DEFAULT_GROUP;
 
 const statusEl = document.getElementById("status");
 const uidInput = document.getElementById("uidInput");
@@ -12,8 +8,6 @@ const versionEl = document.getElementById("version");
 let favorites = [];
 let favoriteGroups = [DEFAULT_GROUP];
 let multiList = [];
-let selectedFavoriteUid = "";
-let draggedGroup = null;
 let draggedFavoriteUid = null;
 
 function setStatus(text, error = false) {
@@ -37,72 +31,24 @@ function renderVersion() {
   versionEl.textContent = `v${manifest.version}`;
 }
 
-function normalizeFavorite(fav) {
-  const uid = String(fav?.uid || "").trim();
-  if (!uid) return null;
-  return {
-    ...fav,
-    uid,
-    name: String(fav?.name || fav?.title || uid).replace(/\s*-\s*CHZZK\s*$/i, "").trim() || uid,
-    title: String(fav?.title || fav?.name || uid).replace(/\s*-\s*CHZZK\s*$/i, "").trim() || uid,
-    group: String(fav?.group || DEFAULT_GROUP).trim() || DEFAULT_GROUP,
-    online: fav?.online === true,
-    openAt: Number.isFinite(Number(fav?.openAt)) && Number(fav.openAt) > 0 ? Number(fav.openAt) : null,
-    category: String(fav?.category || "").trim()
-  };
-}
+const favoriteMetaText = CZFavoritesStore.favoriteMetaText;
 
-// 방송 시작 시각(openDate)은 KST 문자열("YYYY-MM-DD HH:mm:ss")로 내려온다.
-function parseOpenDate(value) {
-  if (!value) return null;
-  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
-  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5], +m[6]);
-  const t = Date.parse(value);
-  return Number.isFinite(t) ? t : null;
-}
-
-function formatBroadcastDuration(openAt) {
-  if (!openAt) return "";
-  const minutes = Math.floor(Math.max(0, Date.now() - openAt) / 60000);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
-}
-
-function favoriteMetaText(fav) {
-  if (!fav.online) return "";
-  return [fav.category, formatBroadcastDuration(fav.openAt)].filter(Boolean).join(" · ");
+function applyFavoriteSnapshot(snapshot) {
+  favorites = snapshot.favorites;
+  favoriteGroups = snapshot.groups;
 }
 
 function ensureGroups() {
-  const set = new Set(favoriteGroups.filter(Boolean));
-  set.add(DEFAULT_GROUP);
-  for (const fav of favorites) set.add(fav.group || DEFAULT_GROUP);
-  favoriteGroups = [...set];
+  applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
 }
 
-function normalizeFavoriteOrders() {
-  const sorted = [...favorites].sort((a, b) => {
-    const ao = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
-    const bo = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
-    return ao - bo;
-  });
-  sorted.forEach((fav, i) => { fav.order = i + 1; });
-  favorites = sorted;
-}
-
-function reindexFavoriteOrders() {
-  favorites.forEach((fav, i) => { fav.order = i + 1; });
-}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[ch]));
 }
 
 function getGroupItems(group) {
-  const items = favorites.filter(f => (f.group || DEFAULT_GROUP) === group);
-  // 온라인 여부를 최우선으로 하되, 같은 상태에서는 전역 순서를 유지한다.
-  return items.sort((a, b) => Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
+  return CZFavoritesStore.itemsForGroup(favorites, group);
 }
 
 function renderFavorites() {
@@ -144,34 +90,7 @@ function renderFavoriteRow(fav) {
 }
 
 function moveGroup(group, targetGroup) {
-  if (!group || !targetGroup || group === targetGroup) return;
-  const from = favoriteGroups.indexOf(group);
-  const to = favoriteGroups.indexOf(targetGroup);
-  if (from < 0 || to < 0) return;
-  favoriteGroups.splice(from, 1);
-  favoriteGroups.splice(favoriteGroups.indexOf(targetGroup), 0, group);
-}
-
-function moveFavoriteWithinGroup(uid, targetUid) {
-  if (!uid || !targetUid || uid === targetUid) return;
-  const source = favorites.find(f => f.uid === uid);
-  const target = favorites.find(f => f.uid === targetUid);
-  if (!source || !target || (source.group || DEFAULT_GROUP) !== (target.group || DEFAULT_GROUP)) return;
-
-  const group = source.group || DEFAULT_GROUP;
-  const groupItems = favorites.filter(f => (f.group || DEFAULT_GROUP) === group);
-  const sourceIndex = groupItems.findIndex(f => f.uid === uid);
-  const targetIndex = groupItems.findIndex(f => f.uid === targetUid);
-  if (sourceIndex < 0 || targetIndex < 0) return;
-
-  groupItems.splice(sourceIndex, 1);
-  groupItems.splice(targetIndex, 0, source);
-
-  let cursor = 0;
-  favorites = favorites.map(f => {
-    if ((f.group || DEFAULT_GROUP) !== group) return f;
-    return groupItems[cursor++];
-  });
+  applyFavoriteSnapshot(CZFavoritesStore.moveGroup(favorites, favoriteGroups, group, targetGroup));
 }
 
 function bindFavoriteEvents() {
@@ -212,33 +131,11 @@ async function loadFavorites({refreshOnline = false} = {}) {
 }
 
 async function saveFavorites() {
-  ensureGroups();
-  normalizeFavoriteOrders();
+  applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
   await CZFavoritesStore.write(favorites, favoriteGroups);
 }
 
-async function fetchLiveInfo(uid) {
-  const offline = { online: false, openAt: null, category: "" };
-  try {
-    const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
-      credentials: "include",
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Front-Client-Platform-Type": "PC",
-        "Front-Client-Product-Type": "web"
-      }
-    });
-    if (!response.ok) return offline;
-    const data = await response.json();
-    const content = data?.content;
-    if (!(data?.code === 200 && content?.status === "OPEN")) return offline;
-    return {
-      online: true,
-      openAt: parseOpenDate(content.openDate),
-      category: String(content.liveCategoryValue || content.liveCategory || "").trim()
-    };
-  } catch (_) { return offline; }
-}
+const fetchLiveInfo = CZFavoritesStore.fetchLiveInfo;
 
 async function refreshFavoriteOnlineStatus(showStatus = true) {
   if (!favorites.length) return;
@@ -260,7 +157,7 @@ async function addGroupFromModal() {
     if (group) setStatus("이미 존재하는 그룹입니다.", true);
     return;
   }
-  favoriteGroups.push(group);
+  applyFavoriteSnapshot(CZFavoritesStore.addGroup(favorites, favoriteGroups, group));
   await saveFavorites();
   renderGroupManager();
   renderFavorites();
@@ -303,8 +200,7 @@ function renderGroupManager() {
     if (nextRaw === null) return;
     const next = nextRaw.trim();
     if (!next || (next !== old && favoriteGroups.includes(next))) return;
-    favoriteGroups = favoriteGroups.map(g => g === old ? next : g);
-    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === old) f.group = next; });
+    applyFavoriteSnapshot(CZFavoritesStore.renameGroup(favorites, favoriteGroups, old, next));
     await saveFavorites();
     renderGroupManager();
     renderFavorites();
@@ -314,9 +210,7 @@ function renderGroupManager() {
     const group = btn.closest(".manage-group-row")?.dataset.group;
     if (!group || group === DEFAULT_GROUP) return;
     if (!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) return;
-    favoriteGroups = favoriteGroups.filter(g => g !== group);
-    favorites.forEach(f => { if ((f.group || DEFAULT_GROUP) === group) f.group = DEFAULT_GROUP; });
-    ensureGroups();
+    applyFavoriteSnapshot(CZFavoritesStore.deleteGroup(favorites, favoriteGroups, group));
     await saveFavorites();
     renderGroupManager();
     renderFavorites();
@@ -341,7 +235,7 @@ function renderGroupManager() {
 }
 
 function renderItemManager() {
-  normalizeFavoriteOrders();
+  ensureGroups();
   const list = document.getElementById("itemManageList");
   if (!list) return;
   list.innerHTML = favorites.map((fav, i) => `
@@ -356,7 +250,7 @@ function renderItemManager() {
   list.querySelectorAll(".manage-item-group").forEach(sel => sel.addEventListener("change", async () => {
     const fav = favorites.find(f => f.uid === sel.closest(".manage-item-row")?.dataset.uid);
     if (!fav) return;
-    fav.group = sel.value || DEFAULT_GROUP;
+    applyFavoriteSnapshot(CZFavoritesStore.setFavoriteGroup(favorites, favoriteGroups, fav.uid, sel.value));
     await saveFavorites();
     renderItemManager();
     renderFavorites();
@@ -365,8 +259,7 @@ function renderItemManager() {
   list.querySelectorAll(".manage-item-delete").forEach(btn => btn.addEventListener("click", async () => {
     const uid = btn.closest(".manage-item-row")?.dataset.uid;
     if (!uid) return;
-    favorites = favorites.filter(f => f.uid !== uid);
-    reindexFavoriteOrders();
+    applyFavoriteSnapshot(CZFavoritesStore.removeFavorite(favorites, favoriteGroups, uid));
     await saveFavorites();
     renderItemManager();
     renderFavorites();
@@ -379,12 +272,7 @@ function renderItemManager() {
       e.preventDefault();
       const targetUid = row.dataset.uid;
       if (!draggedFavoriteUid || !targetUid || draggedFavoriteUid === targetUid) return;
-      const from = favorites.findIndex(f => f.uid === draggedFavoriteUid);
-      const to = favorites.findIndex(f => f.uid === targetUid);
-      if (from < 0 || to < 0) return;
-      const [moved] = favorites.splice(from, 1);
-      favorites.splice(to, 0, moved);
-      reindexFavoriteOrders();
+      applyFavoriteSnapshot(CZFavoritesStore.moveFavorite(favorites, favoriteGroups, draggedFavoriteUid, targetUid));
       draggedFavoriteUid = null;
       await saveFavorites();
       renderItemManager();
@@ -404,30 +292,6 @@ function addToList(value = uidInput.value) {
   renderList();
   if (value === uidInput.value) { uidInput.value = ""; uidInput.focus(); }
   return true;
-}
-
-async function removeFavorite() {
-  if (!selectedFavoriteUid) {
-    setStatus("삭제할 즐겨찾기를 목록에서 선택해주세요.", true);
-    return;
-  }
-  const fav = favorites.find(f => f.uid === selectedFavoriteUid);
-  favorites = favorites.filter(f => f.uid !== selectedFavoriteUid);
-  selectedFavoriteUid = "";
-  await saveFavorites();
-  renderFavorites();
-  setStatus(`${fav?.name || "방송"}을(를) 즐겨찾기에서 삭제했습니다.`);
-}
-
-async function sendOpenMessage(tabId, initialInputs = [], maxTries = 120) {
-  for (let i = 0; i < maxTries; i++) {
-    try {
-      const result = await chrome.tabs.sendMessage(tabId, { type: "OPEN_MULTIVIEW", initialInputs });
-      if (result?.ok !== false) return true;
-    } catch (_) {}
-    await new Promise(r => setTimeout(r, 250));
-  }
-  return false;
 }
 
 async function openMultiView() {

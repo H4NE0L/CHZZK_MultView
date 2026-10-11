@@ -5,11 +5,7 @@
 
   const ROOT_ID = "__chzzk_multiview_v09__";
   const STORAGE_KEY = "chzzkMultiviewV09";
-  const FAVORITES_KEY = "chzzkMultiviewFavoritesV08";
-  const FAVORITES_LEGACY_KEY = "chzzkMultiviewFavoritesV07";
-  const FAVORITE_GROUPS_KEY = "chzzkMultiviewFavoriteGroupsV02";
-  const FAVORITE_GROUPS_LEGACY_KEY = "chzzkMultiviewFavoriteGroupsV01";
-  const DEFAULT_FAVORITE_GROUP = "기본 그룹";
+  const DEFAULT_FAVORITE_GROUP = CZFavoritesStore.DEFAULT_GROUP;
 
   const DEFAULT_STATE = {
     channels: [],
@@ -167,21 +163,14 @@ function saveState() {
     saveTimer = setTimeout(saveState, 300);
   }
 
-  function normalizeFavoriteOrders() {
-    const sorted = [...favorites].sort((a,b) => {
-      const ao = Number.isFinite(a.order) ? a.order : Number.MAX_SAFE_INTEGER;
-      const bo = Number.isFinite(b.order) ? b.order : Number.MAX_SAFE_INTEGER;
-      return ao - bo;
-    });
-    sorted.forEach((fav,i) => { fav.order = i + 1; });
-    favorites.sort((a,b) => a.order - b.order);
+
+  function applyFavoriteSnapshot(snapshot) {
+    favorites = snapshot.favorites;
+    favoriteGroups = snapshot.groups;
   }
 
   function ensureFavoriteGroups() {
-    const set = new Set(favoriteGroups.filter(Boolean));
-    set.add(DEFAULT_FAVORITE_GROUP);
-    favorites.forEach(f => set.add(f.group || DEFAULT_FAVORITE_GROUP));
-    favoriteGroups = [...set];
+    applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
   }
 
   async function loadFavorites() {
@@ -388,7 +377,16 @@ function saveState() {
       }
     });    
     
-    ui.querySelector("#favoriteModalAddGroup").addEventListener("click", async () => { const name=window.prompt("새 그룹 이름을 입력하세요.","새 그룹"); if(name===null)return; const group=name.trim(); if(!group||favoriteGroups.includes(group))return; favoriteGroups.push(group); await saveFavorites(); renderFavoriteGroupManager(); refreshFavoriteList(); });
+    ui.querySelector("#favoriteModalAddGroup").addEventListener("click", async () => {
+      const name = window.prompt("새 그룹 이름을 입력하세요.", "새 그룹");
+      if (name === null) return;
+      const group = name.trim();
+      if (!group || favoriteGroups.includes(group)) return;
+      applyFavoriteSnapshot(CZFavoritesStore.addGroup(favorites, favoriteGroups, group));
+      await saveFavorites();
+      renderFavoriteGroupManager();
+      refreshFavoriteList();
+    });
     ui.querySelectorAll("[data-fav-close]").forEach(btn => btn.addEventListener("click", () => closeFavoriteModal(btn.dataset.favClose)));
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
@@ -742,25 +740,6 @@ function saveState() {
     // This is the key to preserving the live player while changing layout/order.
   }
 
-  function promoteToMain(uid) {
-    const index = state.channels.findIndex(c => c.uid === uid);
-    if (index < 0) return;
-
-    if (index > 0) {
-      state.channels = [state.channels[index], ...state.channels.slice(0, index), ...state.channels.slice(index + 1)];
-    }
-    state.selectedUid = uid;
-    if (state.mainOnly) makeMainAudible();
-
-    // Change only the visual grid position. Existing tile/iframe DOM nodes are
-    // intentionally kept in place so promoting the main broadcast does not
-    // reload every live player.
-    applyLayout();
-    syncSelection();
-    updateChat();
-    saveState();
-  }
-
   // Used when switching to the raid view: the current main broadcast moves to
   // the front without touching the iframes.
   function moveSelectedToFront() {
@@ -801,13 +780,6 @@ function saveState() {
     applyLayout();
     updateChat();
     refreshChannelManager();
-    saveState();
-  }
-
-  function clearSelection() {
-    state.selectedUid = null;
-    syncSelection();
-    updateChat();
     saveState();
   }
 
@@ -1785,27 +1757,7 @@ function saveState() {
     });
   }
 
-  // openDate comes from the API as a KST string ("YYYY-MM-DD HH:mm:ss").
-  function parseOpenDate(value) {
-    if (!value) return null;
-    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
-    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5], +m[6]);
-    const t = Date.parse(value);
-    return Number.isFinite(t) ? t : null;
-  }
-
-  function formatBroadcastDuration(openAt) {
-    if (!openAt) return "";
-    const minutes = Math.floor(Math.max(0, Date.now() - openAt) / 60000);
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
-  }
-
-  function favoriteMetaText(fav) {
-    if (!fav?.online) return "";
-    return [fav.category, formatBroadcastDuration(fav.openAt)].filter(Boolean).join(" · ");
-  }
+  const favoriteMetaText = CZFavoritesStore.favoriteMetaText;
 
   // The broadcast time keeps growing, so refresh it from the stored start time.
   function updateFavoriteMeta() {
@@ -1818,19 +1770,18 @@ function saveState() {
   }
 
   function favoriteItemsForGroup(group) {
-    return favorites.filter(f => (f.group || DEFAULT_FAVORITE_GROUP) === group);
+    return CZFavoritesStore.itemsForGroup(favorites, group);
   }
 
   function refreshFavoriteList() {
     if (!ui) return;
     ensureFavoriteGroups();
-    normalizeFavoriteOrders();
     const list = ui.querySelector("#favoriteList");
     if (!list) return;
     if (!favorites.length) { list.innerHTML = '<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>'; return; }
 
     list.innerHTML = favoriteGroups.map(group => {
-      const items = favoriteItemsForGroup(group).sort((a,b) => Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
+      const items = favoriteItemsForGroup(group);
       const online = items.filter(f=>f.online);
       return `<details class="favorite-list-group" open data-group="${escapeHtml(group)}">
         <summary class="favorite-list-group-summary">
@@ -1876,67 +1827,110 @@ function saveState() {
   function renderFavoriteGroupManager() {
     const list=ui?.querySelector('#favoriteGroupManageList'); if(!list)return;
     list.innerHTML=favoriteGroups.map((g,i)=>`<div class="favorite-manage-row" data-group="${escapeHtml(g)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(g)}</span><button class="favorite-manage-rename">이름 변경</button><button class="favorite-manage-delete" ${g===DEFAULT_FAVORITE_GROUP?'disabled':''}>삭제</button></div>`).join('');
-    list.querySelectorAll('.favorite-manage-rename').forEach(btn=>btn.onclick=async()=>{const row=btn.closest('.favorite-manage-row'),old=row?.dataset.group;if(!old)return;const next=window.prompt('그룹 이름을 입력하세요.',old);if(next===null)return;const name=next.trim();if(!name||name!==old&&favoriteGroups.includes(name))return;favoriteGroups=favoriteGroups.map(g=>g===old?name:g);favorites.forEach(f=>{if((f.group||DEFAULT_FAVORITE_GROUP)===old)f.group=name;});await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});
-    list.querySelectorAll('.favorite-manage-delete').forEach(btn=>btn.onclick=async()=>{const group=btn.closest('.favorite-manage-row')?.dataset.group;if(!group||group===DEFAULT_FAVORITE_GROUP)return;if(!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`))return;favoriteGroups=favoriteGroups.filter(g=>g!==group);favorites.forEach(f=>{if((f.group||DEFAULT_FAVORITE_GROUP)===group)f.group=DEFAULT_FAVORITE_GROUP;});ensureFavoriteGroups();await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});
-    list.querySelectorAll('.favorite-manage-row').forEach(row=>{row.addEventListener('dragstart',e=>{favDragGroup=row.dataset.group;e.dataTransfer.effectAllowed='move';});row.addEventListener('dragover',e=>{if(favDragGroup&&favDragGroup!==row.dataset.group)e.preventDefault();});row.addEventListener('drop',async e=>{e.preventDefault();const target=row.dataset.group;if(!favDragGroup||!target||favDragGroup===target)return;moveFavoriteGroup(favDragGroup,target);favDragGroup=null;await saveFavorites();renderFavoriteGroupManager();refreshFavoriteList();});row.addEventListener('dragend',()=>favDragGroup=null);});
+    list.querySelectorAll('.favorite-manage-rename').forEach(btn => {
+      btn.onclick = async () => {
+        const old = btn.closest('.favorite-manage-row')?.dataset.group;
+        if (!old) return;
+        const next = window.prompt('그룹 이름을 입력하세요.', old);
+        if (next === null) return;
+        const name = next.trim();
+        if (!name || (name !== old && favoriteGroups.includes(name))) return;
+        applyFavoriteSnapshot(CZFavoritesStore.renameGroup(favorites, favoriteGroups, old, name));
+        await saveFavorites();
+        renderFavoriteGroupManager();
+        refreshFavoriteList();
+      };
+    });
+    list.querySelectorAll('.favorite-manage-delete').forEach(btn => {
+      btn.onclick = async () => {
+        const group = btn.closest('.favorite-manage-row')?.dataset.group;
+        if (!group || group === DEFAULT_FAVORITE_GROUP) return;
+        if (!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) return;
+        applyFavoriteSnapshot(CZFavoritesStore.deleteGroup(favorites, favoriteGroups, group));
+        await saveFavorites();
+        renderFavoriteGroupManager();
+        refreshFavoriteList();
+      };
+    });
+    list.querySelectorAll('.favorite-manage-row').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        favDragGroup = row.dataset.group;
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragover', e => {
+        if (favDragGroup && favDragGroup !== row.dataset.group) e.preventDefault();
+      });
+      row.addEventListener('drop', async e => {
+        e.preventDefault();
+        const target = row.dataset.group;
+        if (!favDragGroup || !target || favDragGroup === target) return;
+        moveFavoriteGroup(favDragGroup, target);
+        favDragGroup = null;
+        await saveFavorites();
+        renderFavoriteGroupManager();
+        refreshFavoriteList();
+      });
+      row.addEventListener('dragend', () => { favDragGroup = null; });
+    });
   }
+
   function renderFavoriteItemManager() {
-    normalizeFavoriteOrders(); const list=ui?.querySelector('#favoriteItemManageList'); if(!list)return;
+    ensureFavoriteGroups();
+    const list = ui?.querySelector('#favoriteItemManageList');
+    if (!list) return;
     list.innerHTML=favorites.map((f,i)=>`<div class="favorite-manage-row" data-uid="${escapeHtml(f.uid)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(f.name||f.title||f.uid)}</span><select class="favorite-manage-group">${favoriteGroups.map(g=>`<option value="${escapeHtml(g)}" ${g===(f.group||DEFAULT_FAVORITE_GROUP)?'selected':''}>${escapeHtml(g)}</option>`).join('')}</select><button class="favorite-manage-delete-item">삭제</button></div>`).join('')||'<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>';
-    list.querySelectorAll('.favorite-manage-group').forEach(sel=>sel.onchange=async()=>{const f=favorites.find(x=>x.uid===sel.closest('.favorite-manage-row')?.dataset.uid);if(!f)return;f.group=sel.value||DEFAULT_FAVORITE_GROUP;await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});
-    list.querySelectorAll('.favorite-manage-delete-item').forEach(btn=>btn.onclick=async()=>{const uid=btn.closest('.favorite-manage-row')?.dataset.uid;if(!uid)return;favorites=favorites.filter(f=>f.uid!==uid);favorites.forEach((f,i)=>{f.order=i+1;});await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});
-    list.querySelectorAll('.favorite-manage-row').forEach(row=>{row.addEventListener('dragstart',e=>{favDragUid=row.dataset.uid;e.dataTransfer.effectAllowed='move';});row.addEventListener('dragover',e=>{if(favDragUid&&favDragUid!==row.dataset.uid)e.preventDefault();});row.addEventListener('drop',async e=>{e.preventDefault();const target=row.dataset.uid;if(!favDragUid||!target||favDragUid===target)return;const a=favorites.findIndex(f=>f.uid===favDragUid),b=favorites.findIndex(f=>f.uid===target);if(a<0||b<0)return;const[m]=favorites.splice(a,1);favorites.splice(b,0,m);favorites.forEach((f,i)=>{f.order=i+1;});favDragUid=null;await saveFavorites();renderFavoriteItemManager();refreshFavoriteList();});row.addEventListener('dragend',()=>favDragUid=null);});
+    list.querySelectorAll('.favorite-manage-group').forEach(sel => {
+      sel.onchange = async () => {
+        const uid = sel.closest('.favorite-manage-row')?.dataset.uid;
+        if (!favorites.some(f => f.uid === uid)) return;
+        applyFavoriteSnapshot(CZFavoritesStore.setFavoriteGroup(favorites, favoriteGroups, uid, sel.value));
+        await saveFavorites();
+        renderFavoriteItemManager();
+        refreshFavoriteList();
+      };
+    });
+    list.querySelectorAll('.favorite-manage-delete-item').forEach(btn => {
+      btn.onclick = async () => {
+        const uid = btn.closest('.favorite-manage-row')?.dataset.uid;
+        if (!uid) return;
+        applyFavoriteSnapshot(CZFavoritesStore.removeFavorite(favorites, favoriteGroups, uid));
+        await saveFavorites();
+        renderFavoriteItemManager();
+        refreshFavoriteList();
+      };
+    });
+    list.querySelectorAll('.favorite-manage-row').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        favDragUid = row.dataset.uid;
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragover', e => {
+        if (favDragUid && favDragUid !== row.dataset.uid) e.preventDefault();
+      });
+      row.addEventListener('drop', async e => {
+        e.preventDefault();
+        const target = row.dataset.uid;
+        if (!favDragUid || !target || favDragUid === target) return;
+        applyFavoriteSnapshot(CZFavoritesStore.moveFavorite(favorites, favoriteGroups, favDragUid, target));
+        favDragUid = null;
+        await saveFavorites();
+        renderFavoriteItemManager();
+        refreshFavoriteList();
+      });
+      row.addEventListener('dragend', () => { favDragUid = null; });
+    });
   }
 
   function moveFavoriteGroup(fromGroup, toGroup) {
-    const from = favoriteGroups.indexOf(fromGroup);
-    if (from < 0) return;
-    favoriteGroups.splice(from, 1);
-    const to = favoriteGroups.indexOf(toGroup);
-    favoriteGroups.splice(to < 0 ? favoriteGroups.length : to, 0, fromGroup);
-  }
-
-  function reorderFavoriteWithinGroup(fromUid, toUid, after) {
-    const source = favorites.find(f => f.uid === fromUid);
-    const target = favorites.find(f => f.uid === toUid);
-    if (!source || !target) return;
-    const group = source.group || DEFAULT_FAVORITE_GROUP;
-    if ((target.group || DEFAULT_FAVORITE_GROUP) !== group) return;
-    const items = favorites.filter(f => (f.group || DEFAULT_FAVORITE_GROUP) === group);
-    const fromIndex = items.findIndex(f => f.uid === fromUid);
-    const [moved] = items.splice(fromIndex, 1);
-    let toIndex = items.findIndex(f => f.uid === toUid);
-    if (toIndex < 0) return;
-    if (after) toIndex += 1;
-    items.splice(toIndex, 0, moved);
-    let cursor = 0;
-    favorites = favorites.map(f => (f.group || DEFAULT_FAVORITE_GROUP) === group ? items[cursor++] : f);
+    applyFavoriteSnapshot(CZFavoritesStore.moveGroup(favorites, favoriteGroups, fromGroup, toGroup));
   }
 
   async function saveFavorites() {
-    ensureFavoriteGroups();
-    normalizeFavoriteOrders();
+    applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
     await CZFavoritesStore.write(favorites, favoriteGroups);
   }
 
-  async function fetchFavoriteLive(uid) {
-    const offline = { online: false, openAt: null, category: "" };
-    try {
-      const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
-        credentials: "include",
-        headers: { Accept: "application/json, text/plain, */*", "Front-Client-Platform-Type": "PC", "Front-Client-Product-Type": "web" }
-      });
-      if (!response.ok) return offline;
-      const data = await response.json();
-      const content = data?.content;
-      if (!(data?.code === 200 && content?.status === "OPEN")) return offline;
-      return {
-        online: true,
-        openAt: parseOpenDate(content.openDate),
-        category: String(content.liveCategoryValue || content.liveCategory || "").trim()
-      };
-    } catch (_) { return offline; }
-  }
+  const fetchFavoriteLive = CZFavoritesStore.fetchLiveInfo;
 
   async function refreshFavoriteOnlineStatus(notify = true) {
     if (!favorites.length) return;
@@ -1949,44 +1943,6 @@ function saveState() {
     await saveFavorites();
     refreshFavoriteList();
     if (notify) showNotice("즐겨찾기 온라인 상태를 갱신했습니다.");
-  }
-
-  async function addFavoriteGroup() {
-    const name = window.prompt("새 그룹 이름을 입력하세요.", "새 그룹");
-    if (name === null) return;
-    const group = name.trim();
-    if (!group || favoriteGroups.includes(group)) return;
-    favoriteGroups.push(group);
-    await saveFavorites();
-    refreshFavoriteList();
-  }
-
-  async function manageFavoriteGroups() {
-    const target = window.prompt(`관리할 그룹 이름을 입력하세요.\n\n${favoriteGroups.map((g, i) => `${i + 1}. ${g}`).join("\n")}`);
-    if (target === null) return;
-    const group = target.trim();
-    if (!favoriteGroups.includes(group)) return;
-    if (group === DEFAULT_FAVORITE_GROUP) {
-      const next = window.prompt("기본 그룹은 삭제할 수 없습니다.\n새 이름을 입력하세요.", group);
-      if (next === null) return;
-      const name = next.trim();
-      if (!name || favoriteGroups.includes(name)) return;
-      favoriteGroups = favoriteGroups.map(g => g === group ? name : g);
-      favorites.forEach(f => { if ((f.group || DEFAULT_FAVORITE_GROUP) === group) f.group = name; });
-    } else if (window.confirm(`'${group}' 그룹의 이름을 변경하시겠습니까?\n\n확인: 이름 변경\n취소: 삭제`)) {
-      const next = window.prompt("새 그룹 이름을 입력하세요.", group);
-      if (next === null) return;
-      const name = next.trim();
-      if (!name || favoriteGroups.includes(name)) return;
-      favoriteGroups = favoriteGroups.map(g => g === group ? name : g);
-      favorites.forEach(f => { if ((f.group || DEFAULT_FAVORITE_GROUP) === group) f.group = name; });
-    } else if (window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) {
-      favoriteGroups = favoriteGroups.filter(g => g !== group);
-      favorites.forEach(f => { if ((f.group || DEFAULT_FAVORITE_GROUP) === group) f.group = DEFAULT_FAVORITE_GROUP; });
-    } else return;
-    ensureFavoriteGroups();
-    await saveFavorites();
-    refreshFavoriteList();
   }
 
   function isFavorite(uid) { return favorites.some(f => f.uid === uid); }

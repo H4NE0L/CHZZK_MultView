@@ -131,7 +131,7 @@ async function ensurePageContentScript(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId, frameIds: [0] },
-      files: ["chzzk-page.js"]
+      files: ["favorites-store.js", "chzzk-page.js"]
     });
     return true;
   } catch (err) {
