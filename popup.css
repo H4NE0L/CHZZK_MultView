@@ -57,8 +57,9 @@ h1 {
 .desc {
     margin: 0 0 10px;
     color: #aaa;
-    font-size: 13px;
+    font-size: 10px;
     line-height: 1.4;
+    white-space: nowrap;
 }
 
 .version-badge {
@@ -419,18 +420,18 @@ button {
     height: 24px;
     padding: 0 7px;
 
-    border: 1px solid #3a3a40;
+    border: 1px solid #315f47;
     border-radius: 5px;
 
-    background: #29292d;
-    color: #aaa;
+    background: #193224;
+    color: #62e59a;
 
     font-size: 9px;
     cursor: pointer;
 }
 
 .group-open-online:hover {
-    color: #fff;
+    background: #21412f;
 }
 
 .favorite-group-summary .favorite-group-count {

@@ -2950,7 +2950,7 @@ select:hover {
     left: 0;
     z-index: 50;
 
-    width: 360px;
+    width: 380px;
     max-height: 430px;
 
     padding: 8px;
