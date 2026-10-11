@@ -31,7 +31,7 @@ function renderVersion() {
   versionEl.textContent = `v${manifest.version}`;
 }
 
-const favoriteMetaText = CZFavoritesStore.favoriteMetaText;
+const favoriteDuration = CZFavoritesStore.favoriteDuration;
 
 function applyFavoriteSnapshot(snapshot) {
   favorites = snapshot.favorites;
@@ -55,21 +55,15 @@ function renderFavorites() {
   ensureGroups();
   const groups = favoriteGroups;
 
-  if (!favorites.length) {
-    favoritesEl.innerHTML = `<div class="favorite-empty">즐겨찾기한 방송이 없습니다.</div>`;
-    return;
-  }
-
   favoritesEl.innerHTML = groups.map(group => {
     const items = getGroupItems(group);
-    if (!items.length) return `<div class="favorite-group-empty" data-group="${escapeHtml(group)}">${escapeHtml(group)} <span>비어 있음</span></div>`;
     return `<details class="favorite-group" open data-group="${escapeHtml(group)}">
       <summary class="favorite-group-summary">
         <span class="group-name">${escapeHtml(group)}</span>
-        <span class="favorite-group-count">${items.length}</span>
+        <span class="favorite-group-count">(${items.length})</span>
         ${items.some(f => f.online) ? `<button class="group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${items.filter(f=>f.online).length}개 멀티뷰</button>` : ''}
       </summary>
-      <div class="favorite-group-items">${items.map(renderFavoriteRow).join("")}</div>
+      <div class="favorite-group-items">${items.map(renderFavoriteRow).join("") || '<div class="favorite-empty">등록된 방송이 없습니다.</div>'}</div>
     </details>`;
   }).join("");
 
@@ -81,8 +75,8 @@ function renderFavoriteRow(fav) {
     <button class="favorite-main" title="멀티뷰 목록에 추가">
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
       <span class="favorite-text">
-        <span class="favorite-name">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
-        ${favoriteMetaText(fav) ? `<span class="favorite-meta" title="방송 카테고리 · 방송 시간">${escapeHtml(favoriteMetaText(fav))}</span>` : ""}
+        <span class="favorite-name" title="${escapeHtml(fav.name || fav.title || fav.uid)}">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
+        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span><span class="favorite-meta" title="방송 시간 (hh-mm)">${escapeHtml(favoriteDuration(fav))}</span>
       </span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>
@@ -385,7 +379,7 @@ setInterval(() => {
   favoritesEl.querySelectorAll(".favorite-row").forEach(row => {
     const fav = favorites.find(f => f.uid === row.dataset.uid);
     const meta = row.querySelector(".favorite-meta");
-    if (fav && meta) meta.textContent = favoriteMetaText(fav);
+    if (fav && meta) meta.textContent = favoriteDuration(fav);
   });
 }, 30000);
 

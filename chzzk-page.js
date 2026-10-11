@@ -1759,7 +1759,7 @@ function saveState() {
     });
   }
 
-  const favoriteMetaText = CZFavoritesStore.favoriteMetaText;
+  const favoriteDuration = CZFavoritesStore.favoriteDuration;
 
   // The broadcast time keeps growing, so refresh it from the stored start time.
   function updateFavoriteMeta() {
@@ -1767,7 +1767,7 @@ function saveState() {
     ui.querySelectorAll(".favorite-list-row").forEach(row => {
       const fav = favorites.find(f => f.uid === row.dataset.uid);
       const meta = row.querySelector(".favorite-list-meta");
-      if (fav && meta) meta.textContent = favoriteMetaText(fav);
+      if (fav && meta) meta.textContent = favoriteDuration(fav);
     });
   }
 
@@ -1780,7 +1780,6 @@ function saveState() {
     ensureFavoriteGroups();
     const list = ui.querySelector("#favoriteList");
     if (!list) return;
-    if (!favorites.length) { list.innerHTML = '<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>'; return; }
 
     list.innerHTML = favoriteGroups.map(group => {
       const items = favoriteItemsForGroup(group);
@@ -1788,13 +1787,13 @@ function saveState() {
       return `<details class="favorite-list-group" open data-group="${escapeHtml(group)}">
         <summary class="favorite-list-group-summary">
           <span class="favorite-list-group-name">${escapeHtml(group)}</span>
-          <span class="favorite-list-group-count">${items.length}</span>
+          <span class="favorite-list-group-count">(${items.length})</span>
           ${online.length ? `<button class="favorite-group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${online.length}개 멀티뷰</button>` : ''}
         </summary>
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name">${escapeHtml(f.name || f.title || f.uid)}</span>${favoriteMetaText(f) ? `<span class="favorite-list-meta" title="방송 카테고리 · 방송 시간">${escapeHtml(favoriteMetaText(f))}</span>` : ''}</span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span><span class="favorite-list-meta" title="방송 시간 (hh-mm)">${escapeHtml(favoriteDuration(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -4431,5 +4430,15 @@ select:hover {
 .favorite-moved { animation: favorite-moved-pulse .65s ease-out; }
 @keyframes favorite-moved-pulse { from { background: rgba(0,220,155,.3); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .favorite-moved { animation: none; outline: 2px solid #00dc9b; } }
+
+/* Single-line favorite rows and left-aligned group counts. */
+.favorite-list-text { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) max-content; align-items: center; gap: 6px; white-space: nowrap; }
+.favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.favorite-list-category { color: #8d8d94; font-size: 10px; }
+.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.favorite-list-group-name { flex: 0 1 auto; }
+.favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
+
+.favorite-list-add { min-height: 24px; }
   `;
 })();

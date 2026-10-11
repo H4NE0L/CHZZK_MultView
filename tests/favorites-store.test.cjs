@@ -113,7 +113,7 @@ test('KST timestamps and elapsed-time text match existing behavior', () => {
   const start = Date.UTC(2026,9,11,0,0,0);
   assert.equal(store.parseOpenDate('2026-10-11 09:00:00'), start);
   assert.equal(store.parseOpenDate('invalid'), null);
-  assert.equal(store.favoriteMetaText({online: true, openAt: start, category: '게임'}, start + 135*60000), '게임 · 2시간 15분');
+  assert.equal(store.favoriteMetaText({online: true, openAt: start, category: '게임'}, start + 135*60000), '게임 · 02-15');
   assert.equal(store.favoriteMetaText({online: false, openAt: start, category: '게임'}, start), '');
   assert.equal(store.favoriteMetaText({online: true, openAt: null, category: '게임'}, start), '게임');
 });
@@ -188,4 +188,11 @@ test('simultaneous streamer-name responses retain both names', async () => {
   const state = await f.store.read();
   assert.equal(state.favorites[0].name, '스트리머 A');
   assert.equal(state.favorites[1].name, '스트리머 B');
+});
+
+test('compact favorite duration pads hours/minutes and omits offline elapsed time', () => {
+  const {store} = fixture();
+  assert.equal(store.favoriteDuration({online: true, openAt: 1}, 1 + 5 * 60000), '00-05');
+  assert.equal(store.favoriteDuration({online: false, openAt: 1}), '--');
+  assert.equal(store.favoriteDuration({online: true, openAt: null}), '--');
 });

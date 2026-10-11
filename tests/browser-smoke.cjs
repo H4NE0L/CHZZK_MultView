@@ -6,6 +6,29 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json')));
 
+async function checkCompactFavorites(page, prefix) {
+  const groupPrefix = prefix === 'favorite' ? 'favorite' : 'favorite-list';
+  const nameClass = prefix === 'favorite' ? 'group-name' : 'favorite-list-group-name';
+  const empty = page.locator(`.${groupPrefix}-group[data-group="빈 그룹"]`);
+  assert.equal(await empty.locator(`.${groupPrefix}-group-count`).textContent(), '(0)');
+  const group = page.locator(`.${groupPrefix}-group`).filter({has: page.locator(`.${prefix}-row`)}).first();
+  await group.evaluate(el => { el.open = true; });
+  const countGap = await group.evaluate((el, cls) => {
+    const name = el.querySelector(`.${cls}`).getBoundingClientRect();
+    const count = el.querySelector('[class$="group-count"]').getBoundingClientRect();
+    return count.left - name.right;
+  }, nameClass);
+  assert(countGap >= 0 && countGap <= 12, 'count must sit beside the group name');
+  const row = group.locator(`.${prefix}-row`).first();
+  const fields = await row.evaluate((el, p) => ['name', 'category', 'meta'].map(part => {
+    const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
+    return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
+  }), prefix);
+  assert(Math.max(...fields.map(f => f.top)) < Math.min(...fields.map(f => f.bottom)), 'favorite fields must share one line');
+  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left);
+  assert(fields[2].text === '--' || /^\d{2,}-\d{2}$/.test(fields[2].text));
+}
+
 async function run() {
   const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || '/usr/lib/chromium/chromium', headless: true, args: ['--no-sandbox']});
   try {
@@ -75,7 +98,8 @@ async function run() {
     assert.equal(await popup.locator('h1').textContent(), manifest.name);
     assert.equal(manifest.action.default_title, manifest.name);
     assert.equal(writes, 0, 'opening popup must never write favorites');
-    console.log('Checked popup initial read');
+    await checkCompactFavorites(popup, 'favorite');
+    console.log('Checked popup initial read and compact favorite layout');
     await popup.locator('#uidInput').fill('https://chzzk.naver.com/live/cccccc');
     await popup.locator('#addList').click();
     assert((await popup.locator('#multiList').textContent()).includes('cccccc'));
@@ -97,6 +121,7 @@ async function run() {
     // Fallback injection may repeat both scripts in an already-open view.
     for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
     await main.locator('#favoriteManager > summary').click();
+    await checkCompactFavorites(main, 'favorite-list');
     await main.locator('#favoriteManageGroups').click();
     await main.locator('.favorite-manage-row[data-group="빈 그룹"]').waitFor();
 
@@ -164,6 +189,8 @@ async function run() {
     await main.locator('#favoriteRefresh').click();
     await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.offline').waitFor();
     assert.equal(storage.chzzkMultiviewFavoritesV08[0].online, false);
+    await checkCompactFavorites(main, 'favorite-list');
+    await checkCompactFavorites(popup, 'favorite');
     const storedBeforeFailure = structuredClone(storage);
     const writesBeforeFailure = writes;
     await main.evaluate(() => {

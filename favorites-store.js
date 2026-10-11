@@ -95,11 +95,15 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const t = Date.parse(value);
     return Number.isFinite(t) ? t : null;
   }
-  function favoriteMetaText(fav, now = Date.now()) {
-    if (!fav?.online) return '';
+  function favoriteDuration(fav, now = Date.now()) {
+    if (!fav?.online || !fav.openAt) return '--';
     const minutes = Math.floor(Math.max(0, now - fav.openAt) / 60000);
     const h = Math.floor(minutes / 60), m = minutes % 60;
-    const duration = fav.openAt ? (h > 0 ? `${h}시간 ${m}분` : `${m}분`) : '';
+    return `${String(h).padStart(2, '0')}-${String(m).padStart(2, '0')}`;
+  }
+  function favoriteMetaText(fav, now = Date.now()) {
+    if (!fav?.online) return '';
+    const duration = fav.openAt ? favoriteDuration(fav, now) : '';
     return [fav.category, duration].filter(Boolean).join(' · ');
   }
   async function fetchLiveInfo(uid, { throwOnError = false } = {}) {
@@ -175,6 +179,6 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
     moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
-    parseOpenDate, favoriteMetaText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
+    parseOpenDate, favoriteMetaText, favoriteDuration, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
     FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
 })();
