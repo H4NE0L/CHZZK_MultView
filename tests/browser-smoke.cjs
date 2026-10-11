@@ -20,6 +20,11 @@ async function checkCompactFavorites(page, prefix) {
   }, nameClass);
   assert(countGap >= 0 && countGap <= 12, 'count must sit beside the group name');
   const row = group.locator(`.${prefix}-row`).first();
+  if (await row.evaluate(el => el.classList.contains('offline'))) {
+    for (const part of ['category', 'meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).display), 'none');
+    assert(await row.locator(`.${prefix}-name`).isVisible());
+    return;
+  }
   const fields = await row.evaluate((el, p) => ['identity', 'meta', 'viewers', 'name', 'category'].map(part => {
     const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
     return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
@@ -30,9 +35,13 @@ async function checkCompactFavorites(page, prefix) {
   assert(Math.max(...widths) - Math.min(...widths) < 2, 'three columns have equal width');
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).color), 'rgb(0, 220, 155)');
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).color), 'rgb(255, 116, 116)');
+  assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).textAlign), 'left');
+  assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).fontWeight), '700');
+  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '2px');
+  assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[1].text === '--' || /^\d{2,}:\d{2}$/.test(fields[1].text));
+  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
 }
 
 async function run() {
@@ -63,6 +72,12 @@ async function run() {
       await Promise.all(context.pages().map(p => p.evaluate(c => window.__storageListeners.forEach(f => f(c, 'local')), changes)));
     });
     await context.addInitScript(version => {
+      window.__statusPolls = [];
+      const nativeInterval = window.setInterval.bind(window);
+      window.setInterval = (callback, delay, ...args) => {
+        if (delay === 30000) { window.__statusPolls.push(callback); return -window.__statusPolls.length; }
+        return nativeInterval(callback, delay, ...args);
+      };
       window.__storageListeners = [];
       window.__messageListeners = [];
       window.chrome = {
@@ -265,6 +280,20 @@ async function run() {
     assert.equal(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').group, '새 그룹');
     await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="aaaaaa"]').waitFor({state: 'attached'});
     console.log('PASS: new favorite, group assignment and drag order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
+    await main.evaluate(() => { window.__invalidRead = null; window.__invalidWrite = null; });
+    const timeBefore = await main.locator('.favorite-list-row.online .favorite-list-meta').first().textContent();
+    await main.waitForFunction(old => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.favorite-list-row.online .favorite-list-meta')?.textContent !== old, timeBefore);
+    liveStatus = 'CLOSE';
+    assert.equal(await main.evaluate(() => window.__statusPolls.length), 1);
+    await main.evaluate(() => window.__statusPolls[0]());
+    await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.favorite-list-row')].every(row => row.classList.contains('offline')));
+    await checkCompactFavorites(main, 'favorite-list');
+    await checkCompactFavorites(popup, 'favorite');
+    liveStatus = 'OPEN';
+    assert.equal(await popup.evaluate(() => window.__statusPolls.length), 1);
+    await popup.evaluate(() => window.__statusPolls[0]());
+    await checkCompactFavorites(popup, 'favorite');
+    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and online three-column styles.');
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, login and live playback are not tested by this harness.');

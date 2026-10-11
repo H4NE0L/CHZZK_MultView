@@ -71,12 +71,12 @@ function renderFavorites() {
 }
 
 function renderFavoriteRow(fav) {
-  return `<div class="favorite-row ${fav.online ? "online" : ""}" data-uid="${escapeHtml(fav.uid)}">
+  return `<div class="favorite-row ${fav.online ? "online" : "offline"}" data-uid="${escapeHtml(fav.uid)}">
     <button class="favorite-main" title="멀티뷰 목록에 추가">
       <span class="favorite-status ${fav.online ? "online" : ""}"></span>
       <span class="favorite-text">
         <span class="favorite-identity"><span class="favorite-name" title="${escapeHtml(fav.name || fav.title || fav.uid)}">${escapeHtml(fav.name || fav.title || fav.uid)}</span>
-        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span></span><span class="favorite-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(fav))}</span><span class="favorite-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(fav))}</span>
+        <span class="favorite-category" title="${escapeHtml(fav.online ? fav.category || '-' : '-')}">${escapeHtml(fav.online ? fav.category || '-' : '-')}</span></span><span class="favorite-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(fav))}</span><span class="favorite-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(fav))}</span>
       </span>
       ${fav.online ? '<span class="online-badge">ONLINE</span>' : '<span class="offline-badge">OFFLINE</span>'}
     </button>
@@ -131,7 +131,14 @@ async function saveFavorites() {
 
 const fetchLiveInfo = CZFavoritesStore.fetchLiveInfo;
 
-async function refreshFavoriteOnlineStatus(showStatus = true, {persist = showStatus} = {}) {
+let favoriteRefreshInFlight = null;
+function refreshFavoriteOnlineStatus(...args) {
+  if (favoriteRefreshInFlight) return favoriteRefreshInFlight;
+  favoriteRefreshInFlight = performFavoriteOnlineRefresh(...args).finally(() => { favoriteRefreshInFlight = null; });
+  return favoriteRefreshInFlight;
+}
+
+async function performFavoriteOnlineRefresh(showStatus = true, {persist = showStatus} = {}) {
   if (!favorites.length) return;
   if (showStatus) setStatus("즐겨찾기 온라인 상태를 확인하는 중...");
   const uids = favorites.map(f => f.uid);
@@ -381,6 +388,15 @@ setInterval(() => {
     const meta = row.querySelector(".favorite-meta");
     if (fav && meta) meta.textContent = favoriteDuration(fav);
   });
+}, 1000);
+
+// Poll without replacing the list while an earlier query is still running.
+setInterval(async () => {
+  if (favoriteRefreshInFlight || document.querySelector('[data-dragging="true"]')) return;
+  try {
+    await refreshFavoriteOnlineStatus(false, {persist: true});
+    renderFavorites();
+  } catch (error) { console.warn("즐겨찾기 자동 상태 조회 실패:", error); }
 }, 30000);
 
 renderVersion();

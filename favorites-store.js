@@ -105,9 +105,9 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   function favoriteDuration(fav, now = Date.now()) {
     if (!fav?.online || !fav.openAt) return '--';
-    const minutes = Math.floor(Math.max(0, now - fav.openAt) / 60000);
-    const h = Math.floor(minutes / 60), m = minutes % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const seconds = Math.floor(Math.max(0, now - fav.openAt) / 1000);
+    const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, sec = seconds % 60;
+    return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
   }
   function favoriteMetaText(fav, now = Date.now()) {
     if (!fav?.online) return '';

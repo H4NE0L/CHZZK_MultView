@@ -439,7 +439,11 @@ function saveState() {
     updateToolbarToggleUI();
     syncVolumeUI();
     renderSyncUI();
-    setInterval(updateFavoriteMeta, 30000);
+    setInterval(updateFavoriteMeta, 1000);
+    setInterval(() => {
+      if (favoriteRefreshInFlight || ui.querySelector('[data-dragging="true"]')) return;
+      refreshFavoriteOnlineStatus(false).catch(error => console.warn("즐겨찾기 자동 상태 조회 실패:", error));
+    }, 30000);
     opened = true;
     showPageLauncher(false);
   }
@@ -1791,9 +1795,9 @@ function saveState() {
           ${online.length ? `<button class="favorite-group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${online.length}개 멀티뷰</button>` : ''}
         </summary>
         <div class="favorite-list-group-items">
-          ${items.map(f => `<div class="favorite-list-row" data-uid="${escapeHtml(f.uid)}">
+          ${items.map(f => `<div class="favorite-list-row ${f.online ? 'online' : 'offline'}" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -1983,7 +1987,14 @@ function saveState() {
     return String(error?.message || error).includes("Extension context invalidated");
   }
 
-  async function refreshFavoriteOnlineStatus(notify = true, { persist = true } = {}) {
+  let favoriteRefreshInFlight = null;
+  function refreshFavoriteOnlineStatus(...args) {
+    if (favoriteRefreshInFlight) return favoriteRefreshInFlight;
+    favoriteRefreshInFlight = performFavoriteOnlineRefresh(...args).finally(() => { favoriteRefreshInFlight = null; });
+    return favoriteRefreshInFlight;
+  }
+
+  async function performFavoriteOnlineRefresh(notify = true, { persist = true } = {}) {
     if (!favorites.length) return;
     const uids = favorites.map(f => f.uid);
     const results = await Promise.all(uids.map(uid => fetchFavoriteLive(uid, { throwOnError: true })));
@@ -4433,14 +4444,18 @@ select:hover {
 
 .favorite-list-add .favorite-online-badge { display: none; }
 
+.favorite-list-row.offline .favorite-list-category, .favorite-list-row.offline .favorite-list-meta, .favorite-list-row.offline .favorite-list-viewers { display: none; }
+.favorite-list-row.offline .favorite-list-text { grid-template-columns: minmax(0, 1fr); }
+.favorite-list-row.offline .favorite-status-dot { display: none; }
+
 /* Three equal favorite columns and left-aligned group counts. */
 .favorite-list-text { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 4px; white-space: nowrap; }
 .favorite-list-identity { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .favorite-list-name, .favorite-list-category { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .favorite-list-name { font-size: 12px; }
-.favorite-list-category { color: #00dc9b; font-size: 10px; }
-.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; text-align: center; }
-.favorite-list-viewers { color: #ff7474; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.favorite-list-category { color: #00dc9b; font-size: 10px; padding-left: 2px; }
+.favorite-list-meta { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; text-align: left; }
+.favorite-list-viewers { color: #ff7474; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .favorite-list-group-name { flex: 0 1 auto; }
 .favorite-list-group-count { margin-left: 0; flex: 0 0 auto; white-space: nowrap; }
 
