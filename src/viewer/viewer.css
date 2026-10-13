@@ -2254,3 +2254,20 @@ select:hover {
 
 .favorite-list-row { gap: 8px; }
 .favorite-list-add { min-height: 24px; padding-left: 0; }
+
+/* Stable column origins, independent of each channel's text length. */
+.favorite-list-text { grid-template-columns: minmax(0, 1fr) 8ch 8ch; gap: 4px; }
+.favorite-list-identity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
+.favorite-list-name, .favorite-list-category { width:100%; max-width:none; }
+.favorite-list-meta { overflow:hidden; text-overflow:ellipsis; }
+.favorite-list-viewers { min-width:0; overflow:hidden; }
+.favorite-list-viewer-count { overflow:hidden; text-overflow:ellipsis; }
+.favorite-list-row.offline .favorite-list-identity { grid-template-columns: minmax(0, 1fr); }
+
+/* Only individual controls cover the picture, never a solid header strip. */
+.tile-head { background:transparent; border-bottom:0; pointer-events:none; }
+.tile-head > button, .tile-head .drag-handle { pointer-events:auto; }
+.tile-head .drag-handle, .tile-head .tile-streamer-name { text-shadow:0 1px 3px #000, 0 0 4px #000; }
+.tile-head:focus-within { opacity:1; transform:translateY(0); }
+.tile-refresh { border:0; border-radius:4px; padding:3px 6px; background:#19191bbf; color:#eee; cursor:pointer; font-size:16px; }
+.tile-refresh:hover { background:#333; }

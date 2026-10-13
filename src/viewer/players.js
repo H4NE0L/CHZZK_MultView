@@ -20,6 +20,7 @@ globalThis.CZPlayers = {create(context) {
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
         <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
         <span class="tile-head-spacer"></span>
+        <button class="tile-refresh" type="button" title="방송 새로고침" aria-label="방송 새로고침">↻</button>
         <button class="tile-address" title="방송 링크 생성">링크 생성</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
@@ -74,6 +75,14 @@ globalThis.CZPlayers = {create(context) {
       context.videoGrid.querySelectorAll(".drop-target").forEach(el => {
         el.classList.remove("drop-target");
       });
+    });
+
+    tile.querySelector('.tile-refresh').addEventListener('click', event => {
+      event.stopPropagation();
+      const frame = tile.querySelector('iframe');
+      // Navigate only this frame; the existing load/PLAYER_READY path reapplies
+      // saved audio and clears sync offsets without replacing other players.
+      if (frame) frame.src = frame.src;
     });
 
     const addressBtn = tile.querySelector(".tile-address");

@@ -52,6 +52,15 @@ async function checkCompactFavorites(page, prefix) {
   assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).fontWeight), '700');
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '0px');
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
+  const origins = await row.evaluate((el,p) => {
+    const fields=['name','category','meta','viewers'].map(part => el.querySelector(`.${p}-${part}`));
+    const before=fields.map(f => f.getBoundingClientRect().left), original=fields.slice(0,2).map(f=>f.textContent);
+    fields[0].textContent='아주 긴 방송인 이름 길이 변경'; fields[1].textContent='짧음';
+    const after=fields.map(f => f.getBoundingClientRect().left);
+    fields.slice(0,2).forEach((f,i)=>f.textContent=original[i]);
+    return {before,after};
+  },prefix);
+  assert.deepEqual(origins.before,origins.after,'information column origins must not depend on text length');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
   assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
@@ -171,6 +180,19 @@ async function run() {
     console.log('Checked MultiView initialization');
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
+    // A transparent header leaves the player exposed; refresh reloads one iframe only.
+    assert.equal(await main.locator('.tile-head').first().evaluate(el => getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await main.locator('.tile-refresh').first().evaluate(el => el.nextElementSibling.className),'tile-address');
+    await main.evaluate(() => {
+      const frames=[...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')];
+      window.__tileReloads=frames.map(() => 0);
+      frames.forEach((f,i) => f.addEventListener('load',() => window.__tileReloads[i]++));
+    });
+    await main.locator('.video-tile').first().hover();
+    await main.locator('.tile-refresh').first().click();
+    await main.waitForFunction(() => window.__tileReloads[0]===1);
+    assert.deepEqual(await main.evaluate(() => window.__tileReloads),[1,0]);
+    assert(await main.evaluate(() => window.__originalFrames.every((f,i) => f===document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')[i])));
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
     await main.locator('#favoriteManageGroups').click();
@@ -233,6 +255,13 @@ async function run() {
     assert(await main.evaluate(() => {const root=document.querySelector('#__chzzk_multiview_v09__').shadowRoot; return root.querySelector('#followingManager').getBoundingClientRect().left < root.querySelector('#favoriteManager').getBoundingClientRect().left;}));
     await popup.locator('#followingManager > summary').click();
     await popup.locator('.cf-row.online[data-uid="aaaaaa"]').waitFor();
+    const followingColumns = await popup.locator('.cf-row').evaluateAll(rows => {
+      rows[0].querySelector('.cf-name').textContent='긴 방송인 이름 테스트';
+      rows[1].querySelector('.cf-name').textContent='짧음';
+      return rows.map(row => ['cf-name','cf-info'].map(cls => row.querySelector('.'+cls).getBoundingClientRect().left));
+    });
+    assert.deepEqual(followingColumns[0],followingColumns[1]);
+    assert.equal(await popup.locator('.cf-star').first().evaluate(el => getComputedStyle(el).fontSize),'16px');
     await popup.locator('.cf-search').fill('새 팔로잉');
     assert.equal(await popup.locator('.cf-row').count(),0);
     assert.equal(await popup.locator('.cf-row.offline').count(),0);

@@ -51,3 +51,11 @@
 .cf-star[aria-pressed=true] { color:#00dc9b; }
 .cf-star:disabled { opacity:.5; }
 .cf-tools .cf-refresh { font-size:18px; padding:2px 9px; }
+
+/* Two equal information columns; status and action sit outside them. */
+.cf-main { display:grid; grid-template-columns:7px minmax(0,1fr) minmax(0,1fr); column-gap:8px; }
+.cf-main .cf-dot { margin-right:0; }
+.cf-info { max-width:none; width:100%; text-align:left; }
+.cf-star { flex:0 0 28px; width:28px; height:28px; padding:0; border:0; background:transparent; color:#f0c75e; font-size:16px; }
+.cf-star[aria-pressed=true] { color:#f0c75e; }
+.cf-star:hover { background:#2b2b2e; border-radius:4px; }
