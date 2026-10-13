@@ -86,6 +86,8 @@ async function run() {
       await Promise.all(context.pages().map(p => p.evaluate(c => window.__storageListeners.forEach(f => f(c, 'local')), changes)));
     });
     await context.addInitScript(version => {
+      window.__policyViolations = [];
+      document.addEventListener('securitypolicyviolation', event => window.__policyViolations.push(event.violatedDirective));
       window.__statusPolls = [];
       const nativeInterval = window.setInterval.bind(window);
       window.setInterval = (callback, delay, ...args) => {
@@ -95,7 +97,8 @@ async function run() {
       window.__storageListeners = [];
       window.__messageListeners = [];
       window.chrome = {
-        runtime: {id: 'mock-extension', getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
+        tabs: {getCurrent: async () => ({id: 1})},
+        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
             get: keys => {
@@ -113,20 +116,20 @@ async function run() {
     }, manifest.version);
     await context.route('**/*', async route => {
       const url = new URL(route.request().url());
-      if (url.host === 'popup.invalid') {
-        const file = path.basename(url.pathname);
-        return route.fulfill({body: fs.readFileSync(path.join(root, file)), contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
+      if (url.host === 'popup.invalid' || url.host === 'viewer.invalid') {
+        const file = url.pathname.slice(1);
+        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
-      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>CHZZK fixture</title></head><body></body></html>'});
+      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><aside style="width:260px;height:500px" class="live_chat"><input placeholder="채팅"><ul><li>메시지</li></ul></aside></body></html>'});
     });
     const popup = await context.newPage();
     popup.on('pageerror', e => errors.push(e.message));
-    await popup.goto('https://popup.invalid/popup.html');
+    await popup.goto('https://popup.invalid/src/popup/popup.html');
     await popup.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 2);
     assert.equal(await popup.locator('#version').textContent(), `v${manifest.version}`);
     assert.equal(await popup.title(), manifest.name);
@@ -143,18 +146,16 @@ async function run() {
 
     const main = await context.newPage();
     main.on('pageerror', e => errors.push(e.message));
-    await main.goto('https://chzzk.naver.com/');
-    for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
-    const opened = await main.evaluate(() => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error('MultiView initialization timeout')), 10000);
-      window.__messageListeners[0]({type: 'OPEN_MULTIVIEW', initialInputs: ['aaaaaa','bbbbbb']}, {}, result => { clearTimeout(timer); resolve(result); });
-    }));
-    assert.equal(opened.ok, true, opened.error);
+    main.on('framenavigated', async frame => {
+      if (new URL(frame.url()).hostname !== 'chzzk.naver.com') return;
+      try { for (const file of manifest.content_scripts[0].js) await frame.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')}); } catch (error) { if (!frame.isDetached()) errors.push(error.message); }
+    });
+    await main.goto('https://viewer.invalid/src/viewer/viewer.html?inputs=' + encodeURIComponent(JSON.stringify(['aaaaaa','bbbbbb'])));
+    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
-    // Fallback injection may repeat both scripts in an already-open view.
-    for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
     await main.locator('#favoriteManageGroups').click();
@@ -201,7 +202,7 @@ async function run() {
     const beforeReopen = writes;
     const other = await context.newPage();
     other.on('pageerror', e => errors.push(e.message));
-    await other.goto('https://popup.invalid/popup.html');
+    await other.goto('https://popup.invalid/src/popup/popup.html');
     await other.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 1);
     assert.equal(writes, beforeReopen, 'reopening must not overwrite groups or cause a storage echo');
     assert(storage.chzzkMultiviewFavoriteGroupsV02.includes('새 그룹'));
@@ -309,9 +310,67 @@ async function run() {
     await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
     console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
+    // Real foreign-origin iframe helpers must report native-player changes.
+    await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
+    const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
+    assert.equal(liveFrames.length, 2);
+    for (const frame of liveFrames) await frame.evaluate(() => { document.querySelector('video').muted = false; });
+    await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
+    const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
+    await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
+    assert.equal(await survivor.evaluate(() => document.querySelector('video').muted), false);
+    assert(await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe') === window.__originalFrames[1]));
+    // Unrelated windows cannot impersonate a player UID.
+    await main.evaluate(() => window.dispatchEvent(new MessageEvent('message', {origin:'https://chzzk.naver.com', source:window, data:{source:'chzzk-multiview',type:'VIDEO_STATE',uid:'bbbbbb',reason:'player',muted:true,volume:0}})));
+    assert.equal(await survivor.evaluate(() => document.querySelector('video').muted), false);
+    await main.locator('#volumeManager > summary').click();
+    const setRange = async (selector, value) => main.locator(selector).evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles:true})); }, value);
+    await setRange('#masterVolume', '50');
+    await setRange('.tile-volume-row[data-uid="bbbbbb"] input', '60');
+    await main.locator('#mainOnlyCheck').check();
+    await main.locator('#volumeManager > summary').click();
+    await main.locator('.layout-toggle-btn[data-layout="main-sub"]').click();
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid').classList.contains('layout-main-sub'));
+    assert.equal(storage.chzzkMultiviewV09.layout, 'main-sub');
+    assert.equal(storage.chzzkMultiviewV09.channels[0].volume, .6);
+    assert.equal(storage.chzzkMultiviewV09.channels[0].muted, false);
+    await main.reload();
+    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    assert.equal(main.url(), 'https://viewer.invalid/src/viewer/viewer.html');
+    assert.equal(await main.locator('#videoGrid .video-tile').count(), 1);
+    assert.equal(await main.locator('#masterVolume').inputValue(), '50');
+    assert.equal(await main.locator('.tile-volume-row input').inputValue(), '60');
+    assert(await main.locator('#mainOnlyCheck').isChecked());
+    assert(await main.locator('#videoGrid').evaluate(el => el.classList.contains('layout-main-sub')));
+    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-mute-btn[data-state="u"]')?.classList.contains('is-muted'));
+    const restored = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
+    await restored.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1' && document.querySelector('video').volume === .3 && !document.querySelector('video').muted);
+    console.log('PASS: native-player unmute survives unrelated tile deletion; reload preserves session, main-only, raid layout and per-tile/master volume.');
+    // Replace the popup list in place, retaining the existing broadcaster iframe.
+    await main.evaluate(() => { window.__retainedFrame = document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe'); });
+    const routed = await main.evaluate(() => new Promise(resolve => window.__messageListeners[0]({type:'VIEWER_SET_INPUTS',tabId:1,initialInputs:['video/12345678','bbbbbb']}, {id:'mock-extension'}, resolve)));
+    assert.equal(routed.ok,true);
+    assert(await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.video-tile[data-uid="bbbbbb"] iframe') === window.__retainedFrame));
+    await main.locator('.video-tile[data-uid="video:12345678"] .main-btn').click();
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame')?.src.includes('/video/12345678?multiview=chat'));
+    let replayChat;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      replayChat = main.frames().find(frame => frame.url().includes('/video/12345678?multiview=chat'));
+      if (replayChat) break;
+      await main.waitForTimeout(50);
+    }
+    assert(replayChat);
+    await replayChat.waitForFunction(() => document.querySelector('video')?.muted && document.querySelector('video').volume === 0 && document.querySelector('aside')?.getBoundingClientRect().width > 0);
+    const replayPlayer = main.frames().find(frame => new URL(frame.url()).pathname === '/video/12345678' && !new URL(frame.url()).search);
+    await replayPlayer.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1');
+    await replayPlayer.evaluate(() => { document.querySelector('video').muted = true; });
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-volume-row[data-uid="video:12345678"] .tile-mute-btn')?.dataset.state === 'm');
+    console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
+    assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);
+    assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
-    console.log('Actual extension registration, login and live playback are not tested by this harness.');
+    console.log('Actual extension registration, DNR application, login and live playback require Chrome verification.');
   } finally { await browser.close(); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

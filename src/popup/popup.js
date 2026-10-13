@@ -16,14 +16,7 @@ function setStatus(text, error = false) {
 }
 
 function uidFromInput(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  if (/^[A-Za-z0-9_-]{6,}$/.test(raw)) return raw;
-  try {
-    const url = new URL(raw);
-    const m = url.pathname.match(/^\/live\/([^/?#]+)/);
-    return m ? m[1] : null;
-  } catch (_) { return null; }
+  return CZSessionStore.parseInput(value)?.uid || null;
 }
 
 function renderVersion() {
@@ -338,9 +331,9 @@ async function openMultiView() {
   try {
     const result = await chrome.runtime.sendMessage({
       type: "OPEN_MULTIVIEW_FROM_POPUP",
-      initialInputs: multiList.map(x => x.uid)
+      initialInputs: multiList.map(x => x.uid.startsWith('video:') ? `video/${x.uid.slice(6)}` : x.uid)
     });
-    if (!result?.ok) { setStatus("CHZZK 페이지를 열지 못했습니다.", true); return; }
+    if (!result?.ok) { setStatus("멀티뷰 페이지를 열지 못했습니다.", true); return; }
     setStatus("멀티뷰를 열었습니다.");
     window.close();
   } catch (err) { setStatus("멀티뷰를 열지 못했습니다.", true); }
