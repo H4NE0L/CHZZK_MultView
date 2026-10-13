@@ -137,6 +137,7 @@ async function run() {
 
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
+        if (liveStatus === 'CLOSE' && url.pathname.endsWith('/live-detail')) return route.fulfill({json:{code:200,content:null}});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
       return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><input placeholder="채팅"><ul><li>메시지</li></ul></aside></body></html>'});
@@ -179,8 +180,12 @@ async function run() {
     await popup.locator('#manageGroups').click();
     await popup.locator('.cg-add').click();
     await popup.locator('.cg-name').fill('새 그룹');
+    assert.equal(await popup.locator('.cg-offline').count(),0);
+    await popup.locator('.cg-refresh').click();
     await popup.locator('.cg-picker input[value="cccccc"]').waitFor();
     await popup.locator('.cg-search').fill('#음악');
+    assert.equal(await popup.locator('.cg-channel').count(),0);
+    await popup.locator('.cg-search').fill('새 팔로잉');
     assert.equal(await popup.locator('.cg-channel').count(),1);
     await popup.locator('.cg-select-results').click();
     await popup.locator('.cg-search').fill('');
@@ -229,8 +234,15 @@ async function run() {
     await popup.locator('#followingManager > summary').click();
     await popup.locator('.cf-row.online[data-uid="aaaaaa"]').waitFor();
     await popup.locator('.cf-search').fill('새 팔로잉');
-    assert.equal(await popup.locator('.cf-row').count(),1);
-    assert(await popup.locator('.cf-row.offline').count());
+    assert.equal(await popup.locator('.cf-row').count(),0);
+    assert.equal(await popup.locator('.cf-row.offline').count(),0);
+    await popup.locator('.cf-search').fill('');
+    const star = popup.locator('.cf-row[data-uid="aaaaaa"] .cf-star');
+    await star.click();
+    await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='true');
+    await star.click();
+    await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='false');
+    assert.equal(await main.locator('.chat-head strong').textContent(),'채팅 · 테스트 방송');
     followingLogin=false;
     await popup.locator('.cf-refresh').click();
     await popup.waitForFunction(() => document.querySelector('.cf-status').textContent.includes('로그인'));
@@ -329,15 +341,15 @@ async function run() {
     const timeBefore = await main.locator('.favorite-list-row.online .favorite-list-meta').first().textContent();
     await main.waitForFunction(old => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.favorite-list-row.online .favorite-list-meta')?.textContent !== old, timeBefore);
     liveStatus = 'CLOSE';
-    assert.equal(await main.evaluate(() => window.__statusPolls.length), 2);
-    await main.evaluate(() => window.__statusPolls[1]());
+    assert.equal(await main.evaluate(() => window.__statusPolls.length), 1);
+    await main.evaluate(() => window.__statusPolls[0]());
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.favorite-list-row')].every(row => row.classList.contains('offline')));
     await checkCompactFavorites(main, 'favorite-list');
     await checkCompactFavorites(popup, 'favorite');
     liveStatus = 'OPEN';
-    assert.equal(await popup.evaluate(() => window.__statusPolls.length), 2);
+    assert.equal(await popup.evaluate(() => window.__statusPolls.length), 1);
     liveViewers = 1234567;
-    await popup.evaluate(() => window.__statusPolls[1]());
+    await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
     console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
     // Real foreign-origin iframe helpers must report native-player changes.

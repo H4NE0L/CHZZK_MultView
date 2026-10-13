@@ -37,7 +37,9 @@ globalThis.CZChzzkApi = globalThis.CZChzzkApi || (() => {
         return offline;
       }
       const data = await response.json(), content = data?.content;
-      if (data?.code !== 200 || !['OPEN','CLOSE'].includes(content?.status)) {
+      // A successful null live-detail means the channel has no active broadcast.
+      if (data?.code === 200 && content === null) return offline;
+      if (data?.code !== 200 || !['OPEN','CLOSE','CLOSED'].includes(content?.status)) {
         if (throwOnError) throw Error('방송 상태 조회 응답을 확인할 수 없습니다.');
         return offline;
       }

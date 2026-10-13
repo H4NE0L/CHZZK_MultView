@@ -426,6 +426,7 @@ function saveState() {
         refreshFavoriteList();
         refreshChannelManager();
       }
+      updateChat();
       // Publish the resolved name after its metadata write has settled.
       const nameEl = tileMap.get(uid)?.querySelector(".tile-streamer-name");
       if (nameEl) nameEl.textContent = name;

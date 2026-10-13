@@ -98,3 +98,14 @@ test('JSON-level service errors are not treated as offline by strict refresh', a
   const f=fixture(async()=>({ok:true,status:200,json:async()=>({code:401,content:null})}));
   await assert.rejects(f.api.fetchLiveInfo('aaaaaa',{throwOnError:true}),/응답/);
 });
+
+test('successful null live detail and closed broadcasts are offline, malformed responses still fail', async () => {
+  for (const content of [null, {status:'CLOSED'}, {status:'CLOSE'}]) {
+    const f=fixture(async()=>json(content));
+    assert.equal((await f.api.fetchLiveInfo('aaaaaa',{throwOnError:true})).online,false);
+  }
+  for (const content of [undefined, {}, {status:'UNKNOWN'}]) {
+    const f=fixture(async()=>json(content));
+    await assert.rejects(f.api.fetchLiveInfo('aaaaaa',{throwOnError:true}),/응답/);
+  }
+});
