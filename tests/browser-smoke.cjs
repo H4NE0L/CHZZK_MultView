@@ -156,7 +156,7 @@ async function run() {
         if (liveStatus === 'CLOSE' && url.pathname.endsWith('/live-detail')) return route.fulfill({json:{code:200,content:null}});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
-      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><input placeholder="채팅"><ul><li>메시지</li></ul></aside></body></html>'});
+      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><div class="live_chatting_input_box" style="height:96px"><input placeholder="채팅"></div><ul><li>메시지</li></ul></aside></body></html>'});
     });
     const popup = await context.newPage();
     popup.on('pageerror', e => errors.push(e.message));
@@ -434,6 +434,9 @@ async function run() {
       await main.waitForTimeout(50);
     }
     assert(replayChat);
+    await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box')?.getBoundingClientRect().height===46);
+    await replayChat.evaluate(()=>{document.querySelector('.live_chatting_input_box').style.height='120px';});
+    await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box').getBoundingClientRect().height===46);
     await replayChat.waitForFunction(() => document.querySelector('video')?.muted && document.querySelector('video').volume === 0 && document.querySelector('aside')?.getBoundingClientRect().width > 0);
     const replayPlayer = main.frames().find(frame => new URL(frame.url()).pathname === '/video/12345678' && !new URL(frame.url()).search);
     await replayPlayer.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1');
@@ -478,8 +481,16 @@ async function run() {
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
     assert.equal(await main.locator('.media-dialog button').count(),2);
+    assert.equal(await main.locator('.media-save').evaluate(el=>getComputedStyle(el).paddingLeft),'16px');
+    assert.equal(await main.locator('.media-close').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
+    const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
+    await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();
+    await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
+    assert.equal(await main.locator('.screenshot-crop').evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
-    assert(/_\d{14}\.png$/.test((await imageDownload).suggestedFilename()));
+    const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
+    const imageBytes=fs.readFileSync(await savedImage.path());
+    assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
     await main.locator('.media-overlay').waitFor({state:'detached'});
     // S in an editable field must not trigger a capture.
     await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));

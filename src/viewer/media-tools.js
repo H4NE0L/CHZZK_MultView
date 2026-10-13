@@ -14,7 +14,7 @@ globalThis.CZMediaTools = {create(context) {
   function modal(title) {
     close();
     dialog=document.createElement('div');dialog.className='media-overlay';
-    dialog.innerHTML='<section class="media-dialog" role="dialog" aria-modal="true"><header><strong></strong><div class="media-actions"><button class="media-save" type="button">저장</button><button class="media-close" type="button">취소</button></div></header><div class="media-body"></div></section>';
+    dialog.innerHTML='<section class="media-dialog" role="dialog" aria-modal="true"><header><strong></strong><div class="media-actions"><button class="media-save" type="button">저장</button><button class="media-close" type="button">닫기</button></div></header><div class="media-body"></div></section>';
     dialog.querySelector('strong').textContent=title;dialog.querySelector('.media-close').onclick=close;
     dialog.onkeydown=event=>{if(event.key==='Escape')close();};
     context.ui.appendChild(dialog);dialog.querySelector('.media-close').focus();
@@ -74,11 +74,17 @@ globalThis.CZMediaTools = {create(context) {
       catch(error){context.showNotice('결과 창을 열지 못했습니다. 녹화 결과는 보관되어 있습니다.');throw error;}
       return;
     }
-    const isImage=true, body=modal('스크린샷 미리보기');
-    const url=URL.createObjectURL(data.blob), media=document.createElement(isImage?'img':'video');
-    media.src=url;if(!isImage){media.controls=true;media.preload='metadata';}else media.alt='스크린샷 미리보기';
-    body.appendChild(media);cleanup=()=>{media.pause?.();media.removeAttribute('src');media.load?.();URL.revokeObjectURL(url);};
-    dialog.querySelector('.media-save').onclick=()=>{download(data.blob,`${name}.png`);close();};
+    const body=modal('스크린샷 미리보기'),url=URL.createObjectURL(data.blob),media=document.createElement('img');
+    media.src=url;media.alt='스크린샷 미리보기';media.draggable=false;
+    const host=document.createElement('div');host.className='screenshot-crop-host';host.appendChild(media);body.appendChild(host);
+    const crop=CZScreenshotCrop.attach(media,host);
+    const error=document.createElement('p');error.className='media-error';error.setAttribute('role','status');body.appendChild(error);
+    cleanup=()=>{media.removeAttribute('src');URL.revokeObjectURL(url);};
+    dialog.querySelector('.media-save').onclick=async event=>{
+      event.target.disabled=true;
+      try {download(await crop.blob(),`${name}.png`);close();}
+      catch(e){error.textContent=e.message;event.target.disabled=false;}
+    };
   }
 
   function attachTile(uid,tile) {

@@ -2304,3 +2304,10 @@ select:hover {
 .video-tile.tile-pointer-over .media-transport { opacity:1; pointer-events:auto; }
 
 .media-seek-delta { position:absolute; bottom:22px; transform:translateX(-50%); padding:3px 7px; border-radius:4px; background:#111c; color:#fff; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none; }
+.media-actions button { padding-left:16px; padding-right:16px; }
+.screenshot-crop-host { position:relative; width:100%; touch-action:none; overflow:hidden; }
+.media-body .screenshot-crop-host img { display:block; width:100%; height:auto; max-height:none; margin:0; object-fit:fill; user-select:none; }
+.screenshot-crop { position:absolute; box-sizing:border-box; border:2px solid #00dc9b; box-shadow:0 0 0 100vmax #0006; cursor:move; }
+.crop-handle { position:absolute; width:12px; height:12px; border:1px solid #111; background:#00dc9b; }
+.crop-handle.nw { left:-2px; top:-2px; cursor:nwse-resize; } .crop-handle.ne { right:-2px; top:-2px; cursor:nesw-resize; }
+.crop-handle.sw { left:-2px; bottom:-2px; cursor:nesw-resize; } .crop-handle.se { right:-2px; bottom:-2px; cursor:nwse-resize; }

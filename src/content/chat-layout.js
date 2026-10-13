@@ -50,6 +50,8 @@ globalThis.CZChatLayout = (() => {
     for (const selector of selectors) {
       for (const el of doc.querySelectorAll(selector)) {
         if (!isVisible(el)) continue;
+        // Input boxes can become taller while idle, but are not chat roots.
+        if (el.matches('input,textarea,[contenteditable]') || /(?:input|textbox|composer)/i.test(String(el.className || ''))) continue;
 
         const rect = el.getBoundingClientRect();
         if (rect.width < 160 || rect.height < 120) continue;
@@ -153,15 +155,29 @@ globalThis.CZChatLayout = (() => {
   }
 
 
+  function stabilizeInput(doc, root) {
+    if (!doc.getElementById('cz-chat-input-size')) {
+      const style=doc.createElement('style');style.id='cz-chat-input-size';
+      style.textContent='.cz-chat-input-idle{box-sizing:border-box!important;height:46px!important;min-height:46px!important;max-height:46px!important;padding-top:8px!important;padding-bottom:8px!important;align-items:center!important}.cz-chat-input-idle textarea,.cz-chat-input-idle [contenteditable]{box-sizing:border-box!important;min-height:0!important;max-height:28px!important;line-height:24px!important;margin-top:0!important;margin-bottom:0!important}';
+      (doc.head || doc.documentElement).appendChild(style);
+    }
+    root.querySelectorAll('textarea,[contenteditable],input[type="text"],input:not([type])').forEach(input=>{
+      const box=input.closest('[class*="chat_input_box"],[class*="chatting_input_box"],[class*="chatInputBox"],[class*="ChatInputBox"],[class*="chat_input_field"],[class*="chatting_input_field"]');
+      if (!box || box===root || !root.contains(box)) return;
+      const empty=!String(input.value ?? input.textContent ?? '').trim();
+      box.classList.toggle('cz-chat-input-idle',empty && !box.contains(doc.activeElement));
+    });
+  }
   let preparedRoot = null;
   function prepare() {
     const replay = location.pathname.startsWith('/video/');
-    const root = replay ? (findReplayChatRoot(document) || findChatRoot(document)) : findChatRoot(document);
+    const root = preparedRoot?.isConnected ? preparedRoot : replay ? (findReplayChatRoot(document) || findChatRoot(document)) : findChatRoot(document);
     if (!root) return false;
     if (root !== preparedRoot) {
       prepareChatOnlyFrame(document, root);
       preparedRoot = root;
     }
+    stabilizeInput(document,root);
     return true;
   }
   function start() {
@@ -170,6 +186,7 @@ globalThis.CZChatLayout = (() => {
       prepare();
     };
     apply();
+    document.addEventListener('focusin',apply);document.addEventListener('focusout',()=>queueMicrotask(apply));document.addEventListener('input',apply);
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);
   }
