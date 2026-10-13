@@ -14,11 +14,11 @@ globalThis.CZMediaTools = {create(context) {
   function modal(title) {
     close();
     dialog=document.createElement('div');dialog.className='media-overlay';
-    dialog.innerHTML='<section class="media-dialog screenshot-dialog" role="dialog" aria-modal="true"><header><strong></strong><div class="media-actions"><button class="crop-toggle active" type="button" aria-label="자르기" aria-pressed="true" title="자르기"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><button class="crop-reset" type="button" aria-label="선택 초기화" title="선택 초기화">↶</button><button class="media-close" type="button" aria-label="닫기" title="닫기">✕</button></div></header><div class="media-body"></div><footer class="media-footer"><span class="screenshot-size"></span><button class="media-cancel" type="button">취소</button><button class="media-copy" type="button">선택 영역 복사</button><button class="media-save" type="button">선택 영역 저장</button></footer></section>';
+    dialog.innerHTML='<section class="media-dialog screenshot-dialog" role="dialog" aria-modal="true"><header><strong></strong></header><div class="media-body"></div><footer class="media-footer"><span class="screenshot-size"></span><button class="media-cancel" type="button">취소</button><button class="media-copy" type="button">선택 영역 복사</button><button class="media-save" type="button">선택 영역 저장</button></footer></section>';
 
-    dialog.querySelector('strong').textContent=title;dialog.querySelector('.media-close').onclick=close;dialog.querySelector('.media-cancel').onclick=close;
+    dialog.querySelector('strong').textContent=title;dialog.querySelector('.media-cancel').onclick=close;
     dialog.onkeydown=event=>{if(event.key==='Escape')close();};
-    context.ui.appendChild(dialog);dialog.querySelector('.media-close').focus();
+    context.ui.appendChild(dialog);dialog.querySelector('.media-cancel').focus();
     return dialog.querySelector('.media-body');
   }
   function download(blob,name) {
@@ -79,9 +79,6 @@ globalThis.CZMediaTools = {create(context) {
     media.src=url;media.alt='스크린샷 미리보기';media.draggable=false;
     const host=document.createElement('div');host.className='screenshot-crop-host';host.appendChild(media);body.appendChild(host);
     const crop=CZScreenshotCrop.attach(media,host,()=>{dialog.querySelector('.screenshot-size').textContent=`${media.naturalWidth} × ${media.naturalHeight}px`;});
-    const toggle=dialog.querySelector('.crop-toggle');
-    toggle.onclick=()=>{const enabled=toggle.getAttribute('aria-pressed')!=='true';toggle.setAttribute('aria-pressed',String(enabled));toggle.classList.toggle('active',enabled);crop.setEnabled(enabled);};
-    dialog.querySelector('.crop-reset').onclick=()=>crop.reset();
     const error=document.createElement('p');error.className='media-error';error.setAttribute('role','status');error.hidden=true;body.appendChild(error);
     cleanup=()=>{media.removeAttribute('src');URL.revokeObjectURL(url);};
     dialog.querySelector('.media-copy').onclick=async event=>{

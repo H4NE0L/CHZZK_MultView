@@ -481,11 +481,10 @@ async function run() {
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
-    assert.equal(await main.locator('.media-dialog header button').count(),3);
+    assert.equal(await main.locator('.media-dialog header button').count(),0);
     assert.equal(await main.locator('.media-footer button').count(),3);
     assert.equal(await main.locator('.crop-handle').count(),8);
-    await main.locator('.crop-toggle').click();assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
-    await main.locator('.crop-toggle').click();assert.equal(await main.locator('.screenshot-crop').isVisible(),true);
+    assert.equal(await main.locator('.screenshot-crop').isVisible(),true);
     assert.equal(await main.locator('.media-save').evaluate(el=>getComputedStyle(el).paddingLeft),'16px');
     assert.equal(await main.locator('.media-cancel').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
     const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
@@ -495,8 +494,6 @@ async function run() {
     await main.locator('.media-copy').click();await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-copy').textContent==='복사됨');
     const copied=await main.evaluate(async()=>{const items=await navigator.clipboard.read();const blob=await items[0].getType('image/png');const bytes=new DataView(await blob.arrayBuffer());return [bytes.getUint32(16),bytes.getUint32(20)];});
     assert.deepEqual(copied,[160,90]);
-    await main.locator('.crop-reset').click();assert.equal(await main.locator('.crop-size').textContent(),'320 × 180');
-    await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
     const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
     const imageBytes=fs.readFileSync(await savedImage.path());
@@ -511,6 +508,8 @@ async function run() {
     const resultPageEvent=context.waitForEvent('page');
     await replayPlayer.locator('body').press('r');
     const resultPage=await resultPageEvent;await resultPage.locator('#save:not([disabled])').waitFor();
+    const row=await resultPage.locator('.recording-footer').evaluate(el=>[...el.querySelectorAll('label,#trim,#save')].map(field=>{const r=field.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));
+    assert(Math.max(...row.map(r=>r.top))<Math.min(...row.map(r=>r.bottom)),'recording controls share one row');
     await resultPage.locator('#format').selectOption({label:'WebM'});
     const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
     assert((await recordingDownload).suggestedFilename().endsWith('.webm'));
