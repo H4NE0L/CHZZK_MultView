@@ -9,12 +9,18 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   const GROUPS_LEGACY_KEY = "chzzkMultiviewFavoriteGroupsV01";
   const DEFAULT_GROUP = "기본 그룹";
   const keys = [FAVORITES_KEY, FAVORITES_LEGACY_KEY, GROUPS_KEY, GROUPS_LEGACY_KEY];
+  const GROUP_OPTIONS_KEY = 'chzzkFavoriteGroupOptionsV2';
   const cleanGroup = g => String(g || "").trim();
+  function memberships(favorite) {
+    const groups = [...new Set((Array.isArray(favorite.groups) && favorite.groups.length ? favorite.groups : [favorite.group]).map(cleanGroup).filter(Boolean))];
+    return groups.length ? groups : [DEFAULT_GROUP];
+  }
   const normalizeFavorite = f => ({
     ...f, uid: String(f.uid).trim(),
     name: String(f.name || f.title || f.uid).replace(/\s*-\s*CHZZK\s*$/i, '').trim(),
     title: String(f.title || f.name || f.uid).replace(/\s*-\s*CHZZK\s*$/i, '').trim(),
-    group: cleanGroup(f.group) || DEFAULT_GROUP,
+    group: memberships(f)[0],
+    groups: memberships(f),
     online: f.online === true,
     openAt: Number(f.openAt) > 0 ? Number(f.openAt) : null,
     category: String(f.category || '').trim(),
@@ -30,7 +36,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     favorites.sort((a,b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
     favorites.forEach((f,i) => { f.order = i+1; });
     const groups = [...new Set([...(gs || []).map(cleanGroup).filter(Boolean), DEFAULT_GROUP,
-      ...favorites.map(f => f.group)])];
+      ...favorites.flatMap(f => f.groups)])];
     return {favorites, groups};
   };
   function snapshot(favorites, groups) {
@@ -48,14 +54,14 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const group = cleanGroup(name);
     if (!state.groups.includes(old) || !group || (group !== old && state.groups.includes(group))) return state;
     state.groups = state.groups.map(g => g === old ? group : g);
-    state.favorites.forEach(f => { if (f.group === old) f.group = group; });
+    state.favorites.forEach(f => { if (f.group === old) f.group = group; f.groups = f.groups.map(g => g === old ? group : g); });
     return snapshot(state.favorites, state.groups);
   }
   function deleteGroup(favorites, groups, group) {
     const state = snapshot(favorites, groups);
     if (group === DEFAULT_GROUP) return state;
     state.groups = state.groups.filter(g => g !== group);
-    state.favorites.forEach(f => { if (f.group === group) f.group = DEFAULT_GROUP; });
+    state.favorites.forEach(f => { f.groups = f.groups.filter(g => g !== group); if (!f.groups.length) f.groups = [DEFAULT_GROUP]; f.group = f.groups[0]; });
     return state;
   }
   function moveGroup(favorites, groups, group, target) {
@@ -68,8 +74,31 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   function setFavoriteGroup(favorites, groups, uid, group) {
     const state = snapshot(favorites, groups);
     const favorite = state.favorites.find(f => f.uid === uid);
-    if (favorite) favorite.group = cleanGroup(group) || DEFAULT_GROUP;
+    if (favorite) { favorite.group = cleanGroup(group) || DEFAULT_GROUP; favorite.groups = [favorite.group]; }
     return snapshot(state.favorites, state.groups);
+  }
+  function setGroupMembers(favorites, groups, oldName, name, channels) {
+    const group = cleanGroup(name);
+    if (!group) throw Error('그룹 이름을 입력해주세요.');
+    if (groups.includes(group) && group !== oldName) throw Error('이미 존재하는 그룹 이름입니다.');
+    let state = oldName ? renameGroup(favorites, groups, oldName, group) : addGroup(favorites, groups, group);
+    const selected = new Map(channels.map(c => [c.uid,c]));
+    for (const favorite of state.favorites) {
+      if (!selected.has(favorite.uid)) favorite.groups = favorite.groups.filter(g => g !== group);
+      else if (!favorite.groups.includes(group)) favorite.groups.push(group);
+      if (!favorite.groups.length) favorite.groups = [DEFAULT_GROUP];
+      favorite.group = favorite.groups[0];
+      selected.delete(favorite.uid);
+    }
+    for (const channel of selected.values()) state.favorites.push({...channel, group, groups: [group], order: state.favorites.length + 1});
+    return snapshot(state.favorites, state.groups);
+  }
+  function shiftGroup(favorites, groups, group, direction) {
+    const state = snapshot(favorites, groups);
+    const index = state.groups.indexOf(group), next = index + direction;
+    if (index < 0 || next < 0 || next >= state.groups.length) return state;
+    [state.groups[index],state.groups[next]] = [state.groups[next],state.groups[index]];
+    return state;
   }
   function removeFavorite(favorites, groups, uid) {
     return snapshot(favorites.filter(f => f.uid !== uid), groups);
@@ -85,7 +114,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     return state;
   }
   function itemsForGroup(favorites, group) {
-    return favorites.filter(f => (f.group || DEFAULT_GROUP) === group).sort((a, b) =>
+    return favorites.filter(f => (f.groups || [f.group || DEFAULT_GROUP]).includes(group)).sort((a, b) =>
       Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
   }
   // CHZZK openDate is a KST wall-clock value, independent of the browser timezone.
@@ -113,9 +142,9 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     return task;
   }
   async function read() { return normalize(await chrome.storage.local.get(keys)); }
-  async function write(favorites, groups) {
+  async function write(favorites, groups, groupOptions) {
     const payload = snapshot(favorites, groups);
-    await chrome.storage.local.set({[FAVORITES_KEY]: payload.favorites, [GROUPS_KEY]: payload.groups});
+    await chrome.storage.local.set({[FAVORITES_KEY]: payload.favorites, [GROUPS_KEY]: payload.groups, ...(groupOptions ? {[GROUP_OPTIONS_KEY]: groupOptions} : {})});
     return payload;
   }
   function subscribe(callback) {
@@ -126,7 +155,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     return () => chrome.storage.onChanged.removeListener(handler);
   }
   return Object.freeze({read, write, subscribe, snapshot, addGroup, renameGroup, deleteGroup,
-    moveGroup, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
+    moveGroup, shiftGroup, setGroupMembers, setFavoriteGroup, removeFavorite, moveFavorite, itemsForGroup,
     parseOpenDate, favoriteMetaText, favoriteDuration, favoriteViewerText, fetchLiveInfo, fetchChannelName, mergeInfo, writeInfo,
-    FAVORITES_KEY, GROUPS_KEY, DEFAULT_GROUP});
+    FAVORITES_KEY, GROUPS_KEY, GROUP_OPTIONS_KEY, DEFAULT_GROUP});
 })();

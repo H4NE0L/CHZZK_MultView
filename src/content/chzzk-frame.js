@@ -15,41 +15,6 @@
     return replay ? `video:${replay[1]}` : null;
   })();
 
-  function getChannelName() {
-    const candidates = [
-      '[class*="channel_name"]', '[class*="channelName"]',
-      '[class*="profile_name"]', '[class*="profileName"]',
-      '[class*="nickname"]', '[class*="NickName"]',
-      '[data-testid*="channel-name"]', '[data-testid*="channelName"]'
-    ];
-    for (const selector of candidates) {
-      const el = document.querySelector(selector);
-      const text = el?.textContent?.trim();
-      if (text && text.length < 80) return text;
-    }
-    const meta = document.querySelector('meta[property="og:title"], meta[name="twitter:title"]');
-    const title = (document.title || meta?.content || "").trim();
-    if (title) {
-      const cleaned = title.replace(/\s*[-|]\s*(치지직|CHZZK).*$/i, "").trim();
-      const parts = cleaned.split(/\s+-\s+/).map(v => v.trim()).filter(Boolean);
-      if (parts.length >= 2) return parts[0];
-      if (cleaned) return cleaned;
-    }
-    return null;
-  }
-
-  function sendChannelInfo() {
-    if (!frameUid) return;
-    const channelName = getChannelName();
-    const title = document.title || "";
-    if (channelName || title) {
-      window.parent.postMessage({
-        source: "chzzk-multiview", type: "CHANNEL_INFO", uid: frameUid,
-        channelName: channelName || undefined, title
-      }, PARENT_ORIGIN);
-    }
-  }
-
   function findVideo() {
     return document.querySelector("video");
   }
@@ -338,12 +303,6 @@
 
   // Clicking inside a tile (including its header) never changes the main
   // broadcast. Only the tile's "메인으로 변경" button in the MultiView UI does.
-
-  window.addEventListener("load", () => {
-    sendChannelInfo();
-  });
-  setTimeout(sendChannelInfo, 800);
-  setTimeout(sendChannelInfo, 2500);
 
   const style = document.createElement("style");
   style.textContent = `

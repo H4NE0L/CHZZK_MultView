@@ -1,7 +1,7 @@
 globalThis.CZMessages = (() => {
   const SOURCE = 'chzzk-multiview';
   const CHZZK_ORIGIN = 'https://chzzk.naver.com';
-  const playerTypes = new Set(['PLAYER_READY', 'CHAT_READY', 'VIDEO_STATE', 'CHANNEL_INFO', 'SYNC_STATE', 'SYNC_RESULT']);
+  const playerTypes = new Set(['PLAYER_READY', 'CHAT_READY', 'VIDEO_STATE', 'SYNC_STATE', 'SYNC_RESULT']);
   const commandTypes = new Set(['SET_NAV_VISIBLE', 'SET_CHAT_MODE', 'SET_CHAT_VISIBLE', 'SET_MUTED', 'SET_VOLUME', 'ENTER_THEATER', 'SYNC_SEEK']);
   function isPlayerMessage(event, frame) {
     const data = event?.data;

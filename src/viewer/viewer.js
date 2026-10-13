@@ -19,8 +19,7 @@
   let toolbarCollapsed = false;
   let favorites = [];
   let favoriteGroups = [DEFAULT_FAVORITE_GROUP];
-  let favDragUid = null;
-  let favDragGroup = null;
+  let groupManager = null;
   let saveTimer = null;
   let volumeListSig = "";
   let activeRange = null;
@@ -51,16 +50,6 @@
     return channel?.name || (channel?.title && !channel.title.startsWith("CHZZK ") ? channel.title : channel?.uid || "");
   }
 
-  function extractStreamerName(title, uid) {
-    let t = String(title || "").trim();
-    if (!t) return uid;
-    // Page title format: "채널명 - 방송 제목 - CHZZK".  The API result is
-    // preferred, so this is only a DOM/title fallback.
-    t = t.replace(/\s*[-|]\s*(치지직|CHZZK).*$/i, "").trim();
-    const parts = t.split(/\s+-\s+/).map(v => v.trim()).filter(Boolean);
-    if (parts.length >= 2) return parts[0];
-    return t !== uid ? t : uid;
-  }
 
 function saveState() {
   if (saveTimer) {
@@ -129,23 +118,24 @@ function saveState() {
     style.rel = "stylesheet";
     style.href = new URL("viewer.css", location.href).href;
     shadowRoot.appendChild(style);
+    const groupStyle = document.createElement('link');
+    groupStyle.rel = 'stylesheet'; groupStyle.href = new URL('../shared/group-manager.css', location.href).href;
+    shadowRoot.appendChild(groupStyle);
 
     ui = document.createElement("div");
     ui.className = "mv-root";
     ui.innerHTML = `
       <header class="mv-toolbar">
         <div class="toolbar-left">
+          <details id="followingManager" class="favorite-manager"><summary>팔로잉</summary><div class="favorite-manager-panel"><div id="followingList"></div></div></details>
           <details id="favoriteManager" class="favorite-manager">
             <summary>즐겨찾기</summary>
             <div class="favorite-manager-panel">
               <div class="favorite-manager-tools">
                 <button id="favoriteManageGroups" type="button">그룹 관리</button>
-                <button id="favoriteManageItems" type="button">항목 관리</button>
                 <button id="favoriteRefresh" type="button" title="온라인 상태 새로고침">↻</button>
               </div>
               <div id="favoriteList" class="favorite-list"></div>
-              <div id="favoriteGroupModal" class="favorite-modal"><div class="favorite-dialog"><div class="favorite-dialog-head"><strong>그룹 관리</strong><button type="button" data-fav-close="groups">✕</button></div><button id="favoriteModalAddGroup" type="button" class="favorite-modal-add">+ 그룹 추가</button><div id="favoriteGroupManageList" class="favorite-manage-list"></div></div></div>
-              <div id="favoriteItemModal" class="favorite-modal"><div class="favorite-dialog"><div class="favorite-dialog-head"><strong>항목 관리</strong><button type="button" data-fav-close="items">✕</button></div><p class="favorite-modal-help">전체 즐겨찾기의 순서입니다. 그룹을 변경해도 전체 순번은 유지됩니다.</p><div id="favoriteItemManageList" class="favorite-manage-list"></div></div></div>
             </div>
           </details>
           <div class="add-area">
@@ -237,8 +227,14 @@ function saveState() {
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
-    ui.querySelector("#favoriteManageGroups").addEventListener("click", () => showFavoriteModal("groups"));
-    ui.querySelector("#favoriteManageItems").addEventListener("click", () => showFavoriteModal("items"));
+    groupManager = CZGroupManager.attach({root: ui,
+      onSaved: snapshot => { applyFavoriteSnapshot(snapshot); refreshFavoriteList(); refreshChannelManager(); },
+      onAdd: channel => addToListFromFavorite(channel),
+      onOpen: kind => { for (const id of ['syncManager','volumeManager','channelManager']) ui.querySelector(`#${id}`)?.removeAttribute('open'); if(kind==='following') ui.querySelector('#favoriteManager').removeAttribute('open'); }
+    });
+    ui.querySelector('#followingManager').addEventListener('toggle', () => {if(ui.querySelector('#followingManager').open) ui.querySelector('#favoriteManager').removeAttribute('open');});
+    ui.querySelector('#favoriteManager').addEventListener('toggle', () => {if(ui.querySelector('#favoriteManager').open) ui.querySelector('#followingManager').removeAttribute('open');});
+    ui.querySelector('#favoriteManageGroups').addEventListener('click', () => groupManager.open().catch(error => showNotice(error.message)));
 
     // Storage is shared across popup and multiview; never write on change notification.
     let syncPending = false;
@@ -250,8 +246,7 @@ function saveState() {
         try {
           await loadFavorites();
           refreshFavoriteList();
-          if (ui.querySelector("#favoriteGroupModal")?.classList.contains("open") && !favDragGroup) renderFavoriteGroupManager();
-          if (ui.querySelector("#favoriteItemModal")?.classList.contains("open") && !favDragUid) renderFavoriteItemManager();
+          groupManager.sync();
         } catch (err) { console.warn("즐겨찾기 동기화 실패:", err); }
       });
     });
@@ -288,17 +283,6 @@ function saveState() {
       }
     });
 
-    ui.querySelector("#favoriteModalAddGroup").addEventListener("click", async () => {
-      const name = window.prompt("새 그룹 이름을 입력하세요.", "새 그룹");
-      if (name === null) return;
-      const group = name.trim();
-      if (!group || favoriteGroups.includes(group)) return;
-      applyFavoriteSnapshot(CZFavoritesStore.addGroup(favorites, favoriteGroups, group));
-      await saveFavorites();
-      renderFavoriteGroupManager();
-      refreshFavoriteList();
-    });
-    ui.querySelectorAll("[data-fav-close]").forEach(btn => btn.addEventListener("click", () => closeFavoriteModal(btn.dataset.favClose)));
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
@@ -421,18 +405,12 @@ function saveState() {
 
     // Resolve the permanent channel name independently of the live title.
     // This works even when the player document title is not ready yet.
-    if (channel.type !== "live") {
-      saveState();
-      return;
-    }
-
     resolveChannelName(channel);
   }
 
   function resolveChannelName(channel) {
-    if (channel.type === "video") return;
     const uid = channel.uid;
-    fetchChannelName(channel.sourceId || uid).then(async name => {
+    (channel.type === "video" ? CZChzzkApi.fetchVideoChannelName(channel.sourceId) : fetchChannelName(channel.sourceId || uid)).then(async name => {
       if (!name) return;
       const current = state.channels.find(c => c.uid === uid);
       if (!current) return;
@@ -612,7 +590,6 @@ function saveState() {
       frame.contentWindow.postMessage({source: 'chzzk-multiview', type: 'ENTER_THEATER'}, CZMessages.CHZZK_ORIGIN);
       frame.contentWindow.postMessage({source: 'chzzk-multiview', type: 'SET_CHAT_VISIBLE', visible: false}, CZMessages.CHZZK_ORIGIN);
     } else if (data.type === 'VIDEO_STATE') receiveVideoState(data);
-    else if (data.type === 'CHANNEL_INFO') handleChannelInfo(data);
     else if (data.type === 'SYNC_STATE') handleSyncState(data);
     else if (data.type === 'SYNC_RESULT') handleSyncResult(data);
   });
@@ -927,22 +904,25 @@ function saveState() {
     if (!list) return;
 
     list.innerHTML = favoriteGroups.map(group => {
-      const items = favoriteItemsForGroup(group);
+      const allItems = favoriteItemsForGroup(group);
+      const items = CZGroupManager.visibleItems(group, allItems);
       const online = items.filter(f=>f.online);
       return `<details class="favorite-list-group" open data-group="${escapeHtml(group)}">
         <summary class="favorite-list-group-summary">
           <span class="favorite-list-group-name">${escapeHtml(group)}</span>
-          <span class="favorite-list-group-count">(${items.length})</span>
+          <span class="favorite-list-group-count">(${allItems.length})</span>
           ${online.length ? `<button class="favorite-group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${online.length}개 멀티뷰</button>` : ''}
         </summary>
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row ${f.online ? 'online' : 'offline'}" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
             <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수"><svg class="viewer-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="4" r="3"/><path d="M2 15v-2a6 6 0 0 1 12 0v2z"/></svg><span class="favorite-list-viewer-count">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
-          </div>`).join('') || '<div class="favorite-list-empty">이 그룹에 방송이 없습니다.</div>'}
+          </div>`).join('') || '<div class="favorite-list-empty">표시할 방송이 없습니다.</div>'}
         </div>
       </details>`;
     }).join('');
+
+    CZGroupManager.decorate(ui);
 
     list.querySelectorAll('.favorite-list-add').forEach(btn=>btn.addEventListener('click',e=>{
       e.stopPropagation(); const uid=btn.closest('.favorite-list-row')?.dataset.uid; if(!uid)return;
@@ -960,156 +940,6 @@ function saveState() {
     if (!exists) addChannel(fav.uid, {type:"live", id:fav.uid, uid:fav.uid, url:`https://chzzk.naver.com/live/${encodeURIComponent(fav.uid)}`});
   }
 
-  function showFavoriteModal(kind) {
-    const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
-    if (!modal) return;
-    for (const id of ['syncManager', 'volumeManager', 'channelManager']) {
-      ui.querySelector(`#${id}`)?.removeAttribute('open');
-    }
-    modal.classList.add('open');
-    if (kind === 'items') renderFavoriteItemManager(); else renderFavoriteGroupManager();
-  }
-  function closeFavoriteModal(kind) {
-    const modal = ui?.querySelector(kind === 'items' ? '#favoriteItemModal' : '#favoriteGroupModal');
-    if (modal) modal.classList.remove('open');
-  }
-  function bindFavoriteDragFeedback(list) {
-    const rows = () => list.querySelectorAll('[draggable="true"]');
-    const clear = () => rows().forEach(row => row.classList.remove('favorite-dragging', 'favorite-drop-target'));
-    list.ondragstart = e => {
-      const row = e.target.closest('[draggable="true"]');
-      if (!row) return;
-      list.dataset.dragging = 'true';
-      row.classList.add('favorite-dragging');
-      e.dataTransfer.setData('text/plain', row.dataset.uid || row.dataset.group);
-    };
-    list.ondragover = e => {
-      const row = e.target.closest('[draggable="true"]');
-      if (!list.dataset.dragging || !row || row.classList.contains('favorite-dragging')) return;
-      e.preventDefault();
-      rows().forEach(item => item.classList.toggle('favorite-drop-target', item === row));
-    };
-    list.ondragleave = e => {
-      const row = e.target.closest('[draggable="true"]');
-      if (row && !row.contains(e.relatedTarget)) row.classList.remove('favorite-drop-target');
-    };
-    list.ondrop = list.ondragend = () => { delete list.dataset.dragging; clear(); };
-    if (list._movedUid) {
-      const row = [...rows()].find(row => (row.dataset.uid || row.dataset.group) === list._movedUid);
-      if (row && Date.now() < list._movedUntil) {
-        row.classList.add('favorite-moved');
-        setTimeout(() => row.classList.remove('favorite-moved'), list._movedUntil - Date.now());
-      }
-    }
-  }
-
-  function renderFavoriteGroupManager() {
-    const list=ui?.querySelector('#favoriteGroupManageList'); if(!list)return;
-    list.innerHTML=favoriteGroups.map((g,i)=>`<div class="favorite-manage-row" data-group="${escapeHtml(g)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(g)}</span><button class="favorite-manage-rename">이름 변경</button><button class="favorite-manage-delete" ${g===DEFAULT_FAVORITE_GROUP?'disabled':''}>삭제</button></div>`).join('');
-    list.querySelectorAll('.favorite-manage-rename').forEach(btn => {
-      btn.onclick = async () => {
-        const old = btn.closest('.favorite-manage-row')?.dataset.group;
-        if (!old) return;
-        const next = window.prompt('그룹 이름을 입력하세요.', old);
-        if (next === null) return;
-        const name = next.trim();
-        if (!name || (name !== old && favoriteGroups.includes(name))) return;
-        applyFavoriteSnapshot(CZFavoritesStore.renameGroup(favorites, favoriteGroups, old, name));
-        await saveFavorites();
-        renderFavoriteGroupManager();
-        refreshFavoriteList();
-      };
-    });
-    list.querySelectorAll('.favorite-manage-delete').forEach(btn => {
-      btn.onclick = async () => {
-        const group = btn.closest('.favorite-manage-row')?.dataset.group;
-        if (!group || group === DEFAULT_FAVORITE_GROUP) return;
-        if (!window.confirm(`'${group}' 그룹을 삭제할까요?\n그룹 안의 방송은 기본 그룹으로 이동합니다.`)) return;
-        applyFavoriteSnapshot(CZFavoritesStore.deleteGroup(favorites, favoriteGroups, group));
-        await saveFavorites();
-        renderFavoriteGroupManager();
-        refreshFavoriteList();
-      };
-    });
-    list.querySelectorAll('.favorite-manage-row').forEach(row => {
-      row.addEventListener('dragstart', e => {
-        favDragGroup = row.dataset.group;
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      row.addEventListener('dragover', e => {
-        if (favDragGroup && favDragGroup !== row.dataset.group) e.preventDefault();
-      });
-      row.addEventListener('drop', async e => {
-        e.preventDefault();
-        const target = row.dataset.group;
-        if (!favDragGroup || !target || favDragGroup === target) return;
-        list._movedUid = favDragGroup;
-        list._movedUntil = Date.now() + 650;
-        moveFavoriteGroup(favDragGroup, target);
-        favDragGroup = null;
-        await saveFavorites();
-        renderFavoriteGroupManager();
-        refreshFavoriteList();
-      });
-      row.addEventListener('dragend', () => { favDragGroup = null; });
-    });
-    bindFavoriteDragFeedback(list);
-  }
-
-  function renderFavoriteItemManager() {
-    ensureFavoriteGroups();
-    const list = ui?.querySelector('#favoriteItemManageList');
-    if (!list) return;
-    list.innerHTML=favorites.map((f,i)=>`<div class="favorite-manage-row" data-uid="${escapeHtml(f.uid)}" draggable="true"><span class="favorite-manage-drag">⠿</span><span class="favorite-manage-index">${i+1}</span><span class="favorite-manage-name">${escapeHtml(f.name||f.title||f.uid)}</span><select class="favorite-manage-group">${favoriteGroups.map(g=>`<option value="${escapeHtml(g)}" ${g===(f.group||DEFAULT_FAVORITE_GROUP)?'selected':''}>${escapeHtml(g)}</option>`).join('')}</select><button class="favorite-manage-delete-item">삭제</button></div>`).join('')||'<div class="favorite-list-empty">즐겨찾기한 방송이 없습니다.</div>';
-    list.querySelectorAll('.favorite-manage-group').forEach(sel => {
-      sel.onchange = async () => {
-        const uid = sel.closest('.favorite-manage-row')?.dataset.uid;
-        if (!favorites.some(f => f.uid === uid)) return;
-        applyFavoriteSnapshot(CZFavoritesStore.setFavoriteGroup(favorites, favoriteGroups, uid, sel.value));
-        await saveFavorites();
-        renderFavoriteItemManager();
-        refreshFavoriteList();
-      };
-    });
-    list.querySelectorAll('.favorite-manage-delete-item').forEach(btn => {
-      btn.onclick = async () => {
-        const uid = btn.closest('.favorite-manage-row')?.dataset.uid;
-        if (!uid) return;
-        applyFavoriteSnapshot(CZFavoritesStore.removeFavorite(favorites, favoriteGroups, uid));
-        await saveFavorites();
-        renderFavoriteItemManager();
-        refreshFavoriteList();
-      };
-    });
-    list.querySelectorAll('.favorite-manage-row').forEach(row => {
-      row.addEventListener('dragstart', e => {
-        favDragUid = row.dataset.uid;
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      row.addEventListener('dragover', e => {
-        if (favDragUid && favDragUid !== row.dataset.uid) e.preventDefault();
-      });
-      row.addEventListener('drop', async e => {
-        e.preventDefault();
-        const target = row.dataset.uid;
-        if (!favDragUid || !target || favDragUid === target) return;
-        list._movedUid = favDragUid;
-        list._movedUntil = Date.now() + 650;
-        applyFavoriteSnapshot(CZFavoritesStore.moveFavorite(favorites, favoriteGroups, favDragUid, target));
-        favDragUid = null;
-        await saveFavorites();
-        renderFavoriteItemManager();
-        refreshFavoriteList();
-      });
-      row.addEventListener('dragend', () => { favDragUid = null; });
-    });
-    bindFavoriteDragFeedback(list);
-  }
-
-  function moveFavoriteGroup(fromGroup, toGroup) {
-    applyFavoriteSnapshot(CZFavoritesStore.moveGroup(favorites, favoriteGroups, fromGroup, toGroup));
-  }
-
   async function saveFavorites() {
     applyFavoriteSnapshot(CZFavoritesStore.snapshot(favorites, favoriteGroups));
     try {
@@ -1122,7 +952,7 @@ function saveState() {
     }
   }
 
-  const fetchFavoriteLive = CZFavoritesStore.fetchLiveInfo;
+  const fetchFavoriteLive = CZChzzkApi.fetchFavoriteInfo;
 
   function isExtensionContextInvalidated(error) {
     return String(error?.message || error).includes("Extension context invalidated");
@@ -1138,7 +968,7 @@ function saveState() {
   async function performFavoriteOnlineRefresh(notify = true, { persist = true } = {}) {
     if (!favorites.length) return;
     const uids = favorites.map(f => f.uid);
-    const results = await Promise.all(uids.map(uid => fetchFavoriteLive(uid, { throwOnError: true })));
+    const results = await CZChzzkApi.parallelMap(uids, uid => fetchFavoriteLive(uid, { throwOnError: true }));
     const updates = Object.fromEntries(uids.map((uid, i) => [uid, results[i]]));
     favorites = CZFavoritesStore.mergeInfo(favorites, updates);
     if (persist) {
@@ -1252,36 +1082,6 @@ function saveState() {
     // If a direct input was supplied, it has already been added above. For
     // popup lists, the requested list has likewise replaced the restored list.
 
-
-  }
-
-  function handleChannelInfo(message) {
-    if (message.type === "CHANNEL_INFO" && message.uid) {
-      const title = String(message.channelName || message.title || "").trim();
-      if (title) {
-        const channel = state.channels.find(c => c.uid === message.uid);
-        if (channel) {
-          const streamerName = extractStreamerName(title, message.uid);
-          channel.name = streamerName;
-          channel.title = streamerName;
-          channel.linkTitle = title || streamerName;
-          const tile = tileMap.get(message.uid);
-          const name = tile?.querySelector(".tile-streamer-name");
-          if (name) name.textContent = streamerName;
-          refreshChannelManager();
-          syncVolumeUI();
-          const fav = favorites.find(f => f.uid === message.uid);
-          if (fav && (fav.name !== streamerName || fav.title !== streamerName)) {
-            fav.title = streamerName;
-            fav.name = streamerName;
-            CZFavoritesStore.writeInfo({[message.uid]: {name: streamerName, title: streamerName}})
-              .then(snapshot => { applyFavoriteSnapshot(snapshot); refreshFavoriteList(); })
-              .catch(console.warn);
-            refreshFavoriteList();
-          }
-        }
-      }
-    }
 
   }
 

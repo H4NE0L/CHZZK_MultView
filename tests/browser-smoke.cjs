@@ -72,6 +72,7 @@ async function run() {
     };
     let writes = 0;
     let liveStatus = 'OPEN';
+    let followingLogin = true;
     let liveViewers = 1234;
     let liveGate = null;
     let notifyLiveGate = null;
@@ -86,6 +87,10 @@ async function run() {
       await Promise.all(context.pages().map(p => p.evaluate(c => window.__storageListeners.forEach(f => f(c, 'local')), changes)));
     });
     await context.addInitScript(version => {
+      const requestTimeout = AbortSignal.timeout.bind(AbortSignal);
+      // A controlled server gate tests storage concurrency, not wall-clock time
+      // spent by slow browser automation. Keep normal requests on real deadlines.
+      AbortSignal.timeout = delay => window.__holdRequestTimeouts ? new AbortController().signal : requestTimeout(delay);
       window.__policyViolations = [];
       document.addEventListener('securitypolicyviolation', event => window.__policyViolations.push(event.violatedDirective));
       window.__statusPolls = [];
@@ -121,11 +126,20 @@ async function run() {
         return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
+        if (url.pathname.endsWith('/followings')) {
+          if (!followingLogin) return route.fulfill({status:401,json:{code:401}});
+          return route.fulfill({json:{code:200,content:{totalCount:3,followingList:[
+            {channel:{channelId:'aaaaaa',channelName:'테스트 방송',openLive:liveStatus==='OPEN',tags:['게임']}},
+            {channel:{channelId:'bbbbbb',channelName:'테스트 방송',openLive:liveStatus==='OPEN',tags:['게임']}},
+            {channel:{channelId:'cccccc',channelName:'새 팔로잉',openLive:false,tags:['음악']}}
+          ]}}});
+        }
+
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
-      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><aside style="width:260px;height:500px" class="live_chat"><input placeholder="채팅"><ul><li>메시지</li></ul></aside></body></html>'});
+      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><input placeholder="채팅"><ul><li>메시지</li></ul></aside></body></html>'});
     });
     const popup = await context.newPage();
     popup.on('pageerror', e => errors.push(e.message));
@@ -159,55 +173,71 @@ async function run() {
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
     await main.locator('#favoriteManageGroups').click();
-    await main.locator('.favorite-manage-row[data-group="빈 그룹"]').waitFor();
-
+    await main.locator('.cg-group[data-group="빈 그룹"]').waitFor();
+    assert.equal(await popup.locator('#manageItems').count(),0);
+    assert.equal(await main.locator('#favoriteManageItems').count(),0);
     await popup.locator('#manageGroups').click();
-    popup.once('dialog', dialog => dialog.accept('새 그룹'));
-    await popup.locator('#groupAddFromModal').click();
-    await main.locator('.favorite-manage-row[data-group="새 그룹"]').waitFor();
-    popup.once('dialog', dialog => dialog.accept('변경 그룹'));
-    await popup.locator('.manage-group-row[data-group="첫 그룹"] .manage-rename').click();
-    await main.locator('.favorite-manage-row[data-group="변경 그룹"]').waitFor();
-    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group, '변경 그룹');
-    await popup.locator('[data-close-modal="groups"]').click();
-    await popup.locator('#manageItems').click();
-    await popup.locator('.manage-item-row[data-uid="bbbbbb"] select').selectOption('변경 그룹');
-    await main.locator('.favorite-list-group[data-group="변경 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor();
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['aaaaaa','bbbbbb']);
-    const dragData = await popup.evaluateHandle(() => new DataTransfer());
-    const dragSource = popup.locator('.manage-item-row[data-uid="aaaaaa"]');
-    const dragTarget = popup.locator('.manage-item-row[data-uid="bbbbbb"]');
-    await dragSource.dispatchEvent('dragstart', {dataTransfer: dragData});
-    await dragTarget.dispatchEvent('dragover', {dataTransfer: dragData});
-    assert((await dragSource.getAttribute('class')).includes('favorite-dragging'));
-    assert((await dragTarget.getAttribute('class')).includes('favorite-drop-target'));
-    assert.equal(await dragTarget.evaluate(el => getComputedStyle(el).outlineWidth), '2px');
-    await dragSource.dispatchEvent('dragend', {dataTransfer: dragData});
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
-    await popup.waitForFunction(() => document.querySelector('.manage-item-row')?.dataset.uid === 'bbbbbb');
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['bbbbbb','aaaaaa']);
-    console.log('Checked popup edits and item drag');
-
-    // Modify from MultiView, then assert the already-open popup follows storage.
+    await popup.locator('.cg-add').click();
+    await popup.locator('.cg-name').fill('새 그룹');
+    await popup.locator('.cg-picker input[value="cccccc"]').waitFor();
+    await popup.locator('.cg-search').fill('#음악');
+    assert.equal(await popup.locator('.cg-channel').count(),1);
+    await popup.locator('.cg-select-results').click();
+    await popup.locator('.cg-search').fill('');
+    await popup.locator('.cg-picker input[value="aaaaaa"]').check();
+    assert((await popup.locator('.cg-count').textContent()).includes('2개 선택'));
+    await popup.locator('.cg-save').click();
+    await main.locator('.cg-group[data-group="새 그룹"]').waitFor();
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='aaaaaa').groups.includes('첫 그룹'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='aaaaaa').groups.includes('새 그룹'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='cccccc').groups.includes('새 그룹'));
+    await popup.locator('.cg-group[data-group="새 그룹"] [data-action="up"]').click();
+    await popup.waitForFunction(() => [...document.querySelectorAll('.cg-group')].at(-2)?.dataset.group === '새 그룹');
+    await main.locator('.cg-group[data-group="첫 그룹"] [data-action="edit"]').click();
+    await main.locator('.cg-name').fill('변경 그룹');
+    if (process.env.SMOKE_SCREENSHOT) await main.screenshot({path:process.env.SMOKE_SCREENSHOT});
+    await main.locator('.cg-save').click();
+    await popup.locator('.cg-group[data-group="변경 그룹"]').waitFor();
+    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group,'변경 그룹');
     main.once('dialog', dialog => dialog.accept());
-    await main.locator('.favorite-manage-row[data-group="변경 그룹"] .favorite-manage-delete').click();
-    await popup.waitForFunction(() => [...document.querySelectorAll('.manage-item-group')].every(s => s.value === '기본 그룹'));
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.order), [1,2]);
-    assert(storage.chzzkMultiviewFavoriteGroupsV02.includes('빈 그룹'));
-    await main.locator('[data-fav-close="groups"]').click();
-    await main.locator('#favoriteManageItems').click();
-    await main.locator('.favorite-manage-row[data-uid="aaaaaa"] .favorite-manage-delete-item').click();
-    await popup.waitForFunction(() => document.querySelectorAll('.manage-item-row').length === 1);
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['bbbbbb']);
+    await main.locator('.cg-group[data-group="변경 그룹"] [data-action="delete"]').click();
+    await popup.waitForFunction(() => !document.querySelector('.cg-group[data-group="변경 그룹"]'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f=>f.uid==='aaaaaa').groups.includes('새 그룹'));
+    await popup.locator('.cg-close').click();
+    await main.locator('.cg-close').click();
+    // Remove test-added favorite C using actual channel controls, then preserve A/B frames.
+    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="cccccc"] .favorite-list-add').click();
+    await main.locator('#channelManager > summary').click();
+    await main.locator('.channel-list-row[data-uid="cccccc"] .channel-list-favorite').click();
+    await main.locator('.video-tile[data-uid="cccccc"] .remove-btn').click();
+    await main.locator('.channel-list-row[data-uid="aaaaaa"] .channel-list-favorite').click();
+    await main.locator('#channelManager > summary').click();
+    await popup.waitForFunction(() => document.querySelectorAll('.favorite-row').length===1);
+    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f=>f.uid),['bbbbbb']);
     const beforeReopen = writes;
     const other = await context.newPage();
-    other.on('pageerror', e => errors.push(e.message));
+    other.on('pageerror', e=>errors.push(e.message));
     await other.goto('https://popup.invalid/src/popup/popup.html');
-    await other.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 1);
-    assert.equal(writes, beforeReopen, 'reopening must not overwrite groups or cause a storage echo');
+    await other.waitForFunction(() => document.querySelectorAll('.favorite-row').length===1);
+    assert.equal(writes,beforeReopen,'reopening must not echo writes');
     assert(storage.chzzkMultiviewFavoriteGroupsV02.includes('새 그룹'));
-    await main.locator('[data-fav-close="items"]').click();
-    await main.locator('#favoriteManager > summary').click();
+    // Following is left of favorites in viewer, below favorites in popup, collapsed by default.
+    assert.equal(await popup.locator('#followingManager').getAttribute('open'),null);
+    const placed = await popup.evaluate(() => document.querySelector('#followingManager').getBoundingClientRect().top >= document.querySelector('#favorites').getBoundingClientRect().bottom);
+    assert(placed);
+    assert(await main.evaluate(() => {const root=document.querySelector('#__chzzk_multiview_v09__').shadowRoot; return root.querySelector('#followingManager').getBoundingClientRect().left < root.querySelector('#favoriteManager').getBoundingClientRect().left;}));
+    await popup.locator('#followingManager > summary').click();
+    await popup.locator('.cf-row.online[data-uid="aaaaaa"]').waitFor();
+    await popup.locator('.cf-search').fill('새 팔로잉');
+    assert.equal(await popup.locator('.cf-row').count(),1);
+    assert(await popup.locator('.cf-row.offline').count());
+    followingLogin=false;
+    await popup.locator('.cf-refresh').click();
+    await popup.waitForFunction(() => document.querySelector('.cf-status').textContent.includes('로그인'));
+    assert.equal(storage.chzzkFollowingCacheV2.channels.length,3,'failed login must retain previous following cache');
+    followingLogin=true;
+    await popup.locator('#followingManager > summary').click();
+    console.log('PASS: following placement, collapse/search, login failures, checklist group creation, multiple memberships and group ordering.');
 
     // The same player frame elements must survive favorite edits and main changes.
     await main.locator('#videoGrid .main-btn').nth(1).click();
@@ -266,55 +296,55 @@ async function run() {
     assert.equal(writes, writesBeforeFailure);
     console.log('PASS: refresh OFFLINE→ONLINE on the same screen with invalidated storage, retained frames/store, write-time invalidation, and truthful network/storage failures.');
 
-    await main.locator('#favoriteManageItems').click();
-    await main.locator('.favorite-manage-row[data-uid="bbbbbb"] select').selectOption('새 그룹');
-    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor({state: 'attached'});
-    assert((await main.locator('.mv-notice').textContent()).includes('현재 화면에만 적용'));
-    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group, '기본 그룹');
-    await main.locator('[data-fav-close="items"]').click();
-
     await main.evaluate(() => { window.__invalidWrite = ''; window.__invalidRead = ''; });
+    await main.locator('#favoriteManageGroups').click();
+    await main.locator('.cg-close').click();
     assert.equal(await main.locator('#syncManager').getAttribute('open'), null);
     let releaseLive;
     const requestStarted = new Promise(resolve => { notifyLiveGate = resolve; });
     liveGate = new Promise(resolve => { releaseLive = resolve; });
     // Start a delayed refresh, then add a favorite and edit its group/order.
+    await main.evaluate(() => {window.__holdRequestTimeouts = true;});
+    await popup.evaluate(() => {window.__holdRequestTimeouts = true;});
     await main.locator('#favoriteRefresh').click();
     await requestStarted;
     await main.locator('#channelManager > summary').click();
     await main.locator('.channel-list-row[data-uid="aaaaaa"] .channel-list-favorite').click();
-    await popup.waitForFunction(() => document.querySelectorAll('.manage-item-row').length === 2);
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"] select').selectOption('새 그룹');
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
-    await popup.waitForFunction(() => document.querySelector('.manage-item-row').dataset.uid === 'aaaaaa');
+    await popup.locator('#manageGroups').click();
+    await popup.locator('.cg-group[data-group="새 그룹"] [data-action="edit"]').click();
+    await popup.locator('.cg-picker input[value="aaaaaa"]').check();
+    await popup.locator('.cg-save').click();
+    await popup.locator('.cg-close').click();
     const orderDuringRefresh = storage.chzzkMultiviewFavoritesV08.map(f => f.uid);
     releaseLive();
     liveGate = null;
+    await main.evaluate(() => {window.__holdRequestTimeouts = false;});
+    await popup.evaluate(() => {window.__holdRequestTimeouts = false;});
     await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#favoriteRefresh').disabled);
     assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), orderDuringRefresh);
-    assert.equal(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').group, '새 그룹');
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').groups.includes('새 그룹'));
     await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="aaaaaa"]').waitFor({state: 'attached'});
-    console.log('PASS: new favorite, group assignment and drag order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
+    console.log('PASS: new favorite, group assignment and stable item order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
     await main.evaluate(() => { window.__invalidRead = null; window.__invalidWrite = null; });
     const timeBefore = await main.locator('.favorite-list-row.online .favorite-list-meta').first().textContent();
     await main.waitForFunction(old => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.favorite-list-row.online .favorite-list-meta')?.textContent !== old, timeBefore);
     liveStatus = 'CLOSE';
-    assert.equal(await main.evaluate(() => window.__statusPolls.length), 1);
-    await main.evaluate(() => window.__statusPolls[0]());
+    assert.equal(await main.evaluate(() => window.__statusPolls.length), 2);
+    await main.evaluate(() => window.__statusPolls[1]());
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.favorite-list-row')].every(row => row.classList.contains('offline')));
     await checkCompactFavorites(main, 'favorite-list');
     await checkCompactFavorites(popup, 'favorite');
     liveStatus = 'OPEN';
-    assert.equal(await popup.evaluate(() => window.__statusPolls.length), 1);
+    assert.equal(await popup.evaluate(() => window.__statusPolls.length), 2);
     liveViewers = 1234567;
-    await popup.evaluate(() => window.__statusPolls[0]());
+    await popup.evaluate(() => window.__statusPolls[1]());
     await checkCompactFavorites(popup, 'favorite');
     console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
     // Real foreign-origin iframe helpers must report native-player changes.
     await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
     const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
     assert.equal(liveFrames.length, 2);
-    for (const frame of liveFrames) await frame.evaluate(() => { document.querySelector('video').muted = false; });
+    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); document.querySelector('video').muted = false; });
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
     const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
     await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
@@ -368,8 +398,10 @@ async function run() {
     console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
     assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);
     assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
+    assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
+    assert(!storage.chzzkMultiviewV09.channels.some(f => /오염/.test(f.name)), 'chat nicknames must never enter tile names');
     assert.deepEqual(errors, []);
-    console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
+    console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, group order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, DNR application, login and live playback require Chrome verification.');
   } finally { await browser.close(); }
 }
