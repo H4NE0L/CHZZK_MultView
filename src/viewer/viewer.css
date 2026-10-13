@@ -2313,3 +2313,23 @@ select:hover {
 .crop-handle.sw { left:-1px; bottom:-1px; cursor:nesw-resize; } .crop-handle.se { right:-1px; bottom:-1px; cursor:nwse-resize; }
 
 .crop-handle::after { content:""; position:absolute; inset:-5px; }
+.screenshot-dialog { max-width:760px; background:#191b1f; }
+.screenshot-dialog header { background:#25272c; border-bottom:1px solid #393c42; }
+.screenshot-dialog header strong { font-size:14px; }
+.screenshot-dialog .media-actions button { width:26px; height:26px; padding:0; border:0; background:transparent; color:#ccd0d8; font-size:21px; }
+.screenshot-dialog .media-actions .active { background:#00dc9b; color:#061b13; border-radius:5px; }
+.screenshot-dialog .media-body { background:#070808; padding:18px; }
+.media-footer { display:flex; align-items:center; gap:12px; padding:12px; border-top:1px solid #30333a; }
+.screenshot-size { flex:1; color:#9ba3b0; font-size:11px; white-space:nowrap; }
+.media-footer button { display:inline-flex; align-items:center; justify-content:center; height:34px; padding:0 16px; margin:0; line-height:20px; white-space:nowrap; font-weight:700; }
+.media-footer .media-cancel { background:#2c2f34; border:0; }
+.media-footer .media-copy { background:transparent; border:0; color:#00dc9b; }
+.media-footer .media-save { background:#00dc9b; border-color:#00dc9b; color:#061b13; }
+.crop-grid { position:absolute; inset:0; pointer-events:none; }
+.crop-grid::before,.crop-grid::after { content:""; position:absolute; pointer-events:none; }
+.crop-grid::before { top:0; bottom:0; left:33.333%; right:33.333%; border-left:1px solid #ffffff55; border-right:1px solid #ffffff55; }
+.crop-grid::after { left:0; right:0; top:33.333%; bottom:33.333%; border-top:1px solid #ffffff55; border-bottom:1px solid #ffffff55; }
+.crop-size { position:absolute; bottom:3px; right:3px; padding:2px 5px; background:#000b; color:#fff; border-radius:3px; font-size:10px; pointer-events:none; }
+.crop-handle.n { left:calc(50% - 4px); top:-1px; cursor:ns-resize; } .crop-handle.s { left:calc(50% - 4px); bottom:-1px; cursor:ns-resize; }
+.crop-handle.w { left:-1px; top:calc(50% - 4px); cursor:ew-resize; } .crop-handle.e { right:-1px; top:calc(50% - 4px); cursor:ew-resize; }
+@media(max-width:480px){.media-footer{gap:6px;flex-wrap:wrap;}.screenshot-size{flex-basis:100%;}.media-footer button{flex:1;padding:0 12px;}}

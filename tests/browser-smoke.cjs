@@ -71,6 +71,7 @@ async function run() {
   try {
     const context = await browser.newContext();
     context.setDefaultTimeout(10000);
+    await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:'https://viewer.invalid'});
     const errors = [];
     context.on('page', page => page.on('console', message => {
       if (/target origin provided.*does not match/.test(message.text())) errors.push(message.text());
@@ -480,13 +481,22 @@ async function run() {
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
-    assert.equal(await main.locator('.media-dialog button').count(),2);
+    assert.equal(await main.locator('.media-dialog header button').count(),3);
+    assert.equal(await main.locator('.media-footer button').count(),3);
+    assert.equal(await main.locator('.crop-handle').count(),8);
+    await main.locator('.crop-toggle').click();assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
+    await main.locator('.crop-toggle').click();assert.equal(await main.locator('.screenshot-crop').isVisible(),true);
     assert.equal(await main.locator('.media-save').evaluate(el=>getComputedStyle(el).paddingLeft),'16px');
-    assert.equal(await main.locator('.media-close').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
+    assert.equal(await main.locator('.media-cancel').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
     const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
     await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();
     await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
     assert.equal(await main.locator('.screenshot-crop').evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
+    await main.locator('.media-copy').click();await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-copy').textContent==='복사됨');
+    const copied=await main.evaluate(async()=>{const items=await navigator.clipboard.read();const blob=await items[0].getType('image/png');const bytes=new DataView(await blob.arrayBuffer());return [bytes.getUint32(16),bytes.getUint32(20)];});
+    assert.deepEqual(copied,[160,90]);
+    await main.locator('.crop-reset').click();assert.equal(await main.locator('.crop-size').textContent(),'320 × 180');
+    await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
     const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
     const imageBytes=fs.readFileSync(await savedImage.path());
