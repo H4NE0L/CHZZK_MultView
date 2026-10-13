@@ -2291,3 +2291,12 @@ select:hover {
 .media-trim { margin-top:12px; }
 .media-trim input { width:90px; }
 .media-error { color:#ffb6a8; }
+.media-actions { display:flex; gap:4px; }
+.tile-screenshot,.tile-record { display:inline-flex; align-items:center; gap:4px; }
+.media-transport { bottom:60px; left:12px; right:12px; padding:0; height:14px; background:transparent; opacity:1; pointer-events:auto; }
+.media-range { appearance:none; -webkit-appearance:none; width:100%; margin:0; height:14px; background:transparent; cursor:pointer; }
+.media-range::-webkit-slider-runnable-track { height:2px; background:#00dc9b99; border-radius:4px; transition:height .15s; }
+.media-range::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:0; height:0; background:#00dc9b; border-radius:50%; }
+.media-transport:hover .media-range::-webkit-slider-runnable-track,.media-range:focus-visible::-webkit-slider-runnable-track { height:6px; background:#00dc9b; }
+.media-transport:hover .media-range::-webkit-slider-thumb,.media-range:focus-visible::-webkit-slider-thumb { width:12px; height:12px; margin-top:-3px; }
+.media-range:disabled { cursor:default; opacity:.3; }

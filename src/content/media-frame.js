@@ -49,10 +49,11 @@ globalThis.CZMediaFrame = {create({uid, findVideo, send, seekRange, seekBy}) {
   const timer=setInterval(position,1000);
   window.addEventListener('pagehide',()=>{clearInterval(timer);if(recorder?.state==='recording')recorder.stop();});
   document.addEventListener('keydown',event=>{
-    if(event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowLeft','ArrowRight'].includes(event.key))return;
+    if(event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowLeft','ArrowRight','s','r'].includes(event.key))return;
     if(event.composedPath().some(el=>el?.matches?.('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"]')))return;
+    if(event.repeat && ['s','r'].includes(event.key))return;
     event.preventDefault();event.stopImmediatePropagation();
-    send({type:'MEDIA_KEY',uid,delta:event.key==='ArrowLeft'?-3:3});
+    send({type:'MEDIA_KEY',uid,...(['s','r'].includes(event.key)?{action:event.key==='s'?'screenshot':'record'}:{delta:event.key==='ArrowLeft'?-3:3})});
   },true);
   return {command};
 }};

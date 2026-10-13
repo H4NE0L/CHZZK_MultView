@@ -47,3 +47,11 @@ test('ordinary CHZZK nested iframe exits before observers, state reports or play
   vm.runInContext(fs.readFileSync('src/content/chzzk-frame.js','utf8'),ctx);
   assert.equal(sent,0);
 });
+test('S and R shortcuts report capture/toggle actions and ignore held keys',()=>{
+  const f=fixture({});
+  const event=key=>({key,composedPath:()=>[],preventDefault(){},stopImmediatePropagation(){}});
+  f.handlers.keydown(event('s'));
+  f.handlers.keydown({...event('r'),repeat:true});
+  f.handlers.keydown(event('r'));
+  assert.deepEqual(f.sent.map(message=>message.action),['screenshot','record']);
+});

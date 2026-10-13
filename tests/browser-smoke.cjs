@@ -88,6 +88,7 @@ async function run() {
     let liveViewers = 1234;
     let liveGate = null;
     let notifyLiveGate = null;
+    await context.exposeBinding('__createResultWindow',async(_source,url)=>{const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);return {id:2};});
     await context.exposeBinding('__storageGet', (_source, keys) => {
       const names = typeof keys === 'string' ? [keys] : keys;
       return Object.fromEntries(names.filter(k => k in storage).map(k => [k, structuredClone(storage[k])]));
@@ -114,6 +115,7 @@ async function run() {
       window.__storageListeners = [];
       window.__messageListeners = [];
       window.chrome = {
+        windows: {create:args=>window.__createResultWindow(args.url)},
         tabs: {getCurrent: async () => ({id: 1})},
         runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
@@ -460,36 +462,41 @@ async function run() {
       window.__captureStream=canvas.captureStream(20);video.srcObject=window.__captureStream;await video.play();
     });
     await main.locator('.video-tile[data-uid="video:12345678"]').hover();
-    await main.locator('.video-tile[data-uid="video:12345678"] .tile-screenshot').click();
+    assert.equal(await main.locator('.seek-back,.seek-forward').count(),0);
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).bottom),'60px');
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
     await main.locator('.media-body img').waitFor();
-    const imageDownload=main.waitForEvent('download');
-    await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+    assert.equal(await main.locator('.media-dialog button').count(),2);
+    const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
     assert(/_\d{14}\.png$/.test((await imageDownload).suggestedFilename()));
-    await main.locator('.media-close').click();
+    await main.locator('.media-overlay').waitFor({state:'detached'});
+    // S in an editable field must not trigger a capture.
+    await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
+    assert.equal(await main.locator('.media-overlay').count(),0);
     await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
-    await main.locator('.media-format').selectOption({label:'WebM'});
-    await main.locator('.media-start').click();
+    assert.equal(await main.locator('.media-start').count(),0);
     await main.waitForTimeout(1500);
-    await main.locator('.tile-record.recording').click();
-    await main.locator('.media-body video').waitFor();
-    const recordingDownload=main.waitForEvent('download');
-    await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+    const resultPageEvent=context.waitForEvent('page');
+    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'r',bubbles:true,cancelable:true})));
+    const resultPage=await resultPageEvent;await resultPage.locator('#save:not([disabled])').waitFor();
+    await resultPage.locator('#format').selectOption({label:'WebM'});
+    const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
     assert((await recordingDownload).suggestedFilename().endsWith('.webm'));
-    await main.locator('.trim-end').fill('0.5');
-    const trimDownload=main.waitForEvent('download');
-    await main.locator('.trim-save').click();
+    await resultPage.locator('#end').fill('0.5');
+    const trimDownload=resultPage.waitForEvent('download');await resultPage.locator('#trim').click();
     assert((await trimDownload).suggestedFilename().endsWith('_0-0.5.webm'));
-    await main.locator('.media-close').click();
-    await main.locator('.video-tile[data-uid="video:12345678"]').hover();
-    await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
-    if(await main.locator('.media-format option').filter({hasText:'MP4'}).count()) {
-      await main.locator('.media-format').selectOption({label:'MP4'});
-      await main.locator('.media-start').click();await main.waitForTimeout(1200);
-      await main.locator('.tile-record.recording').click();await main.locator('.media-body video').waitFor();
-      const mp4Download=main.waitForEvent('download');await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+    await resultPage.waitForFunction(()=>!document.getElementById('trim').disabled);
+    if(await resultPage.locator('#format option:not([disabled])').filter({hasText:'MP4'}).count()) {
+      await resultPage.locator('#format').selectOption({label:'MP4'});
+      const mp4Download=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
       assert((await mp4Download).suggestedFilename().endsWith('.mp4'));
-      await main.locator('.media-close').click();console.log('PASS: native MP4 recording/download supported by this Chromium.');
-    }else{await main.locator('.media-close').click();console.log('MP4 recording is unavailable in this Chromium; WebM remains available.');}
+    }else console.log('MP4 export unavailable in this Chromium; WebM export remains available.');
+    // Results persist independently of the opener and survive a reload.
+    await resultPage.reload();await resultPage.locator('#save:not([disabled])').waitFor();
+    assert.deepEqual(await resultPage.evaluate(()=>window.__policyViolations),[]);
+    await resultPage.locator('#discard').click();
+    if(!resultPage.isClosed())await resultPage.close();
     await replayPlayer.evaluate(()=>{clearInterval(window.__paint);window.__captureStream.getTracks().forEach(t=>t.stop());});
     console.log('PASS: real generated-video screenshot preview/save, WebM recording, playback preview and trimmed clip download.');
     assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);

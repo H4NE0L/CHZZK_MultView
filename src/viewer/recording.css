@@ -1,0 +1,6 @@
+:root { color-scheme:dark; font:14px Arial,sans-serif; background:#141518; color:#eee; }
+body { margin:0; } header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px; } h1 { font-size:18px; margin:0; }
+main { padding:0 20px 20px; } video { width:100%; max-height:65vh; background:#000; }
+.settings { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; } label { display:flex; align-items:center; gap:6px; } input { width:100px; }
+button,input,select { border:1px solid #444; border-radius:5px; background:#25272c; color:#eee; padding:7px 10px; } button { cursor:pointer; margin-right:5px; } button:disabled { opacity:.4; cursor:default; }
+#save,#trim { border-color:#00dc9b; } .help { color:#aaa; font-size:12px; } #status,#warning { color:#efc19b; }
