@@ -2276,7 +2276,7 @@ select:hover {
 .tile-screenshot, .tile-record { border:0; border-radius:4px; background:#19191bbf; color:#eee; padding:4px 7px; cursor:pointer; white-space:nowrap; }
 .tile-record.recording { color:#ff7474; }
 .media-transport { position:absolute; bottom:0; left:0; right:0; z-index:6; display:flex; align-items:center; gap:6px; padding:5px; background:#111b; opacity:0; pointer-events:none; }
-.video-tile:hover .media-transport, .media-transport:focus-within { opacity:1; pointer-events:auto; }
+.video-tile:hover .media-transport { opacity:1; pointer-events:auto; }
 .media-transport button { background:#222; border:0; color:#eee; padding:4px; border-radius:4px; white-space:nowrap; cursor:pointer; }
 .media-range { flex:1; min-width:30px; accent-color:#00dc9b; }
 .media-position { color:#eee; font-size:10px; white-space:nowrap; }
@@ -2293,10 +2293,12 @@ select:hover {
 .media-error { color:#ffb6a8; }
 .media-actions { display:flex; gap:4px; }
 .tile-screenshot,.tile-record { display:inline-flex; align-items:center; gap:4px; }
-.media-transport { bottom:60px; left:12px; right:12px; padding:0; height:14px; background:transparent; opacity:1; pointer-events:auto; }
+.media-transport { bottom:60px; left:12px; right:12px; padding:0; height:14px; background:transparent; opacity:0; pointer-events:none; }
 .media-range { appearance:none; -webkit-appearance:none; width:100%; margin:0; height:14px; background:transparent; cursor:pointer; }
 .media-range::-webkit-slider-runnable-track { height:2px; background:#00dc9b99; border-radius:4px; transition:height .15s; }
 .media-range::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:0; height:0; background:#00dc9b; border-radius:50%; }
 .media-transport:hover .media-range::-webkit-slider-runnable-track,.media-range:focus-visible::-webkit-slider-runnable-track { height:6px; background:#00dc9b; }
 .media-transport:hover .media-range::-webkit-slider-thumb,.media-range:focus-visible::-webkit-slider-thumb { width:12px; height:12px; margin-top:-3px; }
 .media-range:disabled { cursor:default; opacity:.3; }
+
+.video-tile.tile-pointer-over .media-transport { opacity:1; pointer-events:auto; }

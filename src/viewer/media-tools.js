@@ -104,11 +104,14 @@ globalThis.CZMediaTools = {create(context) {
       results.push({data,entry});showNext();
     }
   }
-  document.addEventListener('keydown',event=>{
-    if(dialog || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['ArrowLeft','ArrowRight','s','r'].includes(event.key))return;
-    if(event.composedPath().some(el=>el?.matches?.('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],.cg-dialog')))return;
-    if(!context.state.selectedUid || event.repeat && ['s','r'].includes(event.key))return;event.preventDefault();if(event.key==='s')screenshot(context.state.selectedUid);else if(event.key==='r')toggleRecording(context.state.selectedUid);else context.adjustSync(context.state.selectedUid,event.key==='ArrowLeft'?-3:3);
-  });
+  window.addEventListener('keydown',event=>{
+    const key=CZMessages.mediaShortcut(event);
+    if(dialog || !key || CZMessages.isShortcutInput(event,key) || !context.state.selectedUid)return;
+    event.preventDefault();
+    if(key==='s')screenshot(context.state.selectedUid);
+    else if(key==='r')toggleRecording(context.state.selectedUid);
+    else context.adjustSync(context.state.selectedUid,key==='ArrowLeft'?-3:3);
+  },true);
   window.addEventListener('beforeunload',event=>{if(recordings.size || results.length || dialog){event.preventDefault();event.returnValue='';}});
   setInterval(()=>recordings.forEach((_,uid)=>updateRecord(uid)),1000);
   return {screenshot,toggleRecording,attachTile,receive,hasRecordings:()=>recordings.size>0, isRecording:uid=>recordings.has(uid)};

@@ -11,6 +11,7 @@ function fixture(video) {
     stop(){this.state='inactive';this.ondataavailable?.({data:new Blob(['video'])});this.onstop?.();}
   }
   const ctx=vm.createContext({Blob,Date,MediaRecorder:Recorder,setInterval:()=>1,clearInterval(){},window:{addEventListener:(name,fn)=>handlers[name]=fn},document:{addEventListener:(name,fn)=>handlers[name]=fn,createElement:()=>({getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['png'],{type:'image/png'}))})}});
+  vm.runInContext(fs.readFileSync('src/shared/messages.js','utf8'),ctx);
   vm.runInContext(fs.readFileSync('src/content/media-frame.js','utf8'),ctx);
   const media=ctx.CZMediaFrame.create({uid:'aaaaaa',findVideo:()=>video,send:data=>sent.push(data),seekRange:()=>[0,10],seekBy:delta=>({ok:true,applied:delta})});
   return {media,sent,handlers,active:()=>active};

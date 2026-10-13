@@ -65,3 +65,11 @@ test('outgoing commands wait for readiness and skip inherited extension-origin d
   assert.equal(messages.postToPlayer(frame,command),false);
   assert.equal(sent.length,1);
 });
+test('media shortcuts use physical S/R keys across keyboard layouts and ignore held/modified input',()=>{
+  const {messages}=fixture();
+  assert.equal(messages.mediaShortcut({key:'ㄴ',code:'KeyS'}),'s');
+  assert.equal(messages.mediaShortcut({key:'R',code:'KeyR'}),'r');
+  assert.equal(messages.mediaShortcut({key:'r',code:'KeyR',repeat:true}),null);
+  assert.equal(messages.mediaShortcut({key:'s',code:'KeyS',ctrlKey:true}),null);
+  assert.equal(messages.mediaShortcut({key:'s',code:'KeyS',isComposing:true}),null);
+});

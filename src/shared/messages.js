@@ -18,8 +18,18 @@ globalThis.CZMessages = (() => {
     frame.contentWindow.postMessage(data, CHZZK_ORIGIN);
     return true;
   }
+  function mediaShortcut(event) {
+    if(event.altKey || event.ctrlKey || event.metaKey || event.isComposing)return null;
+    const key=event.code==='KeyS'?'s':event.code==='KeyR'?'r':String(event.key || '').toLowerCase();
+    if(['s','r'].includes(key))return event.repeat?null:key;
+    if(event.shiftKey)return null;
+    return event.key==='ArrowLeft' || event.key==='ArrowRight'?event.key:null;
+  }
+  function isShortcutInput(event,key) {
+    return event.composedPath().some(el=>el?.matches?.(`input:not([type=range]),textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],.cg-dialog${key?.startsWith('Arrow')?',input[type=range]':''}`));
+  }
   function isParentCommand(event, origin, parent) {
     return event?.origin === origin && event.source === parent && event.data?.source === SOURCE && commandTypes.has(event.data.type);
   }
-  return Object.freeze({SOURCE, CHZZK_ORIGIN, postToPlayer, isPlayerMessage, isParentCommand});
+  return Object.freeze({SOURCE, CHZZK_ORIGIN, postToPlayer, mediaShortcut, isShortcutInput, isPlayerMessage, isParentCommand});
 })();

@@ -462,10 +462,16 @@ async function run() {
       window.__captureStream=canvas.captureStream(20);video.srcObject=window.__captureStream;await video.play();
     });
     await main.locator('.video-tile[data-uid="video:12345678"]').hover();
+    await main.bringToFront();
+    await main.locator('#uidInput').hover();
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).opacity),'0');
+    await main.locator('.video-tile').first().hover({position:{x:8,y:8}});
+    await main.waitForFunction(()=>getComputedStyle(document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-transport')).opacity==='1');
     assert.equal(await main.locator('.seek-back,.seek-forward').count(),0);
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).bottom),'60px');
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
-    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
+    await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
+    await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
     assert.equal(await main.locator('.media-dialog button').count(),2);
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
@@ -478,7 +484,7 @@ async function run() {
     assert.equal(await main.locator('.media-start').count(),0);
     await main.waitForTimeout(1500);
     const resultPageEvent=context.waitForEvent('page');
-    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'r',bubbles:true,cancelable:true})));
+    await replayPlayer.locator('body').press('r');
     const resultPage=await resultPageEvent;await resultPage.locator('#save:not([disabled])').waitFor();
     await resultPage.locator('#format').selectOption({label:'WebM'});
     const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
