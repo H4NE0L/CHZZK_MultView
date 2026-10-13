@@ -2307,8 +2307,8 @@ select:hover {
 .media-actions button { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; height:34px; padding:0 16px; margin:0; line-height:20px; }
 .screenshot-crop-host { position:relative; width:100%; touch-action:none; overflow:hidden; }
 .media-body .screenshot-crop-host img { display:block; width:100%; height:auto; max-height:none; margin:0; object-fit:fill; user-select:none; }
-.screenshot-crop { position:absolute; box-sizing:border-box; border:1px solid #00dc9b; box-shadow:0 0 0 100vmax #0003; cursor:move; }
-.crop-handle { position:absolute; width:6px; height:6px; border:0; background:#00dc9b; }
+.screenshot-crop { position:absolute; box-sizing:border-box; border:2px solid #00dc9b; box-shadow:0 0 0 100vmax #0003; cursor:move; }
+.crop-handle { position:absolute; width:8px; height:8px; border:0; background:#00dc9b; }
 .crop-handle.nw { left:-1px; top:-1px; cursor:nwse-resize; } .crop-handle.ne { right:-1px; top:-1px; cursor:nesw-resize; }
 .crop-handle.sw { left:-1px; bottom:-1px; cursor:nesw-resize; } .crop-handle.se { right:-1px; bottom:-1px; cursor:nwse-resize; }
 
