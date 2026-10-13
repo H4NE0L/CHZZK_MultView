@@ -1,4 +1,4 @@
-importScripts("../shared/session-store.js", "viewer-tabs.js");
+importScripts("../shared/session-store.js", "viewer-tabs.js", "../shared/recordings-store.js");
 
 /*
  * 치지직 통합관제실 — Naver 로그인 쿠키 연동
@@ -127,3 +127,5 @@ chrome.tabs.onUpdated.addListener((_id, change) => { if (change.url) CZViewerTab
 chrome.tabs.onRemoved.addListener(() => CZViewerTabs.refreshRules().catch(console.error));
 chrome.runtime.onStartup.addListener(() => CZViewerTabs.refreshRules().catch(console.error));
 CZViewerTabs.refreshRules().catch(console.error);
+
+importScripts("recording-results.js");

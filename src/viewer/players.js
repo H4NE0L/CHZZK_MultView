@@ -20,7 +20,7 @@ globalThis.CZPlayers = {create(context) {
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
         <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
         <span class="tile-head-spacer"></span>
-        <button class="tile-screenshot" type="button" title="스크린샷 (S)" aria-label="스크린샷 (S)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M2 6h4l2-3h4l2 3h4v11H2Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        <button class="tile-screenshot" type="button" title="스크린샷 (S)" aria-label="스크린샷 (S)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="tile-record" type="button" title="녹화 시작/종료 (R)" aria-label="녹화 시작/종료 (R)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg></button>
         <button class="tile-address" title="방송 링크 생성">링크 생성</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>

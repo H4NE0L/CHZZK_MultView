@@ -3,12 +3,14 @@
   let result, url, working=false, cancelWork=()=>{};
   function status(text){$('status').textContent=text;}
   function download(blob,name){const target=URL.createObjectURL(blob),a=document.createElement('a');a.href=target;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(target),60000);}
-  function setWorking(value){working=value;['save','trim','discard','close','format','start','end'].forEach(id=>$(id).disabled=value);$('cancel').hidden=!value;}
-  $('cancel').onclick=()=>cancelWork();$('close').onclick=()=>window.close();
-  $('discard').onclick=async()=>{if(working)return;await CZRecordings.remove(id);window.close();};
+  function setWorking(value){working=value;['save','trim','format','start','end'].forEach(id=>$(id).disabled=value);$('cancel').hidden=!value;}
+  $('cancel').onclick=()=>cancelWork();
   window.addEventListener('beforeunload',event=>{if(working){event.preventDefault();event.returnValue='';}});
   window.addEventListener('pagehide',()=>{if(url)URL.revokeObjectURL(url);});
   try {
+    const tab=await chrome.tabs.getCurrent();
+    const registration=await chrome.runtime.sendMessage({type:'REGISTER_RECORDING_RESULT',resultId:id,tabId:tab?.id});
+    if(!registration?.ok)throw Error('결과 창의 정리 처리를 등록하지 못했습니다. 창을 다시 열어주세요.');
     result=await CZRecordings.get(id);if(!result?.blob?.size)throw Error('녹화 결과를 찾을 수 없습니다.');
     const video=$('preview');url=URL.createObjectURL(result.blob);video.src=url;$('warning').textContent=result.warning || '';$('end').value=Number(result.duration).toFixed(1);
     video.onloadedmetadata=()=>{if(Number.isFinite(video.duration))$('end').value=video.duration.toFixed(1);};

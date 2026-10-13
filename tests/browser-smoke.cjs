@@ -88,6 +88,8 @@ async function run() {
     let liveViewers = 1234;
     let liveGate = null;
     let notifyLiveGate = null;
+    const resultCleanup=[];
+    await context.exposeBinding('__registerResult',async(source,message)=>{source.page.once('close',()=>{const viewer=context.pages().find(p=>p.url().includes('/src/viewer/viewer.html'));if(viewer)resultCleanup.push(viewer.evaluate(id=>CZRecordings.remove(id),message.resultId));});return {ok:true};});
     await context.exposeBinding('__createResultWindow',async(_source,url)=>{const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);return {id:2};});
     await context.exposeBinding('__storageGet', (_source, keys) => {
       const names = typeof keys === 'string' ? [keys] : keys;
@@ -117,7 +119,7 @@ async function run() {
       window.chrome = {
         windows: {create:args=>window.__createResultWindow(args.url)},
         tabs: {getCurrent: async () => ({id: 1})},
-        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
+        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
             get: keys => {
@@ -452,6 +454,8 @@ async function run() {
       const input=document.querySelector('input');input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
     });
     assert.equal(await replayPlayer.evaluate(()=>document.querySelector('video').currentTime),2);
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range').evaluate(el=>{el.dispatchEvent(new PointerEvent('pointerdown'));el.value=Number(el.value)+3;el.dispatchEvent(new Event('input'));});
+    assert.match(await main.locator('.video-tile[data-uid="video:12345678"] .media-seek-delta').textContent(),/^\+3\.0초$/);
     await main.locator('.video-tile[data-uid="video:12345678"] .media-range').evaluate(el=>{el.value=10;el.dispatchEvent(new Event('change'));});
     await replayPlayer.waitForFunction(()=>document.querySelector('video').currentTime===10);
     await replayPlayer.evaluate(()=>{const video=document.querySelector('video');delete video.currentTime;delete video.seekable;});
@@ -501,8 +505,10 @@ async function run() {
     // Results persist independently of the opener and survive a reload.
     await resultPage.reload();await resultPage.locator('#save:not([disabled])').waitFor();
     assert.deepEqual(await resultPage.evaluate(()=>window.__policyViolations),[]);
-    await resultPage.locator('#discard').click();
-    if(!resultPage.isClosed())await resultPage.close();
+    assert.equal(await resultPage.locator('#discard,#close').count(),0);
+    const resultId=new URL(resultPage.url()).searchParams.get('id');
+    await resultPage.close();await Promise.all(resultCleanup);
+    assert.equal(await main.evaluate(id=>CZRecordings.get(id),resultId),undefined);
     await replayPlayer.evaluate(()=>{clearInterval(window.__paint);window.__captureStream.getTracks().forEach(t=>t.stop());});
     console.log('PASS: real generated-video screenshot preview/save, WebM recording, playback preview and trimmed clip download.');
     assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);

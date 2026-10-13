@@ -83,9 +83,14 @@ globalThis.CZMediaTools = {create(context) {
 
   function attachTile(uid,tile) {
     const bar=document.createElement('div');bar.className='media-transport';
-    bar.innerHTML='<input type="range" class="media-range" step="0.1" aria-label="방송 재생 위치" disabled><span class="media-position" hidden>재생 위치 조회 중</span>';
+    bar.innerHTML='<input type="range" class="media-range" step="0.1" aria-label="방송 재생 위치" disabled><output class="media-seek-delta" hidden></output><span class="media-position" hidden>재생 위치 조회 중</span>';
     tile.appendChild(bar);
-    const range=bar.querySelector('input');range.onpointerdown=()=>{range.dataset.dragging='true';};range.onchange=()=>{range.dataset.dragging='false';try{request(uid,'MEDIA_SEEK',{time:Number(range.value)});}catch(e){context.showNotice(e.message);}};range.onpointerup=()=>{range.dataset.dragging='false';};
+    const range=bar.querySelector('input'),hint=bar.querySelector('.media-seek-delta');let baseline=0;
+    const showDelta=()=>{const delta=Number(range.value)-baseline;hint.textContent=`${delta>=0?'+':'−'}${Math.abs(delta).toFixed(1)}초`;hint.hidden=false;hint.style.left=`${Math.max(0,Math.min(100,(Number(range.value)-Number(range.min))/(Number(range.max)-Number(range.min))*100))}%`;};
+    const endDrag=()=>{range.dataset.dragging='false';hint.hidden=true;};
+    range.onpointerdown=()=>{baseline=positions.get(uid)?.time ?? Number(range.value);range.dataset.dragging='true';};
+    range.oninput=()=>{if(range.dataset.dragging!=='true')baseline=positions.get(uid)?.time ?? Number(range.value);showDelta();};
+    range.onchange=()=>{endDrag();try{request(uid,'MEDIA_SEEK',{time:Number(range.value)});}catch(e){context.showNotice(e.message);}};range.onpointerup=endDrag;range.onpointercancel=endDrag;range.onblur=endDrag;
   }
   function receive(data) {
     if(data.type==='MEDIA_KEY'){if(data.action==='screenshot')screenshot(data.uid);else if(data.action==='record')toggleRecording(data.uid);else if([-3,3].includes(data.delta))context.adjustSync(data.uid,data.delta);return;}

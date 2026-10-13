@@ -2302,3 +2302,5 @@ select:hover {
 .media-range:disabled { cursor:default; opacity:.3; }
 
 .video-tile.tile-pointer-over .media-transport { opacity:1; pointer-events:auto; }
+
+.media-seek-delta { position:absolute; bottom:22px; transform:translateX(-50%); padding:3px 7px; border-radius:4px; background:#111c; color:#fff; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; pointer-events:none; }
