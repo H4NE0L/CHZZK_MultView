@@ -72,6 +72,9 @@ async function run() {
     const context = await browser.newContext();
     context.setDefaultTimeout(10000);
     const errors = [];
+    context.on('page', page => page.on('console', message => {
+      if (/target origin provided.*does not match/.test(message.text())) errors.push(message.text());
+    }));
     const storage = {
       chzzkMultiviewFavoritesV08: [
         {uid: 'aaaaaa', name: '방송 A', group: '첫 그룹', order: 1},
@@ -195,6 +198,12 @@ async function run() {
     assert(await main.evaluate(() => window.__originalFrames.every((f,i) => f===document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')[i])));
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
+    await main.locator('#channelManager > summary').click();
+    assert.equal(await main.locator('.channel-list-index.is-main').count(),1);
+    assert.equal(await main.locator('.channel-list-name .channel-list-main').count(),0);
+    assert.equal(await main.locator('.channel-list-index.is-main').evaluate(el => getComputedStyle(el).borderRadius),'50%');
+    await main.locator('#channelManager > summary').click();
+    await main.locator('#favoriteManager').evaluate(el => {el.open=true;});
     await main.locator('#favoriteManageGroups').click();
     await main.locator('.cg-group[data-group="빈 그룹"]').waitFor();
     assert.equal(await popup.locator('#manageItems').count(),0);

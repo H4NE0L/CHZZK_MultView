@@ -25,9 +25,9 @@ globalThis.CZChat = {create(context) {
       wrap.appendChild(context.chatFrame);
       context.chatFrame.addEventListener("load", () => {
         try {
-          context.chatFrame.contentWindow.postMessage({
+          CZMessages.postToPlayer(context.chatFrame, {
             source: "chzzk-multiview", type: "SET_CHAT_MODE", visible: true
-          }, "https://chzzk.naver.com");
+          });
         } catch (_) {}
       });
     }
@@ -40,6 +40,7 @@ globalThis.CZChat = {create(context) {
     // Only reload chat when the selected channel changes.
     if (context.chatFrame.dataset.uid !== uid) {
       context.chatFrame.dataset.uid = uid;
+      context.chatFrame.dataset.playerReady = 'false';
       context.chatFrame.src = target;
 
     }

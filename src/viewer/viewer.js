@@ -584,12 +584,14 @@ function saveState() {
     if (!CZMessages.isPlayerMessage(event, frame)) return;
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;
-      frame.contentWindow.postMessage({source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true}, CZMessages.CHZZK_ORIGIN);
+      frame.dataset.playerReady = 'true';
+      CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});
     } else if (data.type === 'PLAYER_READY') {
+      frame.dataset.playerReady = 'true';
       clearSyncState(data.uid);
       sendTileVolume(data.uid);
-      frame.contentWindow.postMessage({source: 'chzzk-multiview', type: 'ENTER_THEATER'}, CZMessages.CHZZK_ORIGIN);
-      frame.contentWindow.postMessage({source: 'chzzk-multiview', type: 'SET_CHAT_VISIBLE', visible: false}, CZMessages.CHZZK_ORIGIN);
+      CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'ENTER_THEATER'});
+      CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_VISIBLE', visible: false});
     } else if (data.type === 'VIDEO_STATE') receiveVideoState(data);
     else if (data.type === 'SYNC_STATE') handleSyncState(data);
     else if (data.type === 'SYNC_RESULT') handleSyncResult(data);
@@ -856,8 +858,8 @@ function saveState() {
     list.innerHTML = state.channels.map((channel, index) => `
       <div class="channel-list-row" data-uid="${escapeHtml(channel.uid)}">
         <div class="channel-list-select">
-          <span class="channel-list-index">${index + 1}</span>
-          <span class="channel-list-name">${escapeHtml(displayChannelName(channel))}${channel.uid === state.selectedUid ? ' <em class="channel-list-main">메인</em>' : ""}</span>
+          <span class="channel-list-index ${channel.uid === state.selectedUid ? 'is-main' : ''}" ${channel.uid === state.selectedUid ? 'aria-label="현재 메인 방송" title="현재 메인 방송"' : ''}>${index + 1}</span>
+          <span class="channel-list-name">${escapeHtml(displayChannelName(channel))}</span>
         </div>
         <button class="channel-list-favorite" title="즐겨찾기 토글">${isFavorite(channel.uid) ? "★" : "☆"}</button>
         <button class="channel-list-remove" title="방송 삭제">✕</button>

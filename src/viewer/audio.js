@@ -39,12 +39,12 @@ globalThis.CZAudio = {create(context) {
     const iframe = tileMap.get(uid)?.querySelector("iframe");
     if (!channel || !iframe) return;
     try {
-      iframe.contentWindow.postMessage({
+      CZMessages.postToPlayer(iframe, {
         source: "chzzk-multiview",
         type: "SET_VOLUME",
         volume: effectiveVolume(channel),
         muted: effectiveMuted(channel)
-      }, "https://chzzk.naver.com");
+      });
     } catch (_) {}
   }
 

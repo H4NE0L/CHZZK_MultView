@@ -55,11 +55,11 @@ globalThis.CZPlayers = {create(context) {
 
     tile.addEventListener("mouseenter", () => {
       const iframe = tile.querySelector("iframe");
-      try { iframe?.contentWindow?.postMessage({ source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: true }, "https://chzzk.naver.com"); } catch (_) {}
+      try { CZMessages.postToPlayer(iframe, { source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: true }); } catch (_) {}
     });
     tile.addEventListener("mouseleave", () => {
       const iframe = tile.querySelector("iframe");
-      try { iframe?.contentWindow?.postMessage({ source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: false }, "https://chzzk.naver.com"); } catch (_) {}
+      try { CZMessages.postToPlayer(iframe, { source: "chzzk-multiview", type: "SET_NAV_VISIBLE", visible: false }); } catch (_) {}
     });
 
     header.addEventListener("dragstart", e => {
@@ -82,7 +82,7 @@ globalThis.CZPlayers = {create(context) {
       const frame = tile.querySelector('iframe');
       // Navigate only this frame; the existing load/PLAYER_READY path reapplies
       // saved audio and clears sync offsets without replacing other players.
-      if (frame) frame.src = frame.src;
+      if (frame) { frame.dataset.playerReady = 'false'; frame.src = frame.src; }
     });
 
     const addressBtn = tile.querySelector(".tile-address");
@@ -139,12 +139,12 @@ globalThis.CZPlayers = {create(context) {
       // A freshly loaded player starts at its own default position.
       clearSyncState(channel.uid);
       try {
-        tileFrame.contentWindow.postMessage({
+        CZMessages.postToPlayer(tileFrame, {
           source: "chzzk-multiview", type: "ENTER_THEATER"
-        }, "https://chzzk.naver.com");
-        tileFrame.contentWindow.postMessage({
+        });
+        CZMessages.postToPlayer(tileFrame, {
           source: "chzzk-multiview", type: "SET_CHAT_VISIBLE", visible: false
-        }, "https://chzzk.naver.com");
+        });
       } catch (_) {}
       // New/recreated tiles start muted by default. Saved mute context.state, the
       // per-tile volume and the master volume are combined here.
@@ -254,16 +254,16 @@ globalThis.CZPlayers = {create(context) {
       sendTileVolume(channel.uid);
       const iframe = tile.querySelector("iframe");
       try {
-        iframe?.contentWindow?.postMessage({
+        CZMessages.postToPlayer(iframe, {
           source: "chzzk-multiview",
           type: "SET_NAV_VISIBLE",
           visible: false
-        }, "https://chzzk.naver.com");
-        iframe?.contentWindow?.postMessage({
+        });
+        CZMessages.postToPlayer(iframe, {
           source: "chzzk-multiview",
           type: "SET_CHAT_VISIBLE",
           visible: false
-        }, "https://chzzk.naver.com");
+        });
       } catch (_) {}
     }
     syncVolumeUI();

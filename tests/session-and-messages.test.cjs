@@ -50,3 +50,18 @@ test('frame accepts commands only from its extension parent', () => {
   assert(!messages.isParentCommand({...event,origin:'https://chzzk.naver.com'},origin,parent));
   assert(!messages.isParentCommand({...event,source:{}},origin,parent));
 });
+test('outgoing commands wait for readiness and skip inherited extension-origin documents', () => {
+  const {messages} = fixture(), sent = [];
+  const win = {location:{origin:'chrome-extension://test'},postMessage:(...args)=>sent.push(args)};
+  const frame = {dataset:{},contentWindow:win}, command = {type:'SET_VOLUME'};
+  assert.equal(messages.postToPlayer(frame,command),false);
+  frame.dataset.playerReady='true';
+  assert.equal(messages.postToPlayer(frame,command),false);
+  assert.equal(sent.length,0);
+  Object.defineProperty(win,'location',{get(){throw Error('Cross-origin access denied');}});
+  assert.equal(messages.postToPlayer(frame,command),true);
+  assert.equal(sent[0][1],'https://chzzk.naver.com');
+  frame.dataset.playerReady='false';
+  assert.equal(messages.postToPlayer(frame,command),false);
+  assert.equal(sent.length,1);
+});

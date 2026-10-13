@@ -29,9 +29,9 @@ globalThis.CZSync = {create(context) {
       if (syncPending.delete(requestId)) showNotice("싱크 조정 응답이 없습니다. 방송이 아직 로딩 중일 수 있습니다.");
     }, 2500);
     try {
-      iframe.contentWindow.postMessage({
+      CZMessages.postToPlayer(iframe, {
         source: "chzzk-multiview", type: "SYNC_SEEK", requestId, delta: deltaSeconds
-      }, "https://chzzk.naver.com");
+      });
     } catch (_) {
       syncPending.delete(requestId);
     }
