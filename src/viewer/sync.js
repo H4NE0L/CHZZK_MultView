@@ -37,6 +37,11 @@ globalThis.CZSync = {create(context) {
     }
   }
 
+  function externalSeek(uid, applied) {
+    if (!Number.isFinite(applied)) return;
+    syncOffsets.set(uid,(syncOffsets.get(uid)||0)+applied*1000);
+    scheduleSyncRender();
+  }
   function adjustSync(uid, deltaSeconds) {
     if (!Number.isFinite(deltaSeconds) || deltaSeconds === 0) return;
     requestSync(uid, deltaSeconds, false);
@@ -176,5 +181,5 @@ globalThis.CZSync = {create(context) {
   function clearAllSyncState() {
     syncOffsets.clear(); syncDelays.clear(); syncPending.clear(); scheduleSyncRender();
   }
-  return {adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI};
+  return {externalSeek, adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI};
 }};

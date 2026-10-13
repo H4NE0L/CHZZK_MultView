@@ -20,7 +20,8 @@ globalThis.CZPlayers = {create(context) {
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
         <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
         <span class="tile-head-spacer"></span>
-        <button class="tile-refresh" type="button" title="방송 새로고침" aria-label="방송 새로고침">↻</button>
+        <button class="tile-screenshot" type="button" title="스크린샷">📷</button>
+        <button class="tile-record" type="button" title="녹화 시작">● 녹화</button>
         <button class="tile-address" title="방송 링크 생성">링크 생성</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
@@ -77,13 +78,8 @@ globalThis.CZPlayers = {create(context) {
       });
     });
 
-    tile.querySelector('.tile-refresh').addEventListener('click', event => {
-      event.stopPropagation();
-      const frame = tile.querySelector('iframe');
-      // Navigate only this frame; the existing load/PLAYER_READY path reapplies
-      // saved audio and clears sync offsets without replacing other players.
-      if (frame) { frame.dataset.playerReady = 'false'; frame.src = frame.src; }
-    });
+    tile.querySelector('.tile-screenshot').onclick = () => context.mediaTools.screenshot(channel.uid);
+    tile.querySelector('.tile-record').onclick = () => context.mediaTools.toggleRecording(channel.uid);
 
     const addressBtn = tile.querySelector(".tile-address");
     addressBtn.addEventListener("click", async e => {
@@ -177,6 +173,7 @@ globalThis.CZPlayers = {create(context) {
     });
 
     tileMap.set(channel.uid, tile);
+    context.mediaTools.attachTile(channel.uid,tile);
     context.videoGrid.appendChild(tile);
 
     updateTileMainUI(channel.uid);

@@ -2269,8 +2269,25 @@ select:hover {
 .tile-head > button, .tile-head .drag-handle { pointer-events:auto; }
 .tile-head .drag-handle, .tile-head .tile-streamer-name { text-shadow:0 1px 3px #000, 0 0 4px #000; }
 .tile-head:focus-within { opacity:1; transform:translateY(0); }
-.tile-refresh { border:0; border-radius:4px; padding:3px 6px; background:#19191bbf; color:#eee; cursor:pointer; font-size:16px; }
 .tile-refresh:hover { background:#333; }
 
 .channel-list-index { flex:0 0 20px; width:20px; height:20px; display:grid; place-items:center; border-radius:50%; }
 .channel-list-index.is-main { background:#00d26a; color:#06150d; font-weight:700; }
+.tile-screenshot, .tile-record { border:0; border-radius:4px; background:#19191bbf; color:#eee; padding:4px 7px; cursor:pointer; white-space:nowrap; }
+.tile-record.recording { color:#ff7474; }
+.media-transport { position:absolute; bottom:0; left:0; right:0; z-index:6; display:flex; align-items:center; gap:6px; padding:5px; background:#111b; opacity:0; pointer-events:none; }
+.video-tile:hover .media-transport, .media-transport:focus-within { opacity:1; pointer-events:auto; }
+.media-transport button { background:#222; border:0; color:#eee; padding:4px; border-radius:4px; white-space:nowrap; cursor:pointer; }
+.media-range { flex:1; min-width:30px; accent-color:#00dc9b; }
+.media-position { color:#eee; font-size:10px; white-space:nowrap; }
+.media-overlay { position:fixed; inset:0; z-index:10000; display:grid; place-items:center; padding:16px; background:#000a; }
+.media-dialog { max-width:760px; width:100%; max-height:90vh; overflow:auto; background:#18191c; color:#eee; border:1px solid #444; border-radius:8px; }
+.media-dialog header { display:flex; align-items:center; justify-content:space-between; padding:12px; }
+.media-body { padding:12px; }
+.media-body img, .media-body video { display:block; width:100%; max-height:60vh; object-fit:contain; margin-bottom:12px; }
+.media-dialog button, .media-dialog select, .media-dialog input { background:#25262a; border:1px solid #555; border-radius:4px; padding:6px; color:#eee; margin:3px; }
+.media-dialog button { cursor:pointer; }
+.media-dialog button:disabled { opacity:.5; }
+.media-trim { margin-top:12px; }
+.media-trim input { width:90px; }
+.media-error { color:#ffb6a8; }

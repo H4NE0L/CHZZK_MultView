@@ -15,6 +15,10 @@
     return replay ? `video:${replay[1]}` : null;
   })();
 
+  // all_frames also includes CHZZK's own nested frames. Only the direct
+  // child of our extension viewer may report state or modify a player.
+  if (!frameUid || location.ancestorOrigins?.[0] !== PARENT_ORIGIN) return;
+
   function findVideo() {
     return document.querySelector("video");
   }
@@ -163,7 +167,15 @@
     const now = video.currentTime;
     const upper = Math.max(now, end - SYNC_EDGE_MARGIN);
     const lower = Math.min(now, start + SYNC_START_MARGIN);
-    const target = Math.min(Math.max(now + delta, lower), upper);
+    let target = Math.min(Math.max(now + delta, lower), upper);
+    const ranges = video.seekable?.length ? video.seekable : video.buffered;
+    if (ranges?.length) {
+      const segments=Array.from({length:ranges.length},(_,i)=>[ranges.start(i),ranges.end(i)]);
+      if (!segments.some(([a,b])=>target>=a && target<=b)) {
+        const edges=segments.flatMap(([a,b])=>[a+0.05,b-0.05]);
+        target=edges.reduce((best,value)=>Math.abs(value-target)<Math.abs(best-target)?value:best,edges[0]);
+      }
+    }
 
     let applied = target - now;
     if (Math.abs(applied) < 0.005) applied = 0;
@@ -190,6 +202,7 @@
     }, PARENT_ORIGIN);
   }
 
+  const media = chatMode ? null : CZMediaFrame.create({uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
   setInterval(reportSyncState, 1000);
 
   let theaterApplied = false;
@@ -281,6 +294,7 @@
 
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
+    if (event.data.type.startsWith('MEDIA_') && !chatMode) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;

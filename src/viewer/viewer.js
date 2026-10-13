@@ -437,6 +437,7 @@ function saveState() {
   }
 
   function removeChannel(uid) {
+    if (mediaTools.isRecording(uid)) { showNotice("녹화를 중지하고 결과를 확인한 뒤 방송을 삭제하세요."); return; }
     const tile = tileMap.get(uid);
     if (tile) {
       const iframe = tile.querySelector("iframe");
@@ -462,7 +463,7 @@ function saveState() {
     saveState();
   }
 
-  const {isChannelVisibleInLayout, createTile, moveSelectedToFront, swapChannels, selectChannel, updateTileMainUI, syncSelection} = CZPlayers.create({get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
+  const {isChannelVisibleInLayout, createTile, moveSelectedToFront, swapChannels, selectChannel, updateTileMainUI, syncSelection} = CZPlayers.create({get mediaTools() {return mediaTools;}, get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
 
   const {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState} = CZAudio.create({get state() { return state; }, tileMap, syncVolumeUI, saveStateSoon, saveState});
 
@@ -576,7 +577,9 @@ function saveState() {
      really applied (it can be limited by the live edge or the start of the
      seekable window). It is runtime-only: a reloaded player starts at 0.
   ------------------------------------------------------------------ */
-  const {adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI} = CZSync.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, escapeHtml, displayChannelName});
+  const {externalSeek, adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI} = CZSync.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, escapeHtml, displayChannelName});
+
+  const mediaTools = CZMediaTools.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
 
   window.addEventListener("message", event => {
     const data = event.data;
@@ -592,7 +595,8 @@ function saveState() {
       sendTileVolume(data.uid);
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'ENTER_THEATER'});
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_VISIBLE', visible: false});
-    } else if (data.type === 'VIDEO_STATE') receiveVideoState(data);
+    } else if (data.type.startsWith('MEDIA_')) mediaTools.receive(data);
+    else if (data.type === 'VIDEO_STATE') receiveVideoState(data);
     else if (data.type === 'SYNC_STATE') handleSyncState(data);
     else if (data.type === 'SYNC_RESULT') handleSyncResult(data);
   });
@@ -1001,6 +1005,7 @@ function saveState() {
   }
 
   function clearAll() {
+    if(mediaTools.hasRecordings()){showNotice("녹화를 중지한 뒤 전체 삭제하세요.");return;}
     for (const tile of tileMap.values()) {
       const iframe = tile.querySelector("iframe");
       if (iframe) iframe.src = "about:blank";
@@ -1026,6 +1031,7 @@ function saveState() {
   }
 
   async function openMultiView(initialInput = "", initialInputs = []) {
+    if(mediaTools.hasRecordings() && initialInputs.length) throw Error("녹화를 중지한 뒤 방송 목록을 교체하세요.");
     await loadState();
 
     const hasPopupList = Array.isArray(initialInputs) && initialInputs.length > 0;

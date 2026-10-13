@@ -183,19 +183,8 @@ async function run() {
     console.log('Checked MultiView initialization');
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
-    // A transparent header leaves the player exposed; refresh reloads one iframe only.
+    assert.equal(await main.locator('.tile-refresh').count(),0);
     assert.equal(await main.locator('.tile-head').first().evaluate(el => getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
-    assert.equal(await main.locator('.tile-refresh').first().evaluate(el => el.nextElementSibling.className),'tile-address');
-    await main.evaluate(() => {
-      const frames=[...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')];
-      window.__tileReloads=frames.map(() => 0);
-      frames.forEach((f,i) => f.addEventListener('load',() => window.__tileReloads[i]++));
-    });
-    await main.locator('.video-tile').first().hover();
-    await main.locator('.tile-refresh').first().click();
-    await main.waitForFunction(() => window.__tileReloads[0]===1);
-    assert.deepEqual(await main.evaluate(() => window.__tileReloads),[1,0]);
-    assert(await main.evaluate(() => window.__originalFrames.every((f,i) => f===document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')[i])));
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
     await main.locator('#channelManager > summary').click();
@@ -209,6 +198,7 @@ async function run() {
     assert.equal(await popup.locator('#manageItems').count(),0);
     assert.equal(await main.locator('#favoriteManageItems').count(),0);
     await popup.locator('#manageGroups').click();
+    assert(await popup.locator('.cg-toolbar').evaluate(el => {const help=el.querySelector('.cg-help').getBoundingClientRect(),button=el.querySelector('.cg-add').getBoundingClientRect();return Math.max(help.top,button.top)<Math.min(help.bottom,button.bottom);}));
     await popup.locator('.cg-add').click();
     await popup.locator('.cg-name').fill('새 그룹');
     assert.equal(await popup.locator('.cg-offline').count(),0);
@@ -446,6 +436,62 @@ async function run() {
     await replayPlayer.evaluate(() => { document.querySelector('video').muted = true; });
     await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-volume-row[data-uid="video:12345678"] .tile-mute-btn')?.dataset.state === 'm');
     console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
+    // Use a real generated video stream to exercise capture and recording in Chromium.
+    await replayPlayer.evaluate(()=>{
+      const video=document.querySelector('video');let current=5;
+      Object.defineProperty(video,'currentTime',{configurable:true,get:()=>current,set:value=>{current=value;}});
+      Object.defineProperty(video,'seekable',{configurable:true,value:{length:1,start:()=>0,end:()=>30}});
+      video.dispatchEvent(new Event('timeupdate'));
+    });
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range:not([disabled])').waitFor();
+    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true})));
+    await replayPlayer.waitForFunction(()=>document.querySelector('video').currentTime===2);
+    await replayPlayer.evaluate(()=>{
+      const input=document.querySelector('input');input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+    });
+    assert.equal(await replayPlayer.evaluate(()=>document.querySelector('video').currentTime),2);
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range').evaluate(el=>{el.value=10;el.dispatchEvent(new Event('change'));});
+    await replayPlayer.waitForFunction(()=>document.querySelector('video').currentTime===10);
+    await replayPlayer.evaluate(()=>{const video=document.querySelector('video');delete video.currentTime;delete video.seekable;});
+    await replayPlayer.evaluate(async()=>{
+      const video=document.querySelector('video'),canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
+      const ctx=canvas.getContext('2d');let count=0;
+      window.__paint=setInterval(()=>{ctx.fillStyle=count++%2?'#00dc9b':'#223344';ctx.fillRect(0,0,320,180);},50);
+      window.__captureStream=canvas.captureStream(20);video.srcObject=window.__captureStream;await video.play();
+    });
+    await main.locator('.video-tile[data-uid="video:12345678"]').hover();
+    await main.locator('.video-tile[data-uid="video:12345678"] .tile-screenshot').click();
+    await main.locator('.media-body img').waitFor();
+    const imageDownload=main.waitForEvent('download');
+    await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+    assert(/_\d{14}\.png$/.test((await imageDownload).suggestedFilename()));
+    await main.locator('.media-close').click();
+    await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
+    await main.locator('.media-format').selectOption({label:'WebM'});
+    await main.locator('.media-start').click();
+    await main.waitForTimeout(1500);
+    await main.locator('.tile-record.recording').click();
+    await main.locator('.media-body video').waitFor();
+    const recordingDownload=main.waitForEvent('download');
+    await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+    assert((await recordingDownload).suggestedFilename().endsWith('.webm'));
+    await main.locator('.trim-end').fill('0.5');
+    const trimDownload=main.waitForEvent('download');
+    await main.locator('.trim-save').click();
+    assert((await trimDownload).suggestedFilename().endsWith('_0-0.5.webm'));
+    await main.locator('.media-close').click();
+    await main.locator('.video-tile[data-uid="video:12345678"]').hover();
+    await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
+    if(await main.locator('.media-format option').filter({hasText:'MP4'}).count()) {
+      await main.locator('.media-format').selectOption({label:'MP4'});
+      await main.locator('.media-start').click();await main.waitForTimeout(1200);
+      await main.locator('.tile-record.recording').click();await main.locator('.media-body video').waitFor();
+      const mp4Download=main.waitForEvent('download');await main.locator('.media-body button').filter({hasText:'전체 저장'}).click();
+      assert((await mp4Download).suggestedFilename().endsWith('.mp4'));
+      await main.locator('.media-close').click();console.log('PASS: native MP4 recording/download supported by this Chromium.');
+    }else{await main.locator('.media-close').click();console.log('MP4 recording is unavailable in this Chromium; WebM remains available.');}
+    await replayPlayer.evaluate(()=>{clearInterval(window.__paint);window.__captureStream.getTracks().forEach(t=>t.stop());});
+    console.log('PASS: real generated-video screenshot preview/save, WebM recording, playback preview and trimmed clip download.');
     assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);
     assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
     assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
