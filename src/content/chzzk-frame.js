@@ -2,48 +2,22 @@
 (() => {
   if (window.top === window) return;
 
+  const PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
+  let commandedState = null;
+  let chatLayoutStarted = false;
   let videoObserver = null;
   let uiObserver = null;
   let chatMode = new URLSearchParams(location.search).get("multiview") === "chat" || new URLSearchParams(location.search).get("multiview") === "1" && location.pathname.endsWith("/chat");
   const frameUid = (() => {
     const m = location.pathname.match(/^\/live\/([^/?#]+)/);
-    return m ? m[1] : null;
+    if (m) return m[1];
+    const replay = location.pathname.match(/^\/video\/([^/?#]+)/);
+    return replay ? `video:${replay[1]}` : null;
   })();
 
-  function getChannelName() {
-    const candidates = [
-      '[class*="channel_name"]', '[class*="channelName"]',
-      '[class*="profile_name"]', '[class*="profileName"]',
-      '[class*="nickname"]', '[class*="NickName"]',
-      '[data-testid*="channel-name"]', '[data-testid*="channelName"]'
-    ];
-    for (const selector of candidates) {
-      const el = document.querySelector(selector);
-      const text = el?.textContent?.trim();
-      if (text && text.length < 80) return text;
-    }
-    const meta = document.querySelector('meta[property="og:title"], meta[name="twitter:title"]');
-    const title = (document.title || meta?.content || "").trim();
-    if (title) {
-      const cleaned = title.replace(/\s*[-|]\s*(치지직|CHZZK).*$/i, "").trim();
-      const parts = cleaned.split(/\s+-\s+/).map(v => v.trim()).filter(Boolean);
-      if (parts.length >= 2) return parts[0];
-      if (cleaned) return cleaned;
-    }
-    return null;
-  }
-
-  function sendChannelInfo() {
-    if (!frameUid) return;
-    const channelName = getChannelName();
-    const title = document.title || "";
-    if (channelName || title) {
-      window.parent.postMessage({
-        source: "chzzk-multiview", type: "CHANNEL_INFO", uid: frameUid,
-        channelName: channelName || undefined, title
-      }, "*");
-    }
-  }
+  // all_frames also includes CHZZK's own nested frames. Only the direct
+  // child of our extension viewer may report state or modify a player.
+  if (!frameUid || location.ancestorOrigins?.[0] !== PARENT_ORIGIN) return;
 
   function findVideo() {
     return document.querySelector("video");
@@ -56,14 +30,14 @@
     return video.muted === true || Number(video.volume) <= 0;
   }
 
-  function reportVideoState(video) {
+  function reportVideoState(video, reason = "player") {
     // The chat iframe silences its own <video>; it must never report that
     // state as if it were the broadcast player.
     if (!frameUid || !video || chatMode) return;
     window.parent.postMessage({
       source: "chzzk-multiview", type: "VIDEO_STATE", uid: frameUid,
-      muted: isVideoMuted(video), volume: Number(video.volume)
-    }, "*");
+      muted: isVideoMuted(video), volume: Number(video.volume), reason
+    }, PARENT_ORIGIN);
   }
 
   function setMuted(muted) {
@@ -73,7 +47,8 @@
     if (!muted) {
       try { video.volume = Math.max(Number(video.volume) || 0, 0.01); } catch (_) {}
     }
-    reportVideoState(video);
+    commandedState = {video, muted: video.muted, volume: video.volume};
+    reportVideoState(video, "command");
     return true;
   }
 
@@ -85,15 +60,19 @@
     if (typeof muted === "boolean") video.muted = muted;
     else if (value <= 0) video.muted = true;
     else video.muted = false;
-    reportVideoState(video);
+    commandedState = {video, muted: video.muted, volume: video.volume};
+    reportVideoState(video, "command");
     return true;
   }
 
   function bindVideo(video) {
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
-    video.addEventListener("volumechange", () => reportVideoState(video));
-    reportVideoState(video);
+    video.addEventListener("volumechange", () => {
+      const echo = commandedState?.video === video && commandedState.muted === video.muted && commandedState.volume === video.volume;
+      reportVideoState(video, echo ? 'command' : 'player');
+    });
+    if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 
   function bindObserver() {
@@ -188,7 +167,15 @@
     const now = video.currentTime;
     const upper = Math.max(now, end - SYNC_EDGE_MARGIN);
     const lower = Math.min(now, start + SYNC_START_MARGIN);
-    const target = Math.min(Math.max(now + delta, lower), upper);
+    let target = Math.min(Math.max(now + delta, lower), upper);
+    const ranges = video.seekable?.length ? video.seekable : video.buffered;
+    if (ranges?.length) {
+      const segments=Array.from({length:ranges.length},(_,i)=>[ranges.start(i),ranges.end(i)]);
+      if (!segments.some(([a,b])=>target>=a && target<=b)) {
+        const edges=segments.flatMap(([a,b])=>[a+0.05,b-0.05]);
+        target=edges.reduce((best,value)=>Math.abs(value-target)<Math.abs(best-target)?value:best,edges[0]);
+      }
+    }
 
     let applied = target - now;
     if (Math.abs(applied) < 0.005) applied = 0;
@@ -212,9 +199,10 @@
       source: "chzzk-multiview", type: "SYNC_STATE", uid: frameUid,
       delay: currentDelay(video),
       canSeek: !!seekRange(video)
-    }, "https://chzzk.naver.com");
+    }, PARENT_ORIGIN);
   }
 
+  const media = chatMode ? null : CZMediaFrame.create({uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
   setInterval(reportSyncState, 1000);
 
   let theaterApplied = false;
@@ -302,43 +290,33 @@
   }
 
   bindObserver();
-  preventFrameScrollbars();
+  if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
   window.addEventListener("message", event => {
-    if (event.data?.source !== "chzzk-multiview") return;
+    if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
+    if (event.data.type.startsWith('MEDIA_') && !chatMode) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
-    if (event.data.type === "SET_CHAT_MODE") chatMode = !!event.data.visible;
+    if (event.data.type === "SET_CHAT_MODE") {
+      chatMode = !!event.data.visible;
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start(); }
+    }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);
     if (event.data.type === "SET_VOLUME") setVolume(event.data.volume, typeof event.data.muted === "boolean" ? event.data.muted : null);
-    if (event.data.type === "ENTER_THEATER" && !chatMode) scheduleTheater();
+    if (event.data.type === "ENTER_THEATER" && !chatMode) { preventFrameScrollbars(); scheduleTheater(); }
     if (event.data.type === "SYNC_SEEK" && frameUid && !chatMode) {
       const delta = Number(event.data.delta);
       const result = Number.isFinite(delta) ? seekBy(delta) : { ok: false, reason: "bad-delta" };
       window.parent.postMessage({
         source: "chzzk-multiview", type: "SYNC_RESULT", uid: frameUid,
         requestId: event.data.requestId, ...result
-      }, "https://chzzk.naver.com");
+      }, PARENT_ORIGIN);
       reportSyncState();
-    }
-  });
-
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!message) return;
-    if (message.type === "SET_TILE_MUTED") {
-      sendResponse({ ok: message.type === "SET_VOLUME" ? setVolume(message.volume, typeof message.muted === "boolean" ? message.muted : null) : setMuted(!!message.muted) });
     }
   });
 
   // Clicking inside a tile (including its header) never changes the main
   // broadcast. Only the tile's "메인으로 변경" button in the MultiView UI does.
-
-  window.addEventListener("load", () => {
-    sendChannelInfo();
-    if (!chatMode) scheduleTheater();
-  });
-  setTimeout(sendChannelInfo, 800);
-  setTimeout(sendChannelInfo, 2500);
 
   const style = document.createElement("style");
   style.textContent = `

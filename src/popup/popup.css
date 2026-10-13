@@ -888,3 +888,12 @@ button {
 
 .favorite-group-summary .favorite-group-count { margin-left: 0; }
 .favorite-main { min-height: 24px; gap: 8px; }
+
+/* Stable column origins, independent of each channel's text length. */
+.favorite-text { grid-template-columns: minmax(0, 1fr) 8ch 8ch; gap: 4px; }
+.favorite-identity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
+.favorite-name, .favorite-category { width:100%; max-width:none; }
+.favorite-meta { overflow:hidden; text-overflow:ellipsis; }
+.favorite-viewers { min-width:0; overflow:hidden; }
+.favorite-viewer-count { overflow:hidden; text-overflow:ellipsis; }
+.favorite-row.offline .favorite-identity { grid-template-columns: minmax(0, 1fr); }

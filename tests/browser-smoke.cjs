@@ -52,6 +52,15 @@ async function checkCompactFavorites(page, prefix) {
   assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).fontWeight), '700');
   assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '0px');
   assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
+  const origins = await row.evaluate((el,p) => {
+    const fields=['name','category','meta','viewers'].map(part => el.querySelector(`.${p}-${part}`));
+    const before=fields.map(f => f.getBoundingClientRect().left), original=fields.slice(0,2).map(f=>f.textContent);
+    fields[0].textContent='아주 긴 방송인 이름 길이 변경'; fields[1].textContent='짧음';
+    const after=fields.map(f => f.getBoundingClientRect().left);
+    fields.slice(0,2).forEach((f,i)=>f.textContent=original[i]);
+    return {before,after};
+  },prefix);
+  assert.deepEqual(origins.before,origins.after,'information column origins must not depend on text length');
   const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
   assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
   assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
@@ -62,7 +71,11 @@ async function run() {
   try {
     const context = await browser.newContext();
     context.setDefaultTimeout(10000);
+    await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:'https://viewer.invalid'});
     const errors = [];
+    context.on('page', page => page.on('console', message => {
+      if (/target origin provided.*does not match/.test(message.text())) errors.push(message.text());
+    }));
     const storage = {
       chzzkMultiviewFavoritesV08: [
         {uid: 'aaaaaa', name: '방송 A', group: '첫 그룹', order: 1},
@@ -72,9 +85,13 @@ async function run() {
     };
     let writes = 0;
     let liveStatus = 'OPEN';
+    let followingLogin = true;
     let liveViewers = 1234;
     let liveGate = null;
     let notifyLiveGate = null;
+    const resultCleanup=[];
+    await context.exposeBinding('__registerResult',async(source,message)=>{source.page.once('close',()=>{const viewer=context.pages().find(p=>p.url().includes('/src/viewer/viewer.html'));if(viewer)resultCleanup.push(viewer.evaluate(id=>CZRecordings.remove(id),message.resultId));});return {ok:true};});
+    await context.exposeBinding('__createResultWindow',async(_source,url)=>{const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);return {id:2};});
     await context.exposeBinding('__storageGet', (_source, keys) => {
       const names = typeof keys === 'string' ? [keys] : keys;
       return Object.fromEntries(names.filter(k => k in storage).map(k => [k, structuredClone(storage[k])]));
@@ -86,6 +103,12 @@ async function run() {
       await Promise.all(context.pages().map(p => p.evaluate(c => window.__storageListeners.forEach(f => f(c, 'local')), changes)));
     });
     await context.addInitScript(version => {
+      const requestTimeout = AbortSignal.timeout.bind(AbortSignal);
+      // A controlled server gate tests storage concurrency, not wall-clock time
+      // spent by slow browser automation. Keep normal requests on real deadlines.
+      AbortSignal.timeout = delay => window.__holdRequestTimeouts ? new AbortController().signal : requestTimeout(delay);
+      window.__policyViolations = [];
+      document.addEventListener('securitypolicyviolation', event => window.__policyViolations.push(event.violatedDirective));
       window.__statusPolls = [];
       const nativeInterval = window.setInterval.bind(window);
       window.setInterval = (callback, delay, ...args) => {
@@ -95,7 +118,9 @@ async function run() {
       window.__storageListeners = [];
       window.__messageListeners = [];
       window.chrome = {
-        runtime: {id: 'mock-extension', getManifest: () => ({version}), sendMessage: async () => ({ok: true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
+        windows: {create:args=>window.__createResultWindow(args.url)},
+        tabs: {getCurrent: async () => ({id: 1})},
+        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
             get: keys => {
@@ -113,20 +138,30 @@ async function run() {
     }, manifest.version);
     await context.route('**/*', async route => {
       const url = new URL(route.request().url());
-      if (url.host === 'popup.invalid') {
-        const file = path.basename(url.pathname);
-        return route.fulfill({body: fs.readFileSync(path.join(root, file)), contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
+      if (url.host === 'popup.invalid' || url.host === 'viewer.invalid') {
+        const file = url.pathname.slice(1);
+        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
+        if (url.pathname.endsWith('/followings')) {
+          if (!followingLogin) return route.fulfill({status:401,json:{code:401}});
+          return route.fulfill({json:{code:200,content:{totalCount:3,followingList:[
+            {channel:{channelId:'aaaaaa',channelName:'테스트 방송',openLive:liveStatus==='OPEN',tags:['게임']}},
+            {channel:{channelId:'bbbbbb',channelName:'테스트 방송',openLive:liveStatus==='OPEN',tags:['게임']}},
+            {channel:{channelId:'cccccc',channelName:'새 팔로잉',openLive:false,tags:['음악']}}
+          ]}}});
+        }
+
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
+        if (liveStatus === 'CLOSE' && url.pathname.endsWith('/live-detail')) return route.fulfill({json:{code:200,content:null}});
         return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
-      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>CHZZK fixture</title></head><body></body></html>'});
+      return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><div class="live_chatting_input_box" style="height:96px"><input placeholder="채팅"></div><ul><li>메시지</li></ul></aside></body></html>'});
     });
     const popup = await context.newPage();
     popup.on('pageerror', e => errors.push(e.message));
-    await popup.goto('https://popup.invalid/popup.html');
+    await popup.goto('https://popup.invalid/src/popup/popup.html');
     await popup.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 2);
     assert.equal(await popup.locator('#version').textContent(), `v${manifest.version}`);
     assert.equal(await popup.title(), manifest.name);
@@ -143,70 +178,111 @@ async function run() {
 
     const main = await context.newPage();
     main.on('pageerror', e => errors.push(e.message));
-    await main.goto('https://chzzk.naver.com/');
-    for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
-    const opened = await main.evaluate(() => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error('MultiView initialization timeout')), 10000);
-      window.__messageListeners[0]({type: 'OPEN_MULTIVIEW', initialInputs: ['aaaaaa','bbbbbb']}, {}, result => { clearTimeout(timer); resolve(result); });
-    }));
-    assert.equal(opened.ok, true, opened.error);
+    main.on('framenavigated', async frame => {
+      if (new URL(frame.url()).hostname !== 'chzzk.naver.com') return;
+      try { for (const file of manifest.content_scripts[0].js) await frame.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')}); } catch (error) { if (!frame.isDetached()) errors.push(error.message); }
+    });
+    await main.goto('https://viewer.invalid/src/viewer/viewer.html?inputs=' + encodeURIComponent(JSON.stringify(['aaaaaa','bbbbbb'])));
+    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
-    // Fallback injection may repeat both scripts in an already-open view.
-    for (const file of ['favorites-store.js', 'chzzk-page.js']) await main.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')});
+    assert.equal(await main.locator('.tile-refresh').count(),0);
+    assert.equal(await main.locator('.tile-head').first().evaluate(el => getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
     await main.locator('#favoriteManager > summary').click();
     await checkCompactFavorites(main, 'favorite-list');
+    await main.locator('#channelManager > summary').click();
+    assert.equal(await main.locator('.channel-list-index.is-main').count(),1);
+    assert.equal(await main.locator('.channel-list-name .channel-list-main').count(),0);
+    assert.equal(await main.locator('.channel-list-index.is-main').evaluate(el => getComputedStyle(el).borderRadius),'50%');
+    await main.locator('#channelManager > summary').click();
+    await main.locator('#favoriteManager').evaluate(el => {el.open=true;});
     await main.locator('#favoriteManageGroups').click();
-    await main.locator('.favorite-manage-row[data-group="빈 그룹"]').waitFor();
-
+    await main.locator('.cg-group[data-group="빈 그룹"]').waitFor();
+    assert.equal(await popup.locator('#manageItems').count(),0);
+    assert.equal(await main.locator('#favoriteManageItems').count(),0);
     await popup.locator('#manageGroups').click();
-    popup.once('dialog', dialog => dialog.accept('새 그룹'));
-    await popup.locator('#groupAddFromModal').click();
-    await main.locator('.favorite-manage-row[data-group="새 그룹"]').waitFor();
-    popup.once('dialog', dialog => dialog.accept('변경 그룹'));
-    await popup.locator('.manage-group-row[data-group="첫 그룹"] .manage-rename').click();
-    await main.locator('.favorite-manage-row[data-group="변경 그룹"]').waitFor();
-    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group, '변경 그룹');
-    await popup.locator('[data-close-modal="groups"]').click();
-    await popup.locator('#manageItems').click();
-    await popup.locator('.manage-item-row[data-uid="bbbbbb"] select').selectOption('변경 그룹');
-    await main.locator('.favorite-list-group[data-group="변경 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor();
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['aaaaaa','bbbbbb']);
-    const dragData = await popup.evaluateHandle(() => new DataTransfer());
-    const dragSource = popup.locator('.manage-item-row[data-uid="aaaaaa"]');
-    const dragTarget = popup.locator('.manage-item-row[data-uid="bbbbbb"]');
-    await dragSource.dispatchEvent('dragstart', {dataTransfer: dragData});
-    await dragTarget.dispatchEvent('dragover', {dataTransfer: dragData});
-    assert((await dragSource.getAttribute('class')).includes('favorite-dragging'));
-    assert((await dragTarget.getAttribute('class')).includes('favorite-drop-target'));
-    assert.equal(await dragTarget.evaluate(el => getComputedStyle(el).outlineWidth), '2px');
-    await dragSource.dispatchEvent('dragend', {dataTransfer: dragData});
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
-    await popup.waitForFunction(() => document.querySelector('.manage-item-row')?.dataset.uid === 'bbbbbb');
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['bbbbbb','aaaaaa']);
-    console.log('Checked popup edits and item drag');
-
-    // Modify from MultiView, then assert the already-open popup follows storage.
+    assert(await popup.locator('.cg-toolbar').evaluate(el => {const help=el.querySelector('.cg-help').getBoundingClientRect(),button=el.querySelector('.cg-add').getBoundingClientRect();return Math.max(help.top,button.top)<Math.min(help.bottom,button.bottom);}));
+    await popup.locator('.cg-add').click();
+    await popup.locator('.cg-name').fill('새 그룹');
+    assert.equal(await popup.locator('.cg-offline').count(),0);
+    await popup.locator('.cg-refresh').click();
+    await popup.locator('.cg-picker input[value="cccccc"]').waitFor();
+    await popup.locator('.cg-search').fill('#음악');
+    assert.equal(await popup.locator('.cg-channel').count(),0);
+    await popup.locator('.cg-search').fill('새 팔로잉');
+    assert.equal(await popup.locator('.cg-channel').count(),1);
+    await popup.locator('.cg-select-results').click();
+    await popup.locator('.cg-search').fill('');
+    await popup.locator('.cg-picker input[value="aaaaaa"]').check();
+    assert((await popup.locator('.cg-count').textContent()).includes('2개 선택'));
+    await popup.locator('.cg-save').click();
+    await main.locator('.cg-group[data-group="새 그룹"]').waitFor();
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='aaaaaa').groups.includes('첫 그룹'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='aaaaaa').groups.includes('새 그룹'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid==='cccccc').groups.includes('새 그룹'));
+    await popup.locator('.cg-group[data-group="새 그룹"] [data-action="up"]').click();
+    await popup.waitForFunction(() => [...document.querySelectorAll('.cg-group')].at(-2)?.dataset.group === '새 그룹');
+    await main.locator('.cg-group[data-group="첫 그룹"] [data-action="edit"]').click();
+    await main.locator('.cg-name').fill('변경 그룹');
+    if (process.env.SMOKE_SCREENSHOT) await main.screenshot({path:process.env.SMOKE_SCREENSHOT});
+    await main.locator('.cg-save').click();
+    await popup.locator('.cg-group[data-group="변경 그룹"]').waitFor();
+    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group,'변경 그룹');
     main.once('dialog', dialog => dialog.accept());
-    await main.locator('.favorite-manage-row[data-group="변경 그룹"] .favorite-manage-delete').click();
-    await popup.waitForFunction(() => [...document.querySelectorAll('.manage-item-group')].every(s => s.value === '기본 그룹'));
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.order), [1,2]);
-    assert(storage.chzzkMultiviewFavoriteGroupsV02.includes('빈 그룹'));
-    await main.locator('[data-fav-close="groups"]').click();
-    await main.locator('#favoriteManageItems').click();
-    await main.locator('.favorite-manage-row[data-uid="aaaaaa"] .favorite-manage-delete-item').click();
-    await popup.waitForFunction(() => document.querySelectorAll('.manage-item-row').length === 1);
-    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), ['bbbbbb']);
+    await main.locator('.cg-group[data-group="변경 그룹"] [data-action="delete"]').click();
+    await popup.waitForFunction(() => !document.querySelector('.cg-group[data-group="변경 그룹"]'));
+    assert(storage.chzzkMultiviewFavoritesV08.find(f=>f.uid==='aaaaaa').groups.includes('새 그룹'));
+    await popup.locator('.cg-close').click();
+    await main.locator('.cg-close').click();
+    // Remove test-added favorite C using actual channel controls, then preserve A/B frames.
+    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="cccccc"] .favorite-list-add').click();
+    await main.locator('#channelManager > summary').click();
+    await main.locator('.channel-list-row[data-uid="cccccc"] .channel-list-favorite').click();
+    await main.locator('.video-tile[data-uid="cccccc"] .remove-btn').click();
+    await main.locator('.channel-list-row[data-uid="aaaaaa"] .channel-list-favorite').click();
+    await main.locator('#channelManager > summary').click();
+    await popup.waitForFunction(() => document.querySelectorAll('.favorite-row').length===1);
+    assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f=>f.uid),['bbbbbb']);
     const beforeReopen = writes;
     const other = await context.newPage();
-    other.on('pageerror', e => errors.push(e.message));
-    await other.goto('https://popup.invalid/popup.html');
-    await other.waitForFunction(() => document.querySelectorAll('.favorite-row').length === 1);
-    assert.equal(writes, beforeReopen, 'reopening must not overwrite groups or cause a storage echo');
+    other.on('pageerror', e=>errors.push(e.message));
+    await other.goto('https://popup.invalid/src/popup/popup.html');
+    await other.waitForFunction(() => document.querySelectorAll('.favorite-row').length===1);
+    assert.equal(writes,beforeReopen,'reopening must not echo writes');
     assert(storage.chzzkMultiviewFavoriteGroupsV02.includes('새 그룹'));
-    await main.locator('[data-fav-close="items"]').click();
-    await main.locator('#favoriteManager > summary').click();
+    // Following is left of favorites in viewer, below favorites in popup, collapsed by default.
+    assert.equal(await popup.locator('#followingManager').getAttribute('open'),null);
+    const placed = await popup.evaluate(() => document.querySelector('#followingManager').getBoundingClientRect().top >= document.querySelector('#favorites').getBoundingClientRect().bottom);
+    assert(placed);
+    assert(await main.evaluate(() => {const root=document.querySelector('#__chzzk_multiview_v09__').shadowRoot; return root.querySelector('#followingManager').getBoundingClientRect().left < root.querySelector('#favoriteManager').getBoundingClientRect().left;}));
+    await popup.locator('#followingManager > summary').click();
+    await popup.locator('.cf-row.online[data-uid="aaaaaa"]').waitFor();
+    const followingColumns = await popup.locator('.cf-row').evaluateAll(rows => {
+      rows[0].querySelector('.cf-name').textContent='긴 방송인 이름 테스트';
+      rows[1].querySelector('.cf-name').textContent='짧음';
+      return rows.map(row => ['cf-name','cf-info'].map(cls => row.querySelector('.'+cls).getBoundingClientRect().left));
+    });
+    assert.deepEqual(followingColumns[0],followingColumns[1]);
+    assert.equal(await popup.locator('.cf-star').first().evaluate(el => getComputedStyle(el).fontSize),'16px');
+    await popup.locator('.cf-search').fill('새 팔로잉');
+    assert.equal(await popup.locator('.cf-row').count(),0);
+    assert.equal(await popup.locator('.cf-row.offline').count(),0);
+    await popup.locator('.cf-search').fill('');
+    const star = popup.locator('.cf-row[data-uid="aaaaaa"] .cf-star');
+    await star.click();
+    await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='true');
+    await star.click();
+    await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='false');
+    assert.equal(await main.locator('.chat-head strong').textContent(),'채팅 · 테스트 방송');
+    followingLogin=false;
+    await popup.locator('.cf-refresh').click();
+    await popup.waitForFunction(() => document.querySelector('.cf-status').textContent.includes('로그인'));
+    assert.equal(storage.chzzkFollowingCacheV2.channels.length,3,'failed login must retain previous following cache');
+    followingLogin=true;
+    await popup.locator('#followingManager > summary').click();
+    console.log('PASS: following placement, collapse/search, login failures, checklist group creation, multiple memberships and group ordering.');
 
     // The same player frame elements must survive favorite edits and main changes.
     await main.locator('#videoGrid .main-btn').nth(1).click();
@@ -265,35 +341,35 @@ async function run() {
     assert.equal(writes, writesBeforeFailure);
     console.log('PASS: refresh OFFLINE→ONLINE on the same screen with invalidated storage, retained frames/store, write-time invalidation, and truthful network/storage failures.');
 
-    await main.locator('#favoriteManageItems').click();
-    await main.locator('.favorite-manage-row[data-uid="bbbbbb"] select').selectOption('새 그룹');
-    await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="bbbbbb"]').waitFor({state: 'attached'});
-    assert((await main.locator('.mv-notice').textContent()).includes('현재 화면에만 적용'));
-    assert.equal(storage.chzzkMultiviewFavoritesV08[0].group, '기본 그룹');
-    await main.locator('[data-fav-close="items"]').click();
-
     await main.evaluate(() => { window.__invalidWrite = ''; window.__invalidRead = ''; });
+    await main.locator('#favoriteManageGroups').click();
+    await main.locator('.cg-close').click();
     assert.equal(await main.locator('#syncManager').getAttribute('open'), null);
     let releaseLive;
     const requestStarted = new Promise(resolve => { notifyLiveGate = resolve; });
     liveGate = new Promise(resolve => { releaseLive = resolve; });
     // Start a delayed refresh, then add a favorite and edit its group/order.
+    await main.evaluate(() => {window.__holdRequestTimeouts = true;});
+    await popup.evaluate(() => {window.__holdRequestTimeouts = true;});
     await main.locator('#favoriteRefresh').click();
     await requestStarted;
     await main.locator('#channelManager > summary').click();
     await main.locator('.channel-list-row[data-uid="aaaaaa"] .channel-list-favorite').click();
-    await popup.waitForFunction(() => document.querySelectorAll('.manage-item-row').length === 2);
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"] select').selectOption('새 그룹');
-    await popup.locator('.manage-item-row[data-uid="aaaaaa"]').dragTo(popup.locator('.manage-item-row[data-uid="bbbbbb"]'));
-    await popup.waitForFunction(() => document.querySelector('.manage-item-row').dataset.uid === 'aaaaaa');
+    await popup.locator('#manageGroups').click();
+    await popup.locator('.cg-group[data-group="새 그룹"] [data-action="edit"]').click();
+    await popup.locator('.cg-picker input[value="aaaaaa"]').check();
+    await popup.locator('.cg-save').click();
+    await popup.locator('.cg-close').click();
     const orderDuringRefresh = storage.chzzkMultiviewFavoritesV08.map(f => f.uid);
     releaseLive();
     liveGate = null;
+    await main.evaluate(() => {window.__holdRequestTimeouts = false;});
+    await popup.evaluate(() => {window.__holdRequestTimeouts = false;});
     await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#favoriteRefresh').disabled);
     assert.deepEqual(storage.chzzkMultiviewFavoritesV08.map(f => f.uid), orderDuringRefresh);
-    assert.equal(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').group, '새 그룹');
+    assert(storage.chzzkMultiviewFavoritesV08.find(f => f.uid === 'aaaaaa').groups.includes('새 그룹'));
     await main.locator('.favorite-list-group[data-group="새 그룹"] .favorite-list-row[data-uid="aaaaaa"]').waitFor({state: 'attached'});
-    console.log('PASS: new favorite, group assignment and drag order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
+    console.log('PASS: new favorite, group assignment and stable item order survive an in-flight refresh; popup-created broadcasts resolve streamer names.');
     await main.evaluate(() => { window.__invalidRead = null; window.__invalidWrite = null; });
     const timeBefore = await main.locator('.favorite-list-row.online .favorite-list-meta').first().textContent();
     await main.waitForFunction(old => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.favorite-list-row.online .favorite-list-meta')?.textContent !== old, timeBefore);
@@ -309,9 +385,159 @@ async function run() {
     await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
     console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
+    // Real foreign-origin iframe helpers must report native-player changes.
+    await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
+    const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
+    assert.equal(liveFrames.length, 2);
+    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); document.querySelector('video').muted = false; });
+    await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
+    const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
+    await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
+    assert.equal(await survivor.evaluate(() => document.querySelector('video').muted), false);
+    assert(await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe') === window.__originalFrames[1]));
+    // Unrelated windows cannot impersonate a player UID.
+    await main.evaluate(() => window.dispatchEvent(new MessageEvent('message', {origin:'https://chzzk.naver.com', source:window, data:{source:'chzzk-multiview',type:'VIDEO_STATE',uid:'bbbbbb',reason:'player',muted:true,volume:0}})));
+    assert.equal(await survivor.evaluate(() => document.querySelector('video').muted), false);
+    await main.locator('#volumeManager > summary').click();
+    const setRange = async (selector, value) => main.locator(selector).evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles:true})); }, value);
+    await setRange('#masterVolume', '50');
+    await setRange('.tile-volume-row[data-uid="bbbbbb"] input', '60');
+    await main.locator('#mainOnlyCheck').check();
+    await main.locator('#volumeManager > summary').click();
+    await main.locator('.layout-toggle-btn[data-layout="main-sub"]').click();
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid').classList.contains('layout-main-sub'));
+    assert.equal(storage.chzzkMultiviewV09.layout, 'main-sub');
+    assert.equal(storage.chzzkMultiviewV09.channels[0].volume, .6);
+    assert.equal(storage.chzzkMultiviewV09.channels[0].muted, false);
+    await main.reload();
+    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    assert.equal(main.url(), 'https://viewer.invalid/src/viewer/viewer.html');
+    assert.equal(await main.locator('#videoGrid .video-tile').count(), 1);
+    assert.equal(await main.locator('#masterVolume').inputValue(), '50');
+    assert.equal(await main.locator('.tile-volume-row input').inputValue(), '60');
+    assert(await main.locator('#mainOnlyCheck').isChecked());
+    assert(await main.locator('#videoGrid').evaluate(el => el.classList.contains('layout-main-sub')));
+    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-mute-btn[data-state="u"]')?.classList.contains('is-muted'));
+    const restored = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
+    await restored.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1' && document.querySelector('video').volume === .3 && !document.querySelector('video').muted);
+    console.log('PASS: native-player unmute survives unrelated tile deletion; reload preserves session, main-only, raid layout and per-tile/master volume.');
+    // Replace the popup list in place, retaining the existing broadcaster iframe.
+    await main.evaluate(() => { window.__retainedFrame = document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe'); });
+    const routed = await main.evaluate(() => new Promise(resolve => window.__messageListeners[0]({type:'VIEWER_SET_INPUTS',tabId:1,initialInputs:['video/12345678','bbbbbb']}, {id:'mock-extension'}, resolve)));
+    assert.equal(routed.ok,true);
+    assert(await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.video-tile[data-uid="bbbbbb"] iframe') === window.__retainedFrame));
+    await main.locator('.video-tile[data-uid="video:12345678"] .main-btn').click();
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame')?.src.includes('/video/12345678?multiview=chat'));
+    let replayChat;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      replayChat = main.frames().find(frame => frame.url().includes('/video/12345678?multiview=chat'));
+      if (replayChat) break;
+      await main.waitForTimeout(50);
+    }
+    assert(replayChat);
+    await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box')?.getBoundingClientRect().height===46);
+    await replayChat.evaluate(()=>{document.querySelector('.live_chatting_input_box').style.height='120px';});
+    await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box').getBoundingClientRect().height===46);
+    await replayChat.waitForFunction(() => document.querySelector('video')?.muted && document.querySelector('video').volume === 0 && document.querySelector('aside')?.getBoundingClientRect().width > 0);
+    const replayPlayer = main.frames().find(frame => new URL(frame.url()).pathname === '/video/12345678' && !new URL(frame.url()).search);
+    await replayPlayer.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1');
+    await replayPlayer.evaluate(() => { document.querySelector('video').muted = true; });
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-volume-row[data-uid="video:12345678"] .tile-mute-btn')?.dataset.state === 'm');
+    console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
+    // Use a real generated video stream to exercise capture and recording in Chromium.
+    await replayPlayer.evaluate(()=>{
+      const video=document.querySelector('video');let current=5;
+      Object.defineProperty(video,'currentTime',{configurable:true,get:()=>current,set:value=>{current=value;}});
+      Object.defineProperty(video,'seekable',{configurable:true,value:{length:1,start:()=>0,end:()=>30}});
+      video.dispatchEvent(new Event('timeupdate'));
+    });
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range:not([disabled])').waitFor();
+    await replayPlayer.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true})));
+    await replayPlayer.waitForFunction(()=>document.querySelector('video').currentTime===2);
+    await replayPlayer.evaluate(()=>{
+      const input=document.querySelector('input');input.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+    });
+    assert.equal(await replayPlayer.evaluate(()=>document.querySelector('video').currentTime),2);
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range').evaluate(el=>{el.dispatchEvent(new PointerEvent('pointerdown'));el.value=Number(el.value)+3;el.dispatchEvent(new Event('input'));});
+    assert.match(await main.locator('.video-tile[data-uid="video:12345678"] .media-seek-delta').textContent(),/^\+3\.0초$/);
+    await main.locator('.video-tile[data-uid="video:12345678"] .media-range').evaluate(el=>{el.value=10;el.dispatchEvent(new Event('change'));});
+    await replayPlayer.waitForFunction(()=>document.querySelector('video').currentTime===10);
+    await replayPlayer.evaluate(()=>{const video=document.querySelector('video');delete video.currentTime;delete video.seekable;});
+    await replayPlayer.evaluate(async()=>{
+      const video=document.querySelector('video'),canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
+      const ctx=canvas.getContext('2d');let count=0;
+      window.__paint=setInterval(()=>{ctx.fillStyle=count++%2?'#00dc9b':'#223344';ctx.fillRect(0,0,320,180);},50);
+      window.__captureStream=canvas.captureStream(20);video.srcObject=window.__captureStream;await video.play();
+    });
+    await main.locator('.video-tile[data-uid="video:12345678"]').hover();
+    await main.bringToFront();
+    await main.locator('#uidInput').hover();
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).opacity),'0');
+    await main.locator('.video-tile').first().hover({position:{x:8,y:8}});
+    await main.waitForFunction(()=>getComputedStyle(document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-transport')).opacity==='1');
+    assert.equal(await main.locator('.seek-back,.seek-forward').count(),0);
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).bottom),'60px');
+    assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
+    await replayPlayer.locator('body').press('s');
+    await main.locator('.media-body img').waitFor();
+    assert.equal(await main.locator('.media-dialog header button').count(),0);
+    assert.equal(await main.locator('.media-footer button').count(),3);
+    assert.equal(await main.locator('.crop-handle').count(),8);
+    assert.equal(await main.locator('.screenshot-crop').isVisible(),true);
+    assert.equal(await main.locator('.media-save').evaluate(el=>getComputedStyle(el).paddingLeft),'16px');
+    assert.equal(await main.locator('.media-cancel').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
+    const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
+    await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();
+    await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
+    assert.equal(await main.locator('.screenshot-crop').evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
+    await main.locator('.media-copy').click();await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-copy').textContent==='복사됨');
+    const copied=await main.evaluate(async()=>{const items=await navigator.clipboard.read();const blob=await items[0].getType('image/png');const bytes=new DataView(await blob.arrayBuffer());return [bytes.getUint32(16),bytes.getUint32(20)];});
+    assert.deepEqual(copied,[160,90]);
+    const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
+    const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
+    const imageBytes=fs.readFileSync(await savedImage.path());
+    assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
+    await main.locator('.media-overlay').waitFor({state:'detached'});
+    // S in an editable field must not trigger a capture.
+    await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
+    assert.equal(await main.locator('.media-overlay').count(),0);
+    await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
+    assert.equal(await main.locator('.media-start').count(),0);
+    await main.waitForTimeout(1500);
+    const resultPageEvent=context.waitForEvent('page');
+    await replayPlayer.locator('body').press('r');
+    const resultPage=await resultPageEvent;await resultPage.locator('#save:not([disabled])').waitFor();
+    const row=await resultPage.locator('.recording-footer').evaluate(el=>[...el.querySelectorAll('label,#trim,#save')].map(field=>{const r=field.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));
+    assert(Math.max(...row.map(r=>r.top))<Math.min(...row.map(r=>r.bottom)),'recording controls share one row');
+    await resultPage.locator('#format').selectOption({label:'WebM'});
+    const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
+    assert((await recordingDownload).suggestedFilename().endsWith('.webm'));
+    await resultPage.locator('#end').fill('0.5');
+    const trimDownload=resultPage.waitForEvent('download');await resultPage.locator('#trim').click();
+    assert((await trimDownload).suggestedFilename().endsWith('_0-0.5.webm'));
+    await resultPage.waitForFunction(()=>!document.getElementById('trim').disabled);
+    if(await resultPage.locator('#format option:not([disabled])').filter({hasText:'MP4'}).count()) {
+      await resultPage.locator('#format').selectOption({label:'MP4'});
+      const mp4Download=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
+      assert((await mp4Download).suggestedFilename().endsWith('.mp4'));
+    }else console.log('MP4 export unavailable in this Chromium; WebM export remains available.');
+    // Results persist independently of the opener and survive a reload.
+    await resultPage.reload();await resultPage.locator('#save:not([disabled])').waitFor();
+    assert.deepEqual(await resultPage.evaluate(()=>window.__policyViolations),[]);
+    assert.equal(await resultPage.locator('#discard,#close').count(),0);
+    const resultId=new URL(resultPage.url()).searchParams.get('id');
+    await resultPage.close();await Promise.all(resultCleanup);
+    assert.equal(await main.evaluate(id=>CZRecordings.get(id),resultId),undefined);
+    await replayPlayer.evaluate(()=>{clearInterval(window.__paint);window.__captureStream.getTracks().forEach(t=>t.stop());});
+    console.log('PASS: real generated-video screenshot preview/save, WebM recording, playback preview and trimmed clip download.');
+    assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);
+    assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
+    assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
+    assert(!storage.chzzkMultiviewV09.channels.some(f => /오염/.test(f.name)), 'chat nicknames must never enter tile names');
     assert.deepEqual(errors, []);
-    console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, drag order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
-    console.log('Actual extension registration, login and live playback are not tested by this harness.');
+    console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, group order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
+    console.log('Actual extension registration, DNR application, login and live playback require Chrome verification.');
   } finally { await browser.close(); }
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

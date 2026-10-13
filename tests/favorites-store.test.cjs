@@ -11,7 +11,8 @@ function fixture(data = {}, fetch = async () => { throw Error('offline'); }) {
     local: {get: async () => structuredClone(data), set: async payload => { Object.assign(data, structuredClone(payload)); writes++; }},
     onChanged: {addListener: f => listeners.add(f), removeListener: f => listeners.delete(f)}
   }}});
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../favorites-store.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/shared/chzzk-api.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/shared/favorites-store.js'), 'utf8'), context);
   return {store: vm.runInContext('CZFavoritesStore', context), data, listeners, writes: () => writes};
 }
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -134,7 +135,8 @@ test('network errors, HTTP errors and closed streams become offline', async () =
 
 test('reinjecting the shared adapter preserves its identity and subscriptions', () => {
   const context = vm.createContext({});
-  const source = fs.readFileSync(path.join(__dirname, '../favorites-store.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/shared/favorites-store.js'), 'utf8');
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/shared/chzzk-api.js'), 'utf8'), context);
   vm.runInContext(source, context);
   const original = vm.runInContext('CZFavoritesStore', context);
   vm.runInContext(source, context);

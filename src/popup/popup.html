@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>치지직 통합관제실</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="../shared/group-manager.css">
 </head>
 <body>
   <main class="popup">
@@ -13,7 +14,7 @@
         <h1>치지직 통합관제실</h1>
         <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
       </div>
-      <span id="version" class="version-badge">v1.1.9</span>
+      <span id="version" class="version-badge">v2.0.0</span>
     </div>
 
     <div class="input-row">
@@ -28,30 +29,20 @@
       <strong>즐겨찾기</strong>
       <div class="favorite-actions">
         <button id="manageGroups" class="text-btn" type="button">그룹 관리</button>
-        <button id="manageItems" class="text-btn" type="button">항목 관리</button>
         <button id="refreshFavorites" class="refresh-btn" type="button" title="온라인 상태 새로고침">↻</button>
       </div>
     </div>
     <div id="favorites" class="favorite-list"></div>
+    <details id="followingManager" class="popup-following"><summary>팔로잉 방송</summary><div id="followingList"></div></details>
     <button id="open" class="primary">멀티뷰 열기</button>
     <p id="status" class="status"></p>
 
-    <div id="groupManageModal" class="manage-modal" aria-hidden="true">
-      <div class="manage-dialog">
-        <div class="manage-dialog-head"><strong>그룹 관리</strong><button type="button" data-close-modal="groups">✕</button></div>
-        <button id="groupAddFromModal" class="modal-add-btn" type="button">+ 그룹 추가</button>
-        <div id="groupManageList" class="manage-list"></div>
-      </div>
-    </div>
-    <div id="itemManageModal" class="manage-modal" aria-hidden="true">
-      <div class="manage-dialog">
-        <div class="manage-dialog-head"><strong>항목 관리</strong><button type="button" data-close-modal="items">✕</button></div>
-        <p class="manage-help">전체 즐겨찾기의 순서입니다. 그룹을 변경해도 번호 순서는 유지됩니다.</p>
-        <div id="itemManageList" class="manage-list"></div>
-      </div>
-    </div>
   </main>
-  <script src="favorites-store.js"></script>
+  <script src="../shared/chzzk-api.js"></script>
+  <script src="../shared/favorites-store.js"></script>
+  <script src="../shared/session-store.js"></script>
+  <script src="../shared/followings-store.js"></script>
+  <script src="../shared/group-manager.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
