@@ -195,7 +195,7 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label><input id="shortcutsEnabled" type="checkbox">일반 단축키 사용</label><p>스크린샷 S · 녹화 R은 항상 사용할 수 있습니다.</p><p>F 즐겨찾기 · H 화면 잠금 · B 상단바<br>V 소리 · G 배치 변경 · C 채팅<br>← / → 재생 위치 ±3초</p></div></details>
+          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>일반 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="일반 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
         </div>
       </header>
 
