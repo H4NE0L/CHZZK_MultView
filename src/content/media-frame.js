@@ -1,5 +1,6 @@
 // Media work stays inside the CHZZK document that owns the video element.
-globalThis.CZMediaFrame = {create({uid, findVideo, send, seekRange, seekBy}) {
+globalThis.CZMediaFrame = {create({uid, findVideo, send, seekRange, seekBy, chatOnly=false}) {
+  let shortcutsEnabled=true;
   let recorder = null, chunks = [], startedAt = 0, bytes = 0;
   const reply = (requestId, kind, result) => send({type:'MEDIA_RESULT',uid,requestId,kind,...result});
   function position() {
@@ -8,6 +9,7 @@ globalThis.CZMediaFrame = {create({uid, findVideo, send, seekRange, seekBy}) {
     else send({type:'MEDIA_TIME',uid,canSeek:false});
   }
   async function command(data) {
+    if(data.type==='MEDIA_SHORTCUTS'){shortcutsEnabled=data.enabled!==false;return;}
     const video=findVideo();
     try {
       if(data.type==='MEDIA_STOP') {
@@ -46,13 +48,13 @@ globalThis.CZMediaFrame = {create({uid, findVideo, send, seekRange, seekBy}) {
       }
     } catch(error) {reply(data.requestId,data.type==='MEDIA_RECORD'?'recording':data.type==='MEDIA_SCREENSHOT'?'screenshot':'command',{error:error.message});}
   }
-  const timer=setInterval(position,1000);
+  const timer=chatOnly?null:setInterval(position,1000);
   window.addEventListener('pagehide',()=>{clearInterval(timer);if(recorder?.state==='recording')recorder.stop();});
   window.addEventListener('keydown',event=>{
     const key=CZMessages.mediaShortcut(event);
-    if(!key || CZMessages.isShortcutInput(event,key))return;
+    if(!key || CZMessages.isShortcutInput(event,key) || !['s','r'].includes(key) && !shortcutsEnabled)return;
     event.preventDefault();event.stopImmediatePropagation();
-    send({type:'MEDIA_KEY',uid,...(['s','r'].includes(key)?{action:key==='s'?'screenshot':'record'}:{delta:key==='ArrowLeft'?-3:3})});
+    send({type:'MEDIA_KEY',uid,...(['s','r'].includes(key)?{action:key==='s'?'screenshot':'record'}:(['ArrowLeft','ArrowRight'].includes(key)?{delta:key==='ArrowLeft'?-3:3}:{action:'shortcut',key}))});
   },true);
   return {command};
 }};

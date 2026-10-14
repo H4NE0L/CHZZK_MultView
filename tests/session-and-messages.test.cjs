@@ -73,3 +73,9 @@ test('media shortcuts use physical S/R keys across keyboard layouts and ignore h
   assert.equal(messages.mediaShortcut({key:'s',code:'KeyS',ctrlKey:true}),null);
   assert.equal(messages.mediaShortcut({key:'s',code:'KeyS',isComposing:true}),null);
 });
+test('general shortcuts normalize all requested physical keys and shortcut preferences migrate/persist',()=>{
+  const {messages,store}=fixture();
+  for(const key of ['F','H','B','V','G','C'])assert.equal(messages.mediaShortcut({key,code:'Key'+key}),key.toLowerCase());
+  assert.equal(store.normalize({}).shortcutsEnabled,true);
+  assert.equal(store.normalize({shortcutsEnabled:false}).shortcutsEnabled,false);
+});

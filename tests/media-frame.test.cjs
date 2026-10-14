@@ -56,3 +56,10 @@ test('S and R shortcuts report capture/toggle actions and ignore held keys',()=>
   f.handlers.keydown(event('r'));
   assert.deepEqual(f.sent.map(message=>message.action),['screenshot','record']);
 });
+test('disabling general shortcuts preserves S/R and does not intercept native player keys',async()=>{
+  const f=fixture({});await f.media.command({type:'MEDIA_SHORTCUTS',enabled:false});
+  let prevented=0;const event=key=>({key,code:'Key'+key.toUpperCase(),composedPath:()=>[],preventDefault(){prevented++;},stopImmediatePropagation(){}});
+  f.handlers.keydown(event('f'));f.handlers.keydown(event('s'));f.handlers.keydown(event('r'));
+  assert.equal(prevented,2);assert.deepEqual(f.sent.map(message=>message.action),['screenshot','record']);
+  await f.media.command({type:'MEDIA_SHORTCUTS',enabled:true});f.handlers.keydown(event('f'));assert.equal(f.sent.at(-1).key,'f');
+});

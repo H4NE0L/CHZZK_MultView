@@ -2333,3 +2333,17 @@ select:hover {
 .crop-handle.n { left:calc(50% - 4px); top:-1px; cursor:ns-resize; } .crop-handle.s { left:calc(50% - 4px); bottom:-1px; cursor:ns-resize; }
 .crop-handle.w { left:-1px; top:calc(50% - 4px); cursor:ew-resize; } .crop-handle.e { right:-1px; top:calc(50% - 4px); cursor:ew-resize; }
 @media(max-width:480px){.media-footer{gap:6px;flex-wrap:wrap;}.screenshot-size{flex-basis:100%;}.media-footer button{flex:1;padding:0 12px;}}
+.viewer-settings { position:relative; }
+.viewer-settings>summary { cursor:pointer; list-style:none; padding:6px 9px; border:1px solid #393c42; border-radius:5px; color:#ddd; white-space:nowrap; }
+.settings-panel { position:absolute; right:0; top:calc(100% + 8px); z-index:100; width:260px; padding:14px; background:#191b1f; border:1px solid #393c42; border-radius:7px; box-shadow:0 8px 24px #0008; font-size:12px; }
+.settings-panel .settings-option { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; cursor:pointer; }
+.settings-switch { position:relative; flex:0 0 56px; width:56px; height:26px; }
+.settings-switch input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.settings-switch-track { position:absolute; inset:0; pointer-events:none; border-radius:13px; background:#454951; transition:background .15s,box-shadow .15s; }
+.settings-switch-track::before { content:""; position:absolute; width:18px; height:18px; top:4px; left:4px; border-radius:50%; background:#eee; transition:transform .15s; }
+.settings-switch-track::after { content:"OFF"; position:absolute; right:6px; line-height:26px; color:#ddd; font-size:9px; font-weight:700; }
+.settings-switch input:checked + .settings-switch-track { background:#00b981; box-shadow:0 0 8px #00dc9b40; }
+.settings-switch input:checked + .settings-switch-track::before { transform:translateX(30px); }
+.settings-switch input:checked + .settings-switch-track::after { content:"ON"; left:7px; right:auto; color:#062319; }
+.settings-switch input:focus-visible + .settings-switch-track { outline:2px solid #00dc9b; outline-offset:3px; }
+.settings-panel p { color:#a4abb7; font-size:11px; line-height:1.7; margin-bottom:0; }

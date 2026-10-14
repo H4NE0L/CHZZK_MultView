@@ -186,6 +186,21 @@ async function run() {
     await main.waitForFunction(() => document.body.classList.contains('ready'));
     assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
+    assert.equal(await main.locator('.layout-toggle-btn[data-layout="grid"]').textContent(),'그리드');
+    await main.bringToFront();await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
+    await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),'');
+    await main.locator('body').press('Shift+F');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
+    await main.locator('body').press('h');assert(await main.locator('#screenLockBtn').evaluate(el=>el.classList.contains('lock-active')));await main.locator('body').press('h');
+    await main.locator('body').press('b');assert(await main.locator('#__chzzk_multiview_v09__').evaluate(el=>el.shadowRoot.querySelector('.mv-root')?.classList.contains('toolbar-collapsed') || el.shadowRoot.querySelector('.toolbar-collapsed')!==null));await main.locator('body').press('b');
+    await main.locator('body').press('v');assert.equal(await main.locator('#volumeManager').getAttribute('open'),'');await main.locator('body').press('v');
+    await main.locator('body').press('g');assert(await main.locator('#videoGrid').evaluate(el=>el.classList.contains('layout-main-sub')));await main.locator('body').press('g');
+    await main.locator('body').press('c');assert.equal(await main.locator('#chatToggleBtn').textContent(),'채팅 열기');await main.locator('body').press('c');
+    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
+    await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
+    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
+    await main.locator('#uidInput').fill('');await main.locator('#uidInput').press('f');assert.equal(await main.locator('#uidInput').inputValue(),'f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);await main.locator('#uidInput').fill('');
+    console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
+
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
     assert.equal(await main.locator('.tile-refresh').count(),0);
@@ -478,6 +493,7 @@ async function run() {
     assert.equal(await main.locator('.seek-back,.seek-forward').count(),0);
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).bottom),'60px');
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
@@ -531,6 +547,8 @@ async function run() {
     assert.equal(await main.evaluate(id=>CZRecordings.get(id),resultId),undefined);
     await replayPlayer.evaluate(()=>{clearInterval(window.__paint);window.__captureStream.getTracks().forEach(t=>t.stop());});
     console.log('PASS: real generated-video screenshot preview/save, WebM recording, playback preview and trimmed clip download.');
+    await main.reload();await main.waitForFunction(()=>document.body.classList.contains('ready'));assert.equal(await main.locator('#shortcutsEnabled').isChecked(),false);
+    await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
     assert.deepEqual(await main.evaluate(() => window.__policyViolations), []);
     assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
     assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
