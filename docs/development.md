@@ -66,4 +66,4 @@ node tests/browser-smoke.cjs
 python3 scripts/package.py
 ```
 
-생성물은 `dist/CZ-Control-Room-v2.0.0.zip`이며 `tests/`와 개발 도구는 포함하지 않습니다.
+생성물은 `dist/CZ-Control-Room-v2.0.1.zip`이며 `tests/`와 개발 도구는 포함하지 않습니다.

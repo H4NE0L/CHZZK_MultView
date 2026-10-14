@@ -1,6 +1,6 @@
 globalThis.CZSessionStore = (() => {
   const KEY = 'chzzkMultiviewV09';
-  const DEFAULT_STATE = Object.freeze({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right'});
+  const DEFAULT_STATE = Object.freeze({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right', shortcutsEnabled:true});
   const clamp01 = value => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
   function parseInput(value) {
     const raw = String(value || "").trim();
@@ -48,7 +48,7 @@ globalThis.CZSessionStore = (() => {
     return {channels, selectedUid: visible.some(c => c.uid === saved.selectedUid) ? saved.selectedUid : visible[0]?.uid || null,
       layout, chatOpen: saved.chatOpen !== false, screenLocked: saved.screenLocked === true,
       mainOnly: saved.mainOnly === true, masterVolume: saved.masterVolume == null ? 1 : clamp01(saved.masterVolume),
-      chatSide: saved.chatSide === 'left' ? 'left' : 'right'};
+      chatSide: saved.chatSide === 'left' ? 'left' : 'right',shortcutsEnabled:saved.shortcutsEnabled!==false};
   }
   async function read() { return normalize((await chrome.storage.local.get(KEY))[KEY]); }
   async function write(state) { await chrome.storage.local.set({[KEY]: normalize(state)}); }

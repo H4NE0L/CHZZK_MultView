@@ -106,7 +106,7 @@ globalThis.CZMediaTools = {create(context) {
     range.onchange=()=>{endDrag();try{request(uid,'MEDIA_SEEK',{time:Number(range.value)});}catch(e){context.showNotice(e.message);}};range.onpointerup=endDrag;range.onpointercancel=endDrag;range.onblur=endDrag;
   }
   function receive(data) {
-    if(data.type==='MEDIA_KEY'){if(data.action==='screenshot')screenshot(data.uid);else if(data.action==='record')toggleRecording(data.uid);else if([-3,3].includes(data.delta))context.adjustSync(data.uid,data.delta);return;}
+    if(data.type==='MEDIA_KEY'){if(data.action==='screenshot')screenshot(data.uid);else if(data.action==='record')toggleRecording(data.uid);else if(context.shortcutsEnabled!==false){if(data.action==='shortcut')context.onShortcut?.(data.key);else if([-3,3].includes(data.delta))context.adjustSync(data.uid,data.delta);}return;}
     if(data.type==='MEDIA_STATE'){if(data.recording)recordings.set(data.uid,{startedAt:data.startedAt});else recordings.delete(data.uid);updateRecord(data.uid);return;}
     if(data.type==='MEDIA_TIME') {
       if(data.canSeek===false){const bar=context.tileMap.get(data.uid)?.querySelector('.media-transport');if(bar){bar.querySelector('input').disabled=true;bar.querySelector('.media-position').textContent='탐색 가능한 구간 없음';}return;}
@@ -124,11 +124,14 @@ globalThis.CZMediaTools = {create(context) {
   }
   window.addEventListener('keydown',event=>{
     const key=CZMessages.mediaShortcut(event);
-    if(dialog || !key || CZMessages.isShortcutInput(event,key) || !context.state.selectedUid)return;
+    if(dialog || !key || CZMessages.isShortcutInput(event,key))return;
+    if(!['s','r'].includes(key) && context.shortcutsEnabled===false)return;
+    if(['s','r','ArrowLeft','ArrowRight'].includes(key) && !context.state.selectedUid)return;
     event.preventDefault();
     if(key==='s')screenshot(context.state.selectedUid);
     else if(key==='r')toggleRecording(context.state.selectedUid);
-    else context.adjustSync(context.state.selectedUid,key==='ArrowLeft'?-3:3);
+    else if(['ArrowLeft','ArrowRight'].includes(key))context.adjustSync(context.state.selectedUid,key==='ArrowLeft'?-3:3);
+    else context.onShortcut?.(key);
   },true);
   window.addEventListener('beforeunload',event=>{if(recordings.size || results.length || dialog){event.preventDefault();event.returnValue='';}});
   setInterval(()=>recordings.forEach((_,uid)=>updateRecord(uid)),1000);

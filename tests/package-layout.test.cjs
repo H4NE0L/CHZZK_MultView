@@ -22,7 +22,7 @@ test('only frame control runs on CHZZK; homepage overlay and scripting injection
   assert.equal(manifest.content_scripts.length,1);
   assert(manifest.content_scripts[0].all_frames);
   assert(!manifest.content_scripts[0].js.some(file => file.includes('/viewer/')));
-  assert.equal(manifest.version,'2.0.0');
+  assert.equal(manifest.version,'2.0.1');
   assert(manifest.content_security_policy.extension_pages.includes("script-src 'self'"));
   assert(manifest.content_security_policy.extension_pages.includes('frame-src https://chzzk.naver.com'));
 });

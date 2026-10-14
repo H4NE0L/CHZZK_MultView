@@ -2333,3 +2333,9 @@ select:hover {
 .crop-handle.n { left:calc(50% - 4px); top:-1px; cursor:ns-resize; } .crop-handle.s { left:calc(50% - 4px); bottom:-1px; cursor:ns-resize; }
 .crop-handle.w { left:-1px; top:calc(50% - 4px); cursor:ew-resize; } .crop-handle.e { right:-1px; top:calc(50% - 4px); cursor:ew-resize; }
 @media(max-width:480px){.media-footer{gap:6px;flex-wrap:wrap;}.screenshot-size{flex-basis:100%;}.media-footer button{flex:1;padding:0 12px;}}
+.viewer-settings { position:relative; }
+.viewer-settings>summary { cursor:pointer; list-style:none; padding:6px 9px; border:1px solid #393c42; border-radius:5px; color:#ddd; white-space:nowrap; }
+.settings-panel { position:absolute; right:0; top:calc(100% + 8px); z-index:100; width:260px; padding:14px; background:#191b1f; border:1px solid #393c42; border-radius:7px; box-shadow:0 8px 24px #0008; font-size:12px; }
+.settings-panel label { display:flex; align-items:center; gap:8px; margin-top:12px; }
+.settings-panel input { accent-color:#00dc9b; }
+.settings-panel p { color:#a4abb7; font-size:11px; line-height:1.7; margin-bottom:0; }

@@ -190,11 +190,12 @@ function saveState() {
             </div>
           </details>
           <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
-            <button type="button" class="layout-toggle-btn" data-layout="grid">기본</button>
+            <button type="button" class="layout-toggle-btn" data-layout="grid">그리드</button>
             <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드 뷰</button>
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
-          <button id="chatToggleBtn" title="채팅 닫기/열기">채팅 닫기</button>
+          <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
+          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label><input id="shortcutsEnabled" type="checkbox">일반 단축키 사용</label><p>스크린샷 S · 녹화 R은 항상 사용할 수 있습니다.</p><p>F 즐겨찾기 · H 화면 잠금 · B 상단바<br>V 소리 · G 배치 변경 · C 채팅<br>← / → 재생 위치 ±3초</p></div></details>
         </div>
       </header>
 
@@ -288,6 +289,10 @@ function saveState() {
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
 
+    const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
+    shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
+    ui.querySelector('#settingsManager').addEventListener('toggle',event=>{if(event.target.open)for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id)?.removeAttribute('open');});
+    for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id).addEventListener('toggle',event=>{if(event.target.open)ui.querySelector('#settingsManager').removeAttribute('open');});
     const masterInput = ui.querySelector("#masterVolume");
     masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
     bindRangeDrag(masterInput);
@@ -579,18 +584,36 @@ function saveState() {
   ------------------------------------------------------------------ */
   const {externalSeek, adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI} = CZSync.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, escapeHtml, displayChannelName});
 
-  const mediaTools = CZMediaTools.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
+  function syncShortcutSettings() {
+    CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
+    for(const tile of tileMap.values())CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
+  }
+  function handleShortcut(key) {
+    if(state.shortcutsEnabled===false)return;
+    if(['f','v'].includes(key)){
+      const collapsed=toolbarCollapsed;if(collapsed)toggleToolbar();
+      const panel=ui.querySelector(key==='f'?'#favoriteManager':'#volumeManager');panel.open=collapsed || !panel.open;
+      if(panel.open)ui.querySelector('#settingsManager').removeAttribute('open');
+    }else if(key==='h')toggleScreenLock();
+    else if(key==='b')toggleToolbar();
+    else if(key==='c')toggleChat();
+    else if(key==='g')ui.querySelector(`.layout-toggle-btn[data-layout="${state.layout==='grid'?'main-sub':'grid'}"]`).click();
+  }
+  const mediaTools = CZMediaTools.create({get shortcutsEnabled(){return state.shortcutsEnabled!==false;},onShortcut:handleShortcut,get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
 
   window.addEventListener("message", event => {
     const data = event.data;
-    const frame = data?.type === 'CHAT_READY' ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
-    if (!CZMessages.isPlayerMessage(event, frame)) return;
+    const fromChat=data?.type==='CHAT_READY' || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
+    if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;
       frame.dataset.playerReady = 'true';
+      CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});
     } else if (data.type === 'PLAYER_READY') {
       frame.dataset.playerReady = 'true';
+      CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       clearSyncState(data.uid);
       sendTileVolume(data.uid);
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'ENTER_THEATER'});

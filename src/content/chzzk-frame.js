@@ -202,7 +202,7 @@
     }, PARENT_ORIGIN);
   }
 
-  const media = chatMode ? null : CZMediaFrame.create({uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
+  const media = CZMediaFrame.create({chatOnly:chatMode,uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
   setInterval(reportSyncState, 1000);
 
   let theaterApplied = false;
@@ -294,7 +294,7 @@
 
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
-    if (event.data.type.startsWith('MEDIA_') && !chatMode) media?.command(event.data);
+    if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
