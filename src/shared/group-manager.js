@@ -25,13 +25,13 @@ globalThis.CZGroupManager = (() => {
     };
     function renderFollowing(message = '') {
       if (!followList) return;
-      if (!followList.querySelector('.cf-tools')) followList.innerHTML = `<div class="cf-tools"><input class="cf-search" type="search" placeholder="팔로잉 방송 검색" aria-label="팔로잉 방송 검색"><button class="cf-refresh" type="button" aria-label="팔로잉 새로고침" title="팔로잉 새로고침">↻</button></div><div class="cf-rows"></div><p class="cf-status" role="status"></p>`;
+      if (!followList.querySelector('.cf-tools')) followList.innerHTML = `<div class="cf-tools"><input class="cf-search" type="search" placeholder="스트리머명·카테고리 검색" aria-label="스트리머명 또는 카테고리 검색"><button class="cf-refresh" type="button" aria-label="팔로잉 새로고침" title="팔로잉 새로고침">↻</button></div><div class="cf-rows"></div><p class="cf-status" role="status"></p>`;
       const search = followList.querySelector('.cf-search');
       if (search.value !== query) search.value = query;
       followList.querySelector('.cf-status').textContent = `${following.filter(f => f.online).length}개 온라인${message ? ' · '+message : ''}`;
       const rows = followList.querySelector('.cf-rows');
       const draw = () => {
-        const items = following.filter(f => f.online && f.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const items = following.filter(f => f.online && [f.name,f.category].some(value=>String(value || '').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())));
         rows.innerHTML = items.map(f => `<div class="cf-row online" data-uid="${esc(f.uid)}"><button type="button" class="cf-main"><span class="cf-dot" aria-hidden="true"></span><span class="cf-name">${esc(f.name)}</span><span class="cf-info">${esc(f.category || '')}</span></button><button type="button" class="cf-star" aria-pressed="${favoriteUids.has(f.uid)}" aria-label="${favoriteUids.has(f.uid) ? '즐겨찾기 해제':'즐겨찾기 추가'}">${favoriteUids.has(f.uid) ? '★':'☆'}</button></div>`).join('') || '<p class="cg-empty">표시할 온라인 방송이 없습니다.</p>';
         rows.querySelectorAll('[data-uid]').forEach(row => {
           row.querySelector('.cf-main').onclick = () => onAdd(following.find(f => f.uid === row.dataset.uid));
