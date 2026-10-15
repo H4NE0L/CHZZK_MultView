@@ -67,4 +67,3 @@
 
 /* Keep live-status dots independent of the current multiview selection. */
 .in-multiview { box-shadow:inset 0 0 0 1px #00dc9b88; }
-.in-multiview .favorite-list-name::before,.in-multiview .favorite-name::before,.in-multiview .cf-name::before { content:"▣"; color:#00dc9b; margin-right:4px; font-size:11px; }
