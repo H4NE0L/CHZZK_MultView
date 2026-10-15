@@ -67,6 +67,6 @@ node tests/site-browser-smoke.cjs
 python3 scripts/package.py
 ```
 
-생성물은 `dist/CZ-Control-Room-v2.0.1.zip`이며 `tests/`와 개발 도구는 포함하지 않습니다.
+생성물은 `dist/CZ-Control-Room-v2.0.2.zip`이며 `tests/`와 개발 도구는 포함하지 않습니다.
 
 페이지 모드에서 기존 채팅 수집 확장의 방송 대상, 로그인, 실제 녹화 음성, 원본 페이지 복귀를 별도로 확인하세요. 모의 검사는 타사 확장의 동작을 검증하지 않습니다.
