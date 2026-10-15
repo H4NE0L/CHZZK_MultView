@@ -2381,3 +2381,5 @@ select:hover {
 .screenshot-gallery { overflow:hidden; }
 .screenshot-gallery .media-body { padding:10px; overflow:hidden; display:flex; justify-content:center; align-items:center; }
 .screenshot-gallery .screenshot-crop-host { flex:none; max-width:100%; }
+
+.center-controls.has-site-return { width:max-content; min-width:200px; }

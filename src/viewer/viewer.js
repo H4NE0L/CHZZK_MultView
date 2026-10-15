@@ -199,7 +199,7 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>일반 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="일반 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
+          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
         </div>
       </header>
 
@@ -226,7 +226,7 @@ function saveState() {
 
     shadowRoot.appendChild(ui);
     if(globalThis.CZ_SITE_VIEWER){
-      const exit=document.createElement('button');exit.textContent='치지직으로 돌아가기';exit.type='button';exit.onclick=()=>location.reload();ui.querySelector('.toolbar-right').appendChild(exit);
+      const exit=document.createElement('button');exit.textContent='치지직으로 돌아가기';exit.id='siteReturnBtn';exit.className='center-btn';exit.type='button';exit.onclick=()=>location.reload();ui.querySelector('#centerControls').appendChild(exit);ui.querySelector('#centerControls').classList.add('has-site-return');
     }
 
     videoGrid = ui.querySelector("#videoGrid");
@@ -235,7 +235,7 @@ function saveState() {
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
-    groupManager = CZGroupManager.attach({root: ui,
+    groupManager = CZGroupManager.attach({root: ui, getActiveChannels: () => state.channels,
       onSaved: snapshot => { applyFavoriteSnapshot(snapshot); refreshFavoriteList(); refreshChannelManager(); },
       onAdd: channel => addToListFromFavorite(channel),
       onOpen: kind => { for (const id of ['syncManager','volumeManager','channelManager']) ui.querySelector(`#${id}`)?.removeAttribute('open'); if(kind==='following') ui.querySelector('#favoriteManager').removeAttribute('open'); }
@@ -894,6 +894,7 @@ function saveState() {
 
   function refreshChannelManager() {
     if (!ui) return;
+    groupManager?.refreshActive();
     scheduleSyncRender();
     const list = ui.querySelector("#channelList");
     if (!list) return;
@@ -968,6 +969,7 @@ function saveState() {
     }).join('');
 
     CZGroupManager.decorate(ui);
+    groupManager?.refreshActive();
 
     list.querySelectorAll('.favorite-list-add').forEach(btn=>btn.addEventListener('click',e=>{
       e.stopPropagation(); const uid=btn.closest('.favorite-list-row')?.dataset.uid; if(!uid)return;

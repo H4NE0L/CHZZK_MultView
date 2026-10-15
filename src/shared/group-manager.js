@@ -8,7 +8,14 @@ globalThis.CZGroupManager = (() => {
       el.querySelector('summary').style.borderLeft = `3px solid ${color(options[el.dataset.group]?.color)}`;
     });
   }
-  function attach({root, onSaved, onAdd, onOpen = () => {}}) {
+  function attach({root, onSaved, onAdd, onOpen = () => {}, getActiveChannels = () => []}) {
+    function refreshActive() {
+      const active=new Set(getActiveChannels().map(channel=>channel.uid));
+      root.querySelectorAll('.favorite-list-row,.favorite-row,.cf-row').forEach(row=>{
+        const used=active.has(row.dataset.uid);row.classList.toggle('in-multiview',used);
+        if(used)row.setAttribute('title','멀티뷰 사용 중');else if(row.title==='멀티뷰 사용 중')row.removeAttribute('title');
+      });
+    }
     const host = root.body || root;
     let favoriteUids = new Set();
     let saved, following = [], query = '', selected = new Set(), currentName = null, loading = false, editor = false;
@@ -48,6 +55,7 @@ globalThis.CZGroupManager = (() => {
             } catch(error) {renderFollowing(error.message); event.target.disabled = false;}
           };
         });
+        refreshActive();
       };
       draw();
       followList.querySelector('.cf-search').oninput = event => {query = event.target.value; draw();};
@@ -135,7 +143,7 @@ globalThis.CZGroupManager = (() => {
     });
     overlay.addEventListener('click', event => {if(event.target===overlay) close();});
     overlay.addEventListener('keydown', event => {if(event.key==='Escape') close();});
-    return {open, close, sync};
+    return {open, close, sync, refreshActive};
   }
   return {attach, visibleItems, decorate};
 })();

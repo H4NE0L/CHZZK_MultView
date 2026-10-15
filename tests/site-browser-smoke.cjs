@@ -12,7 +12,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.route('https://viewer.invalid/**',route=>{const file=new URL(route.request().url()).pathname.slice(1);return route.fulfill({contentType:'text/css',body:read(file)});});
  await page.route('https://api.chzzk.naver.com/**',route=>route.fulfill({json:{code:200,content:{status:'OPEN',channelId:'aaaaaa',channelName:'테스트 방송',liveTitle:'테스트',channel:{channelId:'aaaaaa',channelName:'테스트 방송'}}}}));
  await page.addInitScript(()=>{
-   const data={chzzkMultiviewV09:{channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
+   const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
    window.__messages=[];
    window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
  });
@@ -28,7 +28,18 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.locator('.mv-root').waitFor();
  await page.waitForFunction(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe')?.dataset.playerReady==='true');
  assert.equal(page.url(),'https://chzzk.naver.com/');
+ await page.locator('#centerControls').hover();
  assert(await page.getByRole('button',{name:'치지직으로 돌아가기'}).isVisible());
+ assert(await page.locator('#siteReturnBtn').evaluate(el=>el.previousElementSibling.id==='collapseBtn'));
+ await page.locator('#collapseBtn').click();await page.locator('#centerControls').hover();
+ assert(await page.locator('#siteReturnBtn').evaluate(el=>getComputedStyle(el).pointerEvents==='auto'));
+ await page.locator('#collapseBtn').click();
+ assert.equal(await page.locator('#shortcutsEnabled').getAttribute('aria-label'),'멀티뷰 단축키 사용');
+ for(const selector of ['.favorite-list-row','.cf-row']){
+   await page.locator(selector+'[data-uid="aaaaaa"].in-multiview').waitFor({state:'attached'});
+   assert.equal(await page.locator(selector+'[data-uid="bbbbbb"].in-multiview').count(),0);
+ }
+
  await page.locator('.tile-screenshot').click();await page.locator('.screenshot-gallery img').waitFor();await page.locator('.screenshot-gallery img').evaluate(img=>img.decode());
  assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'false');
  await page.locator('.gallery-crop-toggle').click();assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'true');
@@ -57,6 +68,11 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.waitForTimeout(500);await page.locator('.tile-record').click();
  await page.waitForFunction(()=>window.__messages.some(m=>m.type==='SITE_OPEN_RECORDING'));
  const types=await page.evaluate(()=>window.__messages.map(m=>m.type));assert(types.includes('SITE_RECORDING_BEGIN') && types.includes('SITE_RECORDING_CHUNK') && types.includes('SITE_RECORDING_FINISH'));
+ await page.locator('.remove-btn').click();
+ assert.equal(await page.locator('.favorite-list-row.in-multiview,.cf-row.in-multiview').count(),0);
+ await page.locator('#favoriteManager > summary').click();
+ await page.locator('.favorite-list-row[data-uid="aaaaaa"] .favorite-list-add').click();
+ for(const selector of ['.favorite-list-row','.cf-row'])assert.equal(await page.locator(selector+'[data-uid="aaaaaa"].in-multiview').count(),1);
  assert.deepEqual(errors,[]);
  console.log('PASS: CHZZK top-level launcher, same-origin frame readiness, screenshot capture/layout/crop and recording transfer.');
  }finally{await browser.close();}
