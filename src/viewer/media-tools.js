@@ -60,9 +60,9 @@ globalThis.CZMediaTools = {create(context) {
     if(!(data.blob instanceof Blob) || !data.blob.size){context.showNotice('저장할 영상/이미지가 없습니다.');return;}
     const name=await entry.name;
     if(data.kind==='recording') {
-      const id=crypto.randomUUID();await CZRecordings.put({id,name,blob:data.blob,duration:data.duration,warning:data.warning,createdAt:Date.now()});
+      const id=crypto.randomUUID();await (globalThis.CZ_SITE_VIEWER ? CZSiteRecordings : CZRecordings).put({id,name,blob:data.blob,duration:data.duration,warning:data.warning,createdAt:Date.now()});
       const url=chrome.runtime.getURL(`src/viewer/recording.html?id=${encodeURIComponent(id)}`);
-      try {await chrome.windows.create({url,type:'popup',width:900,height:780});}
+      try {if(globalThis.CZ_SITE_VIEWER){const result=await chrome.runtime.sendMessage({type:'SITE_OPEN_RECORDING',id});if(!result?.ok)throw Error(result?.error || '결과 창 열기 실패');}else await chrome.windows.create({url,type:'popup',width:900,height:780});}
       catch(error){context.showNotice('결과 창을 열지 못했습니다. 녹화 결과는 보관되어 있습니다.');throw error;}
       return;
     }

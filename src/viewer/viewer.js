@@ -112,14 +112,18 @@ function saveState() {
     const host = document.createElement("div");
     host.id = ROOT_ID;
     document.body.appendChild(host);
+    if(globalThis.CZ_SITE_VIEWER){
+      host.style.cssText='position:fixed;inset:0;z-index:2147483647';
+      document.querySelectorAll('video').forEach(video=>{video.muted=true;video.pause();});
+    }
     shadowRoot = host.attachShadow({ mode: "open" });
 
     const style = document.createElement("link");
     style.rel = "stylesheet";
-    style.href = new URL("viewer.css", location.href).href;
+    style.href = chrome.runtime.getURL("src/viewer/viewer.css");
     shadowRoot.appendChild(style);
     const groupStyle = document.createElement('link');
-    groupStyle.rel = 'stylesheet'; groupStyle.href = new URL('../shared/group-manager.css', location.href).href;
+    groupStyle.rel = 'stylesheet'; groupStyle.href = chrome.runtime.getURL('src/shared/group-manager.css');
     shadowRoot.appendChild(groupStyle);
 
     ui = document.createElement("div");
@@ -221,6 +225,9 @@ function saveState() {
     `;
 
     shadowRoot.appendChild(ui);
+    if(globalThis.CZ_SITE_VIEWER){
+      const exit=document.createElement('button');exit.textContent='치지직으로 돌아가기';exit.type='button';exit.onclick=()=>location.reload();ui.querySelector('.toolbar-right').appendChild(exit);
+    }
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
@@ -290,7 +297,7 @@ function saveState() {
       const channel=state.channels.find(c=>c.uid===state.selectedUid);
       if(!channel){showNotice('메인 방송을 먼저 선택하세요.');return;}
       try {const url=CZSessionStore.parseInput(channel.url || channel.uid)?.url;if(!url)return;
-        const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});
+        if(globalThis.CZ_SITE_VIEWER){const result=await chrome.runtime.sendMessage({type:'SITE_OPEN_ORIGINAL',url});if(!result?.ok)throw Error(result?.error || '탭 열기 실패');}else{const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});}
         showNotice('원본 방송을 음소거 탭으로 열었습니다. 채팅 수집은 해당 탭에서 확인하세요.');
       }catch(error){showNotice('원본 방송 열기 실패: '+error.message);}
     };
@@ -1138,21 +1145,21 @@ function saveState() {
   });
 
   const boot = async () => {
-    viewerTabId = (await chrome.tabs.getCurrent())?.id;
+    viewerTabId = globalThis.CZ_SITE_VIEWER ? (await chrome.runtime.sendMessage({type:'SITE_VIEWER_TAB'}))?.tabId : (await chrome.tabs.getCurrent())?.id;
     const query = new URL(location.href).searchParams;
     let inputs = [];
-    if (query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
+    if (!globalThis.CZ_SITE_VIEWER && query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
     await chrome.runtime.sendMessage({type: 'COOKIE_BRIDGE_INIT'});
     await openMultiView('', Array.isArray(inputs) ? inputs : []);
     // Explicit launch inputs apply once; refreshing restores the saved session.
-    history.replaceState(null, '', location.pathname);
+    if(!globalThis.CZ_SITE_VIEWER)history.replaceState(null, '', location.pathname);
     initialized = true;
-    document.body.classList.add('ready');
+    if(!globalThis.CZ_SITE_VIEWER)document.body.classList.add('ready');
   };
   boot().catch(error => {
     console.error(error);
     document.getElementById(ROOT_ID)?.remove();
-    document.getElementById('startupStatus').textContent = '멀티뷰를 열지 못했습니다. 확장을 다시 로드한 뒤 페이지를 새로고침해주세요.';
+    if(document.getElementById('startupStatus'))document.getElementById('startupStatus').textContent = '멀티뷰를 열지 못했습니다. 확장을 다시 로드한 뒤 페이지를 새로고침해주세요.';
   });
   window.addEventListener('pagehide', saveState);
 

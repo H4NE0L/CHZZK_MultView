@@ -500,7 +500,7 @@ async function run() {
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
-    assert.equal(await main.locator('.gallery-crop-toggle').isChecked(),false);
+    assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
     assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
     const gallery=main.locator('.screenshot-gallery');await main.locator('.media-body img').evaluate(img=>img.decode());await main.bringToFront();const before=await gallery.boundingBox();
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
@@ -510,7 +510,7 @@ async function run() {
     // Capture again while the non-modal preview is open.
     await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-index').textContent==='2 / 2');
     await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-index').textContent(),'1 / 2');await main.locator('.media-body img').waitFor();
-    await main.locator('.gallery-crop-toggle').check();
+    await main.locator('.gallery-crop-toggle').click();
     const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
     await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();
     await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
@@ -523,8 +523,8 @@ async function run() {
     const imageBytes=fs.readFileSync(await savedImage.path());
     assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
     assert.equal(await main.locator('.screenshot-gallery').count(),1);
-    await main.locator('.gallery-next').click();assert.equal(await main.locator('.gallery-crop-toggle').isChecked(),false);
-    await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-crop-toggle').isChecked(),true);
+    await main.locator('.gallery-next').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
+    await main.locator('.gallery-prev').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',true);
     await main.locator('.gallery-close').click();
     await main.locator('.screenshot-gallery').waitFor({state:'detached'});
     // S in an editable field must not trigger a capture.

@@ -8,7 +8,8 @@
     "tabs",
     "cookies",
     "declarativeNetRequestWithHostAccess",
-    "clipboardWrite"
+    "clipboardWrite",
+    "scripting"
   ],
   "host_permissions": [
     "https://chzzk.naver.com/*",
@@ -35,6 +36,15 @@
       ],
       "all_frames": true,
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chzzk.naver.com/*"
+      ],
+      "js": [
+        "src/content/site-launcher.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "icons": {
@@ -46,5 +56,16 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; frame-src https://chzzk.naver.com; connect-src https://api.chzzk.naver.com; style-src 'self'; media-src 'self' blob:;"
   },
-  "minimum_chrome_version": "119"
+  "minimum_chrome_version": "119",
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/viewer/viewer.css",
+        "src/shared/group-manager.css"
+      ],
+      "matches": [
+        "https://chzzk.naver.com/*"
+      ]
+    }
+  ]
 }

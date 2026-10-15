@@ -2,7 +2,7 @@
 (() => {
   if (window.top === window) return;
 
-  const PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
+  let PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
   let commandedState = null;
   let chatLayoutStarted = false;
   let videoObserver = null;
@@ -17,7 +17,16 @@
 
   // all_frames also includes CHZZK's own nested frames. Only the direct
   // child of our extension viewer may report state or modify a player.
-  if (!frameUid || location.ancestorOrigins?.[0] !== PARENT_ORIGIN) return;
+  if (!frameUid) return;
+  if(location.ancestorOrigins?.[0] !== PARENT_ORIGIN){
+    // Same-origin mode: control only frames belonging to our top-level UI.
+    if(location.ancestorOrigins?.[0] !== 'https://chzzk.naver.com' || window.parent!==window.top)return;
+    try {
+      const root=window.parent.document.getElementById('__chzzk_multiview_v09__')?.shadowRoot;
+      if(!root || !Array.from(root.querySelectorAll('iframe')).some(frame=>frame.contentWindow===window))return;
+    }catch(_){return;}
+    PARENT_ORIGIN='https://chzzk.naver.com';
+  }
 
   function findVideo() {
     return document.querySelector("video");
