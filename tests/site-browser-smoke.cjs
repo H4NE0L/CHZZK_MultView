@@ -19,7 +19,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.route('https://chzzk.naver.com/**',route=>{
    const frame=new URL(route.request().url()).pathname.startsWith('/live/');
    let body='<h1>CHZZK 원본 페이지</h1>';
-   if(frame)body=`<video autoplay muted></video><script>const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,320,180)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
+   if(frame)body=`<video autoplay muted></video><script>const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
    return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body>'+body+'</body></html>'});
  });
  await page.goto('https://chzzk.naver.com/');await page.addScriptTag({content:read('src/content/site-launcher.js')});
@@ -32,6 +32,22 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.locator('.tile-screenshot').click();await page.locator('.screenshot-gallery img').waitFor();await page.locator('.screenshot-gallery img').evaluate(img=>img.decode());
  assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'false');
  await page.locator('.gallery-crop-toggle').click();assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'true');
+ // Full-size captures must fit before/after cropping, including short windows.
+ for(const height of [800,540]){
+   await page.setViewportSize({width:1280,height});
+   await page.waitForTimeout(100);
+   const geometry=await page.locator('.screenshot-gallery').evaluate(el=>{
+     const body=el.querySelector('.media-body'),image=el.querySelector('img'),handle=el.querySelector('.crop-handle.se');
+     const b=body.getBoundingClientRect(),i=image.getBoundingClientRect(),h=handle.getBoundingClientRect();
+     return {scroll:body.scrollHeight>body.clientHeight || body.scrollWidth>body.clientWidth || el.scrollHeight>el.clientHeight || el.scrollWidth>el.clientWidth,gutter:i.left-b.left,inside:h.right<=b.right && h.bottom<=b.bottom,naturalWidth:image.naturalWidth};
+   });
+   assert.equal(geometry.scroll,false);assert(geometry.gutter>=9 && geometry.inside);assert.equal(geometry.naturalWidth,1920);
+   await page.locator('.gallery-crop-toggle').click();
+   const size=await page.locator('.screenshot-gallery img').boundingBox();
+   await page.locator('.gallery-crop-toggle').click();
+   assert.deepEqual(await page.locator('.screenshot-gallery img').boundingBox(),size);
+ }
+ await page.setViewportSize({width:1280,height:800});await page.waitForTimeout(100);
  const alignment=await page.locator('.screenshot-gallery').evaluate(el=>{
    const rect=sel=>el.querySelector(sel).getBoundingClientRect(),panel=el.getBoundingClientRect(),nav=rect('.gallery-navigation'),footer=rect('footer'),tool=rect('.gallery-tools'),close=rect('.gallery-close'),box=rect('.screenshot-crop'),handle=rect('.crop-handle.nw');
    return {center:Math.abs(nav.x+nav.width/2-(footer.x+footer.width/2)),bottom:tool.y>panel.y+panel.height/2,top:close.y<panel.y+60,handle:Math.abs(handle.x+handle.width/2-(box.x+1))+Math.abs(handle.y+handle.height/2-(box.y+1))};

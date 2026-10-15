@@ -2376,3 +2376,8 @@ select:hover {
 .screenshot-crop-host { overflow:visible; isolation:isolate; }
 .screenshot-gallery .media-body { padding:6px; }
 .screenshot-crop-host { clip-path:inset(-5px); }
+
+/* Keep handles inside a permanently reserved gutter, without scrollbars. */
+.screenshot-gallery { overflow:hidden; }
+.screenshot-gallery .media-body { padding:10px; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+.screenshot-gallery .screenshot-crop-host { flex:none; max-width:100%; }

@@ -21,8 +21,19 @@ globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
     crop=CZScreenshotCrop.attach(img,area,update,items[index].cropState);
     url=URL.createObjectURL(items[index].blob);img.src=url;update();
   }
-  function close() {if(closed)return;closed=true;release();items.length=0;panel.remove();window.removeEventListener('resize',clamp);onClose();}
-  function clamp() {const r=panel.getBoundingClientRect();panel.style.right='auto';panel.style.left=`${Math.max(0,Math.min(r.left,innerWidth-r.width))}px`;panel.style.top=`${Math.max(0,Math.min(r.top,innerHeight-Math.min(r.height,innerHeight)))}px`;}
+  function close() {if(closed)return;closed=true;release();items.length=0;panel.remove();window.removeEventListener('resize',clamp);sizeObserver.disconnect();onClose();}
+  function clamp() {
+    // Reserve handle space before sizing the image, including short viewports.
+    const img=body.querySelector('img'),area=body.firstElementChild;
+    if(img?.naturalWidth && area){
+      const style=getComputedStyle(body),paddingX=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight),paddingY=parseFloat(style.paddingTop)+parseFloat(style.paddingBottom);
+      const chromeHeight=$('header').offsetHeight+$('footer').offsetHeight+status.getBoundingClientRect().height;
+      const statusStyle=getComputedStyle(status),statusMargin=parseFloat(statusStyle.marginTop)+parseFloat(statusStyle.marginBottom);
+      const availableHeight=Math.max(1,parseFloat(getComputedStyle(panel).maxHeight)-chromeHeight-statusMargin-paddingY-2);
+      area.style.width=Math.max(1,Math.min(body.clientWidth-paddingX,availableHeight*img.naturalWidth/img.naturalHeight))+'px';
+    }
+    const r=panel.getBoundingClientRect();panel.style.right='auto';panel.style.left=`${Math.max(0,Math.min(r.left,innerWidth-r.width))}px`;panel.style.top=`${Math.max(0,Math.min(r.top,innerHeight-Math.min(r.height,innerHeight)))}px`;}
+  const sizeObserver=new ResizeObserver(clamp);sizeObserver.observe(panel);
   const header=$('header');header.onpointerdown=event=>{
     if(event.button!==0 || event.target.closest('button,input,label'))return;
     event.preventDefault();const r=panel.getBoundingClientRect();drag={x:event.clientX,y:event.clientY,left:r.left,top:r.top};header.setPointerCapture(event.pointerId);
