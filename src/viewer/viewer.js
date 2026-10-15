@@ -112,14 +112,18 @@ function saveState() {
     const host = document.createElement("div");
     host.id = ROOT_ID;
     document.body.appendChild(host);
+    if(globalThis.CZ_SITE_VIEWER){
+      host.style.cssText='position:fixed;inset:0;z-index:2147483647';
+      document.querySelectorAll('video').forEach(video=>{video.muted=true;video.pause();});
+    }
     shadowRoot = host.attachShadow({ mode: "open" });
 
     const style = document.createElement("link");
     style.rel = "stylesheet";
-    style.href = new URL("viewer.css", location.href).href;
+    style.href = chrome.runtime.getURL("src/viewer/viewer.css");
     shadowRoot.appendChild(style);
     const groupStyle = document.createElement('link');
-    groupStyle.rel = 'stylesheet'; groupStyle.href = new URL('../shared/group-manager.css', location.href).href;
+    groupStyle.rel = 'stylesheet'; groupStyle.href = chrome.runtime.getURL('src/shared/group-manager.css');
     shadowRoot.appendChild(groupStyle);
 
     ui = document.createElement("div");
@@ -195,7 +199,7 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>일반 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="일반 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
+          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
         </div>
       </header>
 
@@ -209,7 +213,7 @@ function saveState() {
 
         <aside id="chatPanel" class="chat-panel">
           <div class="chat-head">
-            <strong>채팅</strong>
+            <strong>채팅</strong><button id="chatOriginalBtn" type="button" title="채팅 수집 확장을 사용할 원본 방송을 별도 탭에서 열기">원본 방송 열기</button>
           </div>
           <div class="chat-frame-wrap">
             <div id="chatEmpty" class="chat-empty">
@@ -221,6 +225,9 @@ function saveState() {
     `;
 
     shadowRoot.appendChild(ui);
+    if(globalThis.CZ_SITE_VIEWER){
+      const exit=document.createElement('button');exit.textContent='치지직으로 돌아가기';exit.id='siteReturnBtn';exit.className='center-btn';exit.type='button';exit.onclick=()=>location.reload();ui.querySelector('#centerControls').appendChild(exit);ui.querySelector('#centerControls').classList.add('has-site-return');
+    }
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
@@ -228,7 +235,7 @@ function saveState() {
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
-    groupManager = CZGroupManager.attach({root: ui,
+    groupManager = CZGroupManager.attach({root: ui, getActiveChannels: () => state.channels,
       onSaved: snapshot => { applyFavoriteSnapshot(snapshot); refreshFavoriteList(); refreshChannelManager(); },
       onAdd: channel => addToListFromFavorite(channel),
       onOpen: kind => { for (const id of ['syncManager','volumeManager','channelManager']) ui.querySelector(`#${id}`)?.removeAttribute('open'); if(kind==='following') ui.querySelector('#favoriteManager').removeAttribute('open'); }
@@ -286,6 +293,14 @@ function saveState() {
 
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
+    ui.querySelector('#chatOriginalBtn').onclick=async()=>{
+      const channel=state.channels.find(c=>c.uid===state.selectedUid);
+      if(!channel){showNotice('메인 방송을 먼저 선택하세요.');return;}
+      try {const url=CZSessionStore.parseInput(channel.url || channel.uid)?.url;if(!url)return;
+        if(globalThis.CZ_SITE_VIEWER){const result=await chrome.runtime.sendMessage({type:'SITE_OPEN_ORIGINAL',url});if(!result?.ok)throw Error(result?.error || '탭 열기 실패');}else{const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});}
+        showNotice('원본 방송을 음소거 탭으로 열었습니다. 채팅 수집은 해당 탭에서 확인하세요.');
+      }catch(error){showNotice('원본 방송 열기 실패: '+error.message);}
+    };
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
 
@@ -879,6 +894,7 @@ function saveState() {
 
   function refreshChannelManager() {
     if (!ui) return;
+    groupManager?.refreshActive();
     scheduleSyncRender();
     const list = ui.querySelector("#channelList");
     if (!list) return;
@@ -953,6 +969,7 @@ function saveState() {
     }).join('');
 
     CZGroupManager.decorate(ui);
+    groupManager?.refreshActive();
 
     list.querySelectorAll('.favorite-list-add').forEach(btn=>btn.addEventListener('click',e=>{
       e.stopPropagation(); const uid=btn.closest('.favorite-list-row')?.dataset.uid; if(!uid)return;
@@ -1130,21 +1147,21 @@ function saveState() {
   });
 
   const boot = async () => {
-    viewerTabId = (await chrome.tabs.getCurrent())?.id;
+    viewerTabId = globalThis.CZ_SITE_VIEWER ? (await chrome.runtime.sendMessage({type:'SITE_VIEWER_TAB'}))?.tabId : (await chrome.tabs.getCurrent())?.id;
     const query = new URL(location.href).searchParams;
     let inputs = [];
-    if (query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
+    if (!globalThis.CZ_SITE_VIEWER && query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
     await chrome.runtime.sendMessage({type: 'COOKIE_BRIDGE_INIT'});
     await openMultiView('', Array.isArray(inputs) ? inputs : []);
     // Explicit launch inputs apply once; refreshing restores the saved session.
-    history.replaceState(null, '', location.pathname);
+    if(!globalThis.CZ_SITE_VIEWER)history.replaceState(null, '', location.pathname);
     initialized = true;
-    document.body.classList.add('ready');
+    if(!globalThis.CZ_SITE_VIEWER)document.body.classList.add('ready');
   };
   boot().catch(error => {
     console.error(error);
     document.getElementById(ROOT_ID)?.remove();
-    document.getElementById('startupStatus').textContent = '멀티뷰를 열지 못했습니다. 확장을 다시 로드한 뒤 페이지를 새로고침해주세요.';
+    if(document.getElementById('startupStatus'))document.getElementById('startupStatus').textContent = '멀티뷰를 열지 못했습니다. 확장을 다시 로드한 뒤 페이지를 새로고침해주세요.';
   });
   window.addEventListener('pagehide', saveState);
 

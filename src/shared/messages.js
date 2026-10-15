@@ -27,7 +27,7 @@ globalThis.CZMessages = (() => {
     return event.key==='ArrowLeft' || event.key==='ArrowRight'?event.key:null;
   }
   function isShortcutInput(event,key) {
-    return event.composedPath().some(el=>el?.matches?.(`input:not([type=range]),textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],.cg-dialog,.settings-panel${key?.startsWith('Arrow')?',input[type=range]':''}`));
+    return event.composedPath().some(el=>el?.matches?.(`input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]),textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],.cg-dialog,.settings-panel${key?.startsWith('Arrow')?',input[type=range]':''}`));
   }
   function isParentCommand(event, origin, parent) {
     return event?.origin === origin && event.source === parent && event.data?.source === SOURCE && commandTypes.has(event.data.type);

@@ -36,7 +36,7 @@
         recorder.start(500);status('선택한 영상을 재생하며 처리하는 중…');
         timer=setInterval(()=>{status(`처리 ${Math.min(100,Math.floor((video.currentTime-start)/(end-start)*100))}%`);if(video.currentTime>=end || video.ended){video.pause();if(recorder.state==='recording')recorder.stop();}},50);
         await finished;
-        if(!cancelled)download(new Blob(parts,{type:recorder.mimeType}),`${result.name}${trim?`_${start}-${end}`:''}.${container}`);
+        if(!cancelled)download(new Blob(parts,{type:recorder.mimeType}),`${result.name}${trim?`_${start}-${end}s`:''}.${container}`);
         status(cancelled?'처리를 취소했습니다.':'영상을 저장했습니다.');
       }catch(error){status(error.message);}
       finally{clearInterval(timer);if(recorder?.state==='recording')recorder.stop();video.pause();setWorking(false);cancelWork=()=>{};}

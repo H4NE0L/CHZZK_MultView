@@ -83,6 +83,7 @@ async function run() {
       ],
       chzzkMultiviewFavoriteGroupsV02: ['기본 그룹', '첫 그룹', '둘째 그룹', '빈 그룹']
     };
+    const externalTabs=[];
     let writes = 0;
     let liveStatus = 'OPEN';
     let followingLogin = true;
@@ -90,6 +91,8 @@ async function run() {
     let liveGate = null;
     let notifyLiveGate = null;
     const resultCleanup=[];
+    await context.exposeBinding('__openOriginalTab',(_source,props)=>{externalTabs.push(props);return {id:22};});
+    await context.exposeBinding('__updateOriginalTab',(_source,id,props)=>{externalTabs.push({id,...props});return {id,...props};});
     await context.exposeBinding('__registerResult',async(source,message)=>{source.page.once('close',()=>{const viewer=context.pages().find(p=>p.url().includes('/src/viewer/viewer.html'));if(viewer)resultCleanup.push(viewer.evaluate(id=>CZRecordings.remove(id),message.resultId));});return {ok:true};});
     await context.exposeBinding('__createResultWindow',async(_source,url)=>{const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);return {id:2};});
     await context.exposeBinding('__storageGet', (_source, keys) => {
@@ -119,7 +122,7 @@ async function run() {
       window.__messageListeners = [];
       window.chrome = {
         windows: {create:args=>window.__createResultWindow(args.url)},
-        tabs: {getCurrent: async () => ({id: 1})},
+        tabs: {getCurrent: async () => ({id: 1}),create:props=>window.__openOriginalTab(props),update:(id,props)=>window.__updateOriginalTab(id,props)},
         runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
@@ -497,27 +500,36 @@ async function run() {
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();
-    assert.equal(await main.locator('.media-dialog header button').count(),0);
-    assert.equal(await main.locator('.media-footer button').count(),3);
-    assert.equal(await main.locator('.crop-handle').count(),8);
-    assert.equal(await main.locator('.screenshot-crop').isVisible(),true);
-    assert.equal(await main.locator('.media-save').evaluate(el=>getComputedStyle(el).paddingLeft),'16px');
-    assert.equal(await main.locator('.media-cancel').evaluate(el=>getComputedStyle(el).paddingRight),'16px');
+    assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
+    assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
+    const gallery=main.locator('.screenshot-gallery');await main.locator('.media-body img').evaluate(img=>img.decode());await main.bringToFront();const before=await gallery.boundingBox();
+    await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
+    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
+    const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
+    await main.locator('#chatOriginalBtn').click();assert.equal(externalTabs[0].url,'https://chzzk.naver.com/video/12345678');assert.equal(externalTabs[1].muted,true);
+    // Capture again while the non-modal preview is open.
+    await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-index').textContent==='2 / 2');
+    await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-index').textContent(),'1 / 2');await main.locator('.media-body img').waitFor();
+    await main.locator('.gallery-crop-toggle').click();
     const cropHost=main.locator('.screenshot-crop-host');const rect=await cropHost.boundingBox();
     await main.mouse.move(rect.x+rect.width*.25,rect.y+rect.height*.25);await main.mouse.down();
     await main.mouse.move(rect.x+rect.width*.75,rect.y+rect.height*.75);await main.mouse.up();
     assert.equal(await main.locator('.screenshot-crop').evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
-    await main.locator('.media-copy').click();await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.media-copy').textContent==='복사됨');
+    await main.locator('.media-copy').click();await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-status').textContent==='이미지를 복사했습니다.');
     const copied=await main.evaluate(async()=>{const items=await navigator.clipboard.read();const blob=await items[0].getType('image/png');const bytes=new DataView(await blob.arrayBuffer());return [bytes.getUint32(16),bytes.getUint32(20)];});
     assert.deepEqual(copied,[160,90]);
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
     const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
     const imageBytes=fs.readFileSync(await savedImage.path());
     assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
-    await main.locator('.media-overlay').waitFor({state:'detached'});
+    assert.equal(await main.locator('.screenshot-gallery').count(),1);
+    await main.locator('.gallery-next').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
+    await main.locator('.gallery-prev').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',true);
+    await main.locator('.gallery-close').click();
+    await main.locator('.screenshot-gallery').waitFor({state:'detached'});
     // S in an editable field must not trigger a capture.
     await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
-    assert.equal(await main.locator('.media-overlay').count(),0);
+    assert.equal(await main.locator('.screenshot-gallery').count(),0);
     await main.locator('.video-tile[data-uid="video:12345678"] .tile-record').click();
     assert.equal(await main.locator('.media-start').count(),0);
     await main.waitForTimeout(1500);
@@ -528,10 +540,10 @@ async function run() {
     assert(Math.max(...row.map(r=>r.top))<Math.min(...row.map(r=>r.bottom)),'recording controls share one row');
     await resultPage.locator('#format').selectOption({label:'WebM'});
     const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
-    assert((await recordingDownload).suggestedFilename().endsWith('.webm'));
+    assert(/^\[\d{2}\.\d{2}\.\d{2}\][^_]+_.+\.webm$/.test((await recordingDownload).suggestedFilename()));
     await resultPage.locator('#end').fill('0.5');
     const trimDownload=resultPage.waitForEvent('download');await resultPage.locator('#trim').click();
-    assert((await trimDownload).suggestedFilename().endsWith('_0-0.5.webm'));
+    assert((await trimDownload).suggestedFilename().endsWith('_0-0.5s.webm'));
     await resultPage.waitForFunction(()=>!document.getElementById('trim').disabled);
     if(await resultPage.locator('#format option:not([disabled])').filter({hasText:'MP4'}).count()) {
       await resultPage.locator('#format').selectOption({label:'MP4'});

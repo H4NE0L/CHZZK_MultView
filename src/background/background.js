@@ -129,3 +129,5 @@ chrome.runtime.onStartup.addListener(() => CZViewerTabs.refreshRules().catch(con
 CZViewerTabs.refreshRules().catch(console.error);
 
 importScripts("recording-results.js");
+
+importScripts("site-viewer.js");

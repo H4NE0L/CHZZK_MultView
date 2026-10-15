@@ -64,3 +64,6 @@
 .cg-toolbar .cg-help { margin:0; flex:1; min-width:0; }
 .cg-toolbar .cg-actions { margin:0; flex:none; }
 .cg-add { white-space:nowrap; }
+
+/* Keep live-status dots independent of the current multiview selection. */
+.in-multiview { box-shadow:inset 0 0 0 1px #00dc9b88; }
