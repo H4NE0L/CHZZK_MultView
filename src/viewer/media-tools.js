@@ -1,7 +1,7 @@
 globalThis.CZMediaTools = {create(context) {
   const recordings=new Map(), pending=new Map(), positions=new Map(), results=[];
   let openingResult=false;
-  let sequence=0, dialog=null, cleanup=()=>{};
+  let sequence=0;
   const formats=[['video/webm;codecs=vp9,opus','WebM'],['video/webm;codecs=vp8,opus','WebM'],['video/mp4;codecs=avc1,mp4a.40.2','MP4'],['video/mp4;codecs=avc1.42E01E,mp4a.40.2','MP4']].filter(([mime])=>typeof MediaRecorder!=='undefined' && MediaRecorder.isTypeSupported(mime));
   const uniqueFormats=formats.filter((f,i)=>formats.findIndex(x=>x[1]===f[1])===i);
   function frame(uid){return context.tileMap.get(uid)?.querySelector('iframe');}
@@ -10,22 +10,12 @@ globalThis.CZMediaTools = {create(context) {
     if(!CZMessages.postToPlayer(frame(uid),{source:'chzzk-multiview',type,requestId,...extra}))throw Error('방송이 준비된 뒤 다시 시도하세요.');
     return requestId;
   }
-  function close() {cleanup();cleanup=()=>{};dialog?.remove();dialog=null;queueMicrotask(showNext);}
-  function modal(title) {
-    close();
-    dialog=document.createElement('div');dialog.className='media-overlay';
-    dialog.innerHTML='<section class="media-dialog screenshot-dialog" role="dialog" aria-modal="true"><header><strong></strong></header><div class="media-body"></div><footer class="media-footer"><span class="screenshot-size"></span><button class="media-cancel" type="button">취소</button><button class="media-copy" type="button">선택 영역 복사</button><button class="media-save" type="button">선택 영역 저장</button></footer></section>';
-
-    dialog.querySelector('strong').textContent=title;dialog.querySelector('.media-cancel').onclick=close;
-    dialog.onkeydown=event=>{if(event.key==='Escape')close();};
-    context.ui.appendChild(dialog);dialog.querySelector('.media-cancel').focus();
-    return dialog.querySelector('.media-body');
-  }
+  let gallery=null;
   function download(blob,name) {
     const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download=name;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
-  async function fileName(uid,date=new Date()) {
+  async function fileName(uid,date=new Date(),kind='screenshot') {
     const channel=context.state.channels.find(c=>c.uid===uid);
     let title='방송';
     try {
@@ -36,6 +26,7 @@ globalThis.CZMediaTools = {create(context) {
     }catch(_){}
     const stamp=[date.getFullYear(),date.getMonth()+1,date.getDate(),date.getHours(),date.getMinutes(),date.getSeconds()].map((n,i)=>i?String(n).padStart(2,'0'):String(n)).join('');
     const clean=value=>String(value).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_');
+    if(kind==='recording')return `[${String(date.getFullYear()).slice(-2)}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}]${clean(channel?.name || uid).slice(0,70)}_${clean(title).slice(0,70)}`;
     return `${clean(channel?.name || uid).slice(0,70)}_${clean(title).slice(0,70)}_${stamp}`;
   }
   async function screenshot(uid) {
@@ -46,7 +37,7 @@ globalThis.CZMediaTools = {create(context) {
       if(recordings.has(uid)){request(uid,'MEDIA_STOP');return;}
       const mime=uniqueFormats.find(([,label])=>label==='MP4')?.[0] || uniqueFormats[0]?.[0];
       if(!mime)throw Error('이 환경에서는 녹화를 지원하지 않습니다.');
-      const id=request(uid,'MEDIA_RECORD',{mime});pending.set(id,{uid,name:fileName(uid),kind:'recording'});
+      const id=request(uid,'MEDIA_RECORD',{mime});pending.set(id,{uid,name:fileName(uid,new Date(),'recording'),kind:'recording'});
       recordings.set(uid,{startedAt:Date.now()});updateRecord(uid);
     }catch(e){context.showNotice(e.message);}
   }
@@ -58,12 +49,12 @@ globalThis.CZMediaTools = {create(context) {
     button.title=record?'녹화 중지 (R)':'녹화 시작 (R)';
   }
   async function showNext() {
-    if(dialog || openingResult || !results.length)return;
+    if(openingResult || !results.length)return;
     openingResult=true;
     const next=results.shift();
-    try {next.entry.name=await next.entry.name;if(dialog)results.unshift(next);else await preview(next.data,next.entry);}
+    try {next.entry.name=await next.entry.name;await preview(next.data,next.entry);}
     catch(error){context.showNotice(error.message);}
-    finally{openingResult=false;if(!dialog && results.length)queueMicrotask(showNext);}
+    finally{openingResult=false;if(results.length)queueMicrotask(showNext);}
   }
   async function preview(data, entry) {
     if(!(data.blob instanceof Blob) || !data.blob.size){context.showNotice('저장할 영상/이미지가 없습니다.');return;}
@@ -75,23 +66,8 @@ globalThis.CZMediaTools = {create(context) {
       catch(error){context.showNotice('결과 창을 열지 못했습니다. 녹화 결과는 보관되어 있습니다.');throw error;}
       return;
     }
-    const body=modal('스크린샷 미리보기'),url=URL.createObjectURL(data.blob),media=document.createElement('img');
-    media.src=url;media.alt='스크린샷 미리보기';media.draggable=false;
-    const host=document.createElement('div');host.className='screenshot-crop-host';host.appendChild(media);body.appendChild(host);
-    const crop=CZScreenshotCrop.attach(media,host,()=>{dialog.querySelector('.screenshot-size').textContent=`${media.naturalWidth} × ${media.naturalHeight}px`;});
-    const error=document.createElement('p');error.className='media-error';error.setAttribute('role','status');error.hidden=true;body.appendChild(error);
-    cleanup=()=>{media.removeAttribute('src');URL.revokeObjectURL(url);};
-    dialog.querySelector('.media-copy').onclick=async event=>{
-      const button=event.currentTarget;button.disabled=true;
-      try {const blob=await crop.blob();await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);button.textContent='복사됨';}
-      catch(e){error.hidden=false;error.textContent='이미지 복사 실패: '+e.message;}
-      finally{button.disabled=false;}
-    };
-    dialog.querySelector('.media-save').onclick=async event=>{
-      event.target.disabled=true;
-      try {download(await crop.blob(),`${name}.png`);close();}
-      catch(e){error.hidden=false;error.textContent=e.message;event.target.disabled=false;}
-    };
+    if(!gallery)gallery=CZScreenshotGallery.create({host:context.ui,download,onClose:()=>{gallery=null;}});
+    gallery.add({blob:data.blob,name});
   }
 
   function attachTile(uid,tile) {
@@ -124,7 +100,8 @@ globalThis.CZMediaTools = {create(context) {
   }
   window.addEventListener('keydown',event=>{
     const key=CZMessages.mediaShortcut(event);
-    if(dialog || !key || CZMessages.isShortcutInput(event,key))return;
+    if(!key || CZMessages.isShortcutInput(event,key))return;
+    if(gallery?.containsEvent(event) && key.startsWith('Arrow'))return;
     if(!['s','r'].includes(key) && context.shortcutsEnabled===false)return;
     if(['s','r','ArrowLeft','ArrowRight'].includes(key) && !context.state.selectedUid)return;
     event.preventDefault();
@@ -133,7 +110,7 @@ globalThis.CZMediaTools = {create(context) {
     else if(['ArrowLeft','ArrowRight'].includes(key))context.adjustSync(context.state.selectedUid,key==='ArrowLeft'?-3:3);
     else context.onShortcut?.(key);
   },true);
-  window.addEventListener('beforeunload',event=>{if(recordings.size || results.length || dialog){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(recordings.size || results.length || gallery?.hasUnsaved()){event.preventDefault();event.returnValue='';}});
   setInterval(()=>recordings.forEach((_,uid)=>updateRecord(uid)),1000);
   return {screenshot,toggleRecording,attachTile,receive,hasRecordings:()=>recordings.size>0, isRecording:uid=>recordings.has(uid)};
 }};

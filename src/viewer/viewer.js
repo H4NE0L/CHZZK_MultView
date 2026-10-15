@@ -209,7 +209,7 @@ function saveState() {
 
         <aside id="chatPanel" class="chat-panel">
           <div class="chat-head">
-            <strong>채팅</strong>
+            <strong>채팅</strong><button id="chatOriginalBtn" type="button" title="채팅 수집 확장을 사용할 원본 방송을 별도 탭에서 열기">원본 방송 열기</button>
           </div>
           <div class="chat-frame-wrap">
             <div id="chatEmpty" class="chat-empty">
@@ -286,6 +286,14 @@ function saveState() {
 
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
+    ui.querySelector('#chatOriginalBtn').onclick=async()=>{
+      const channel=state.channels.find(c=>c.uid===state.selectedUid);
+      if(!channel){showNotice('메인 방송을 먼저 선택하세요.');return;}
+      try {const url=CZSessionStore.parseInput(channel.url || channel.uid)?.url;if(!url)return;
+        const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});
+        showNotice('원본 방송을 음소거 탭으로 열었습니다. 채팅 수집은 해당 탭에서 확인하세요.');
+      }catch(error){showNotice('원본 방송 열기 실패: '+error.message);}
+    };
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
 

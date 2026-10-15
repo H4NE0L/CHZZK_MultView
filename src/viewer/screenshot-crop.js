@@ -1,10 +1,11 @@
-globalThis.CZScreenshotCrop = {attach(img, host, onChange=()=>{}) {
+globalThis.CZScreenshotCrop = {attach(img, host, onChange=()=>{},initial={}) {
   const box=document.createElement('div');box.className='screenshot-crop';box.setAttribute('aria-label','저장할 이미지 영역');
   for(const corner of ['nw','n','ne','w','e','sw','s','se']){const handle=document.createElement('span');handle.className='crop-handle '+corner;handle.dataset.corner=corner;box.appendChild(handle);}
   const size=document.createElement('span');size.className='crop-size';box.appendChild(size);
   const grid=document.createElement('div');grid.className='crop-grid';box.appendChild(grid);
   host.appendChild(box);
-  let selection={x:0,y:0,width:1,height:1},drag=null,enabled=true;
+  let selection={x:0,y:0,width:1,height:1,...initial.selection},drag=null,enabled=initial.enabled===true;
+  box.hidden=!enabled;
   function render() {box.style.left=selection.x*100+'%';box.style.top=selection.y*100+'%';box.style.width=selection.width*100+'%';box.style.height=selection.height*100+'%';size.textContent=`${Math.round(selection.width*img.naturalWidth)} × ${Math.round(selection.height*img.naturalHeight)}`;onChange(selection);}
   const point=event=>{const r=host.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(event.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(event.clientY-r.top)/r.height))};};
   host.onpointerdown=event=>{
@@ -29,7 +30,7 @@ globalThis.CZScreenshotCrop = {attach(img, host, onChange=()=>{}) {
   const end=()=>{drag=null;if(selection.width*img.naturalWidth<1 || selection.height*img.naturalHeight<1){selection={x:0,y:0,width:1,height:1};render();}};
   host.onpointerup=end;host.onpointercancel=end;
   img.onload=render;render();
-  return {reset(){selection={x:0,y:0,width:1,height:1};render();},setEnabled(value){enabled=value;box.hidden=!enabled;},async blob() {
+  return {getState(){return {selection:{...selection},enabled};},isEnabled(){return enabled;},reset(){selection={x:0,y:0,width:1,height:1};render();},setEnabled(value){enabled=value;box.hidden=!enabled;onChange(selection);},async blob() {
     await img.decode();
     const area=enabled?selection:{x:0,y:0,width:1,height:1};
     const x=Math.min(img.naturalWidth-1,Math.round(area.x*img.naturalWidth)),y=Math.min(img.naturalHeight-1,Math.round(area.y*img.naturalHeight));

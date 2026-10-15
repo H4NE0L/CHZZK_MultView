@@ -2347,3 +2347,19 @@ select:hover {
 .settings-switch input:checked + .settings-switch-track::after { content:"ON"; left:7px; right:auto; color:#062319; }
 .settings-switch input:focus-visible + .settings-switch-track { outline:2px solid #00dc9b; outline-offset:3px; }
 .settings-panel p { color:#a4abb7; font-size:11px; line-height:1.7; margin-bottom:0; }
+.screenshot-gallery { position:fixed; z-index:10000; top:70px; right:20px; width:min(760px,calc(100vw - 40px)); max-height:calc(100vh - 90px); display:flex; flex-direction:column; box-shadow:0 10px 35px #0009; }
+.screenshot-gallery header { cursor:move; touch-action:none; gap:8px; }
+.screenshot-gallery header strong { flex:1; }
+.screenshot-gallery header button { margin:0; }
+.gallery-crop-option { display:flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; }
+.gallery-crop-option input { accent-color:#00dc9b; }
+.screenshot-gallery .media-body { min-height:0; flex:1 1 auto; overflow:auto; }
+.screenshot-gallery header,.gallery-tools,.screenshot-gallery .media-footer,.gallery-status { flex:none; }
+.gallery-navigation { display:flex; align-items:center; gap:6px; white-space:nowrap; color:#b4bcc8; font-size:12px; }
+.gallery-navigation button { width:28px; padding:0; font-size:20px; }
+.gallery-status { font-size:11px; color:#9ba3b0; margin:0; padding:0 12px 8px; }
+.gallery-status:empty { display:none; }
+#chatOriginalBtn { margin-left:auto; padding:3px 7px; border:1px solid #41454d; border-radius:4px; background:#25272c; color:#cdd2da; font-size:10px; white-space:nowrap; cursor:pointer; }
+
+.gallery-tools { display:flex; align-items:center; gap:10px; padding:6px 12px; background:#202229; }
+.gallery-tools button { margin:0; padding:3px 8px; font-size:11px; height:28px; }
