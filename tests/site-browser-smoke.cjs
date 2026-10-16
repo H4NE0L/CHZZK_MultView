@@ -24,7 +24,17 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  });
  await page.goto('https://chzzk.naver.com/');await page.addScriptTag({content:read('src/content/site-launcher.js')});
  assert.equal(await page.locator('.mv-root').count(),0);
- await page.getByRole('button',{name:'통합관제실 열기',exact:true}).click();
+ const launcher=page.locator('#cz-site-launcher'),launchButton=page.getByRole('button',{name:'멀티뷰 열기',exact:true});
+ await page.mouse.move(0,400);
+ assert.equal(await launchButton.evaluate(el=>getComputedStyle(el).opacity),'0');
+ const launchArea=await launcher.boundingBox();assert.equal(launchArea.y,0);assert(launchArea.height<=12);
+ await launchButton.focus();await page.waitForTimeout(180);
+ assert.equal(await launchButton.evaluate(el=>getComputedStyle(el).opacity),'1');
+ await launchButton.evaluate(el=>el.blur());await page.waitForTimeout(180);
+ assert.equal(await launchButton.evaluate(el=>getComputedStyle(el).opacity),'0');
+ await launcher.hover();await page.waitForTimeout(180);
+ assert.equal(await launchButton.evaluate(el=>getComputedStyle(el).opacity),'1');
+ await launchButton.click();
  await page.locator('.mv-root').waitFor();
  await page.waitForFunction(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe')?.dataset.playerReady==='true');
  assert.equal(page.url(),'https://chzzk.naver.com/');
