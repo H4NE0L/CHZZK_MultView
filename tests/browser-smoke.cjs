@@ -432,13 +432,13 @@ async function run() {
     assert.equal(main.url(), 'https://viewer.invalid/src/viewer/viewer.html');
     assert.equal(await main.locator('#videoGrid .video-tile').count(), 1);
     assert.equal(await main.locator('#masterVolume').inputValue(), '50');
-    assert.equal(await main.locator('.tile-volume-row input').inputValue(), '60');
+    assert.equal(await main.locator('.tile-volume-row input').inputValue(), '10');
     assert(await main.locator('#mainOnlyCheck').isChecked());
     assert(await main.locator('#videoGrid').evaluate(el => el.classList.contains('layout-main-sub')));
-    await main.waitForFunction(() => !document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-mute-btn[data-state="u"]')?.classList.contains('is-muted'));
+    await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-mute-btn[data-state="m"]')?.classList.contains('is-muted'));
     const restored = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
-    await restored.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1' && document.querySelector('video').volume === .3 && !document.querySelector('video').muted);
-    console.log('PASS: native-player unmute survives unrelated tile deletion; reload preserves session, main-only, raid layout and per-tile/master volume.');
+    await restored.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1' && Math.abs(document.querySelector('video').volume - .05)<.001 && document.querySelector('video').muted);
+    console.log('PASS: native-player unmute survives unrelated tile deletion; reload preserves session/layout/master volume and resets tile audio to muted 10%.');
     // Replace the popup list in place, retaining the existing broadcaster iframe.
     await main.evaluate(() => { window.__retainedFrame = document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe'); });
     const routed = await main.evaluate(() => new Promise(resolve => window.__messageListeners[0]({type:'VIEWER_SET_INPUTS',tabId:1,initialInputs:['video/12345678','bbbbbb']}, {id:'mock-extension'}, resolve)));
