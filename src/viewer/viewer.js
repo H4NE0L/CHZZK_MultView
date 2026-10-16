@@ -1108,6 +1108,9 @@ function saveState() {
       }
     }
 
+    // Only a fresh viewer launch resets audio; updating an open viewer keeps it.
+    if (!initialized) state.channels.forEach(channel => {channel.volume = 0.1; channel.muted = true;});
+
     if (!state.channels.some(c => c.uid === state.selectedUid)) state.selectedUid = state.channels[0]?.uid || null;
     if (state.layout === "main-sub") moveSelectedToFront();
     // Drop only removed tiles; retain surviving iframe instances and audio state.
