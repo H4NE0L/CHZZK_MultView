@@ -863,11 +863,7 @@ function saveState() {
     ui.classList.toggle("chat-closed", !state.chatOpen);
     const btn = ui.querySelector("#chatToggleBtn");
     if (btn) btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
-    if (!state.chatOpen) {
-
-    } else if (state.selectedUid) {
-      updateChat();
-    }
+    updateChat();
     requestAnimationFrame(() => resizeFixedAspectGrid());
     saveState();
   }
