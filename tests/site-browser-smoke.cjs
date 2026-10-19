@@ -15,7 +15,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    // Wait for encoded data instead of racing a fixed 500ms stop timer.
    const NativeRecorder=window.MediaRecorder;
    window.MediaRecorder=class extends NativeRecorder{constructor(...args){super(...args);this.addEventListener('dataavailable',event=>{window.__recordedBytes=(window.__recordedBytes || 0)+event.data.size;});}};
-   const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
+   const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{chatOpen:!new URL(location.href).searchParams.has('chatClosed'),channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
    window.__messages=[];
    window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
  });
@@ -55,6 +55,20 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    assert.equal(await page.locator(selector+'[data-uid="bbbbbb"].in-multiview').count(),0);
  }
 
+ // Closing destroys chat; a main change while closed must not reconnect it.
+ await page.evaluate(()=>{const root=document.getElementById('__chzzk_multiview_v09__').shadowRoot;window.__oldChat=root.querySelector('.chat-frame');window.__player=root.querySelector('#videoGrid iframe');});
+ await page.locator('#chatToggleBtn').click();assert.equal(await page.locator('.chat-frame').count(),0);
+ assert(await page.evaluate(()=>!window.__oldChat.isConnected && window.__oldChat.getAttribute('src')==='about:blank'));
+ await page.locator('#uidInput').fill('bbbbbb');await page.locator('#addBtn').click();
+ await page.locator('.video-tile[data-uid="bbbbbb"] .main-btn').click();
+ assert.equal(await page.locator('.chat-frame').count(),0);
+ await page.locator('#chatToggleBtn').click();
+ assert.equal(await page.locator('.chat-frame').getAttribute('data-uid'),'bbbbbb');
+ assert(await page.evaluate(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame')!==window.__oldChat));
+ await page.locator('.video-tile[data-uid="aaaaaa"] .main-btn').click();
+ await page.locator('.video-tile[data-uid="bbbbbb"] .remove-btn').click();
+ assert(await page.evaluate(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe')===window.__player));
+ await page.evaluate(()=>{delete window.__oldChat;delete window.__player;});
  await page.locator('.tile-screenshot').click();await page.locator('.screenshot-gallery img').waitFor();await page.locator('.screenshot-gallery img').evaluate(img=>img.decode());
  assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'false');
  await page.locator('.gallery-crop-toggle').click();assert.equal(await page.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'true');
@@ -89,6 +103,14 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.locator('#favoriteManager > summary').click();
  await page.locator('.favorite-list-row[data-uid="aaaaaa"] .favorite-list-add').click();
  for(const selector of ['.favorite-list-row','.cf-row'])assert.equal(await page.locator(selector+'[data-uid="aaaaaa"].in-multiview').count(),1);
+ // A saved closed state must not load a chat document on startup.
+ await page.goto('https://chzzk.naver.com/?chatClosed=1');
+ await page.addScriptTag({content:read('src/content/site-launcher.js')});
+ await page.locator('#cz-site-launcher').hover();
+ await page.getByRole('button',{name:'멀티뷰 열기',exact:true}).click();
+ await page.locator('#videoGrid iframe').waitFor();
+ assert.equal(await page.locator('#chatToggleBtn').textContent(),'채팅 열기');
+ assert.equal(await page.locator('.chat-frame').count(),0);
  assert.deepEqual(errors,[]);
  console.log('PASS: CHZZK top-level launcher, same-origin frame readiness, screenshot capture/layout/crop and recording transfer.');
  }finally{await browser.close();}

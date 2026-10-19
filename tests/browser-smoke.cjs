@@ -197,7 +197,13 @@ async function run() {
     await main.locator('body').press('b');assert(await main.locator('#__chzzk_multiview_v09__').evaluate(el=>el.shadowRoot.querySelector('.mv-root')?.classList.contains('toolbar-collapsed') || el.shadowRoot.querySelector('.toolbar-collapsed')!==null));await main.locator('body').press('b');
     await main.locator('body').press('v');assert.equal(await main.locator('#volumeManager').getAttribute('open'),'');await main.locator('body').press('v');
     await main.locator('body').press('g');assert(await main.locator('#videoGrid').evaluate(el=>el.classList.contains('layout-main-sub')));await main.locator('body').press('g');
-    await main.locator('body').press('c');assert.equal(await main.locator('#chatToggleBtn').textContent(),'채팅 열기');await main.locator('body').press('c');
+    await main.evaluate(()=>{window.__oldChat=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame');});
+    await main.locator('body').press('c');assert.equal(await main.locator('#chatToggleBtn').textContent(),'채팅 열기');
+    assert.equal(await main.locator('.chat-frame').count(),0);
+    assert(await main.evaluate(()=>!window.__oldChat.isConnected && window.__oldChat.getAttribute('src')==='about:blank'));
+    await main.locator('body').press('c');
+    assert(await main.evaluate(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame')!==window.__oldChat));
+    await main.evaluate(()=>{delete window.__oldChat;});
     await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
     await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
     await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
