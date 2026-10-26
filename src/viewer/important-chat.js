@@ -1,9 +1,26 @@
 globalThis.CZImportantChatPanel = {create({chatPanel,getFrame,getState,notify}) {
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
   const panel=document.createElement('details');panel.className='important-chat-panel';panel.open=true;
-  panel.innerHTML='<summary>주요 채팅 <span class="ic-count">(0)</span></summary><div class="ic-body"><div class="ic-options"><label><input class="ic-enabled" type="checkbox">사용</label><label><input class="ic-streamers" type="checkbox">스트리머</label><label><input class="ic-managers" type="checkbox">관리자</label></div><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><div class="ic-list"></div><div class="ic-bottom"><small class="ic-status"></small><button class="ic-clear" type="button">목록 비우기</button></div></div>';
+  panel.innerHTML='<summary>주요 채팅 <span class="ic-count">(0)</span></summary><div class="ic-body"><div class="ic-tabs" role="tablist" aria-label="주요 채팅 보기"><button class="ic-list-tab" id="icListTab" type="button" role="tab" aria-selected="true" aria-controls="icMessages">채팅 목록</button><button class="ic-settings-tab" id="icSettingsTab" type="button" role="tab" aria-selected="false" aria-controls="icSettings" tabindex="-1">설정</button></div><div id="icMessages" role="tabpanel" aria-labelledby="icListTab"><div class="ic-list"></div></div><div id="icSettings" class="ic-settings" role="tabpanel" aria-labelledby="icSettingsTab" hidden><div class="ic-options"><label><input class="ic-enabled" type="checkbox">사용</label><label><input class="ic-streamers" type="checkbox">스트리머</label><label><input class="ic-managers" type="checkbox">관리자</label></div><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><button class="ic-clear" type="button">수집된 내용 초기화</button></div><div class="ic-bottom"><small class="ic-status"></small></div></div>';
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const $=selector=>panel.querySelector(selector);
+  function selectTab(name,focus=false){
+    for(const current of ['list','settings']){
+      const tab=$('.ic-'+current+'-tab'),selected=current===name;
+      tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;
+      $('#'+tab.getAttribute('aria-controls')).hidden=!selected;
+      if(selected && focus)tab.focus();
+    }
+  }
+  for(const name of ['list','settings']){
+    const tab=$('.ic-'+name+'-tab');tab.onclick=()=>selectTab(name);
+    tab.onkeydown=event=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();event.stopPropagation();
+      selectTab(event.key==='Home'?'list':event.key==='End'?'settings':name==='list'?'settings':'list',true);
+    };
+  }
+  $('summary').addEventListener('click',()=>{if(!panel.open)selectTab('list');});
   function configure(){const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter]);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter}))configured.set(frame,signature);}
   function render(){
     $('.ic-count').textContent=`(${model.items.length})`;

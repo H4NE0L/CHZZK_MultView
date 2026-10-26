@@ -2402,3 +2402,11 @@ select:hover {
 .ic-message span { white-space:pre-wrap; }
 .ic-empty,.ic-status { color:#a2a9b5; font-size:10px; }
 .ic-bottom { display:flex; align-items:center; justify-content:space-between; gap:5px; margin-top:5px; }
+
+.ic-tabs { display:flex; gap:4px; margin-bottom:7px; border-bottom:1px solid #393c42; }
+.ic-tabs [role=tab] { border:0; border-radius:4px 4px 0 0; padding:6px 10px; background:transparent; }
+.ic-tabs [aria-selected=true] { color:#00dc9b; box-shadow:inset 0 -2px #00dc9b; }
+.ic-settings[hidden],[role=tabpanel][hidden] { display:none; }
+.ic-tabs button:focus-visible { outline:2px solid #00dc9b; outline-offset:-2px; }
+
+.ic-settings .ic-clear { display:block; margin-top:8px; }
