@@ -30,8 +30,10 @@
       ],
       "js": [
         "src/shared/messages.js",
+        "src/shared/important-chat.js",
         "src/content/chat-layout.js",
         "src/content/media-frame.js",
+        "src/content/chat-collector.js",
         "src/content/chzzk-frame.js"
       ],
       "all_frames": true,

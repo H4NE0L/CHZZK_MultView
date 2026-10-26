@@ -14,6 +14,7 @@
   let videoGrid = null;
   let chatPanel = null;
   let chatFrame = null;
+  let importantChat = null;
   let tileMap = new Map();
   let dragUid = null;
   let toolbarCollapsed = false;
@@ -231,6 +232,7 @@ function saveState() {
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
+    importantChat = CZImportantChatPanel.create({chatPanel,getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
@@ -618,12 +620,14 @@ function saveState() {
 
   window.addEventListener("message", event => {
     const data = event.data;
-    const fromChat=data?.type==='CHAT_READY' || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
+    if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;
       frame.dataset.playerReady = 'true';
+      importantChat?.sync(true);
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});
     } else if (data.type === 'PLAYER_READY') {
@@ -787,7 +791,7 @@ function saveState() {
     });
   }
 
-  const {updateChat} = CZChat.create({get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
+  const {updateChat} = CZChat.create({onUpdated:()=>importantChat?.sync(),get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
 
   function applyTileLock(tile, locked) {
     if (!tile) return;

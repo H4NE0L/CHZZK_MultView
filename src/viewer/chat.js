@@ -9,6 +9,7 @@ globalThis.CZChat = {create(context) {
       frame.remove();
     }
     context.chatPanel.querySelector('.chat-frame-wrap').replaceChildren();
+    context.onUpdated?.();
   }
   function updateChat() {
     const uid = context.state.selectedUid;
@@ -59,6 +60,7 @@ globalThis.CZChat = {create(context) {
       context.chatFrame.src = target;
 
     }
+    context.onUpdated?.();
   }
 
   return {updateChat};

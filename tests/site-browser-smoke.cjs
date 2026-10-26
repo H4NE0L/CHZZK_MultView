@@ -22,8 +22,8 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
  await page.route('https://chzzk.naver.com/**',route=>{
    const frame=new URL(route.request().url()).pathname.startsWith('/live/');
    let body='<h1>CHZZK 원본 페이지</h1>';
-   if(frame)body=`<video autoplay muted></video><script>const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
-   return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body>'+body+'</body></html>'});
+   if(frame)body=`<video autoplay muted></video><script>const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/shared/important-chat.js','src/content/chat-collector.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
+   return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"></head><body>'+body+'</body></html>'});
  });
  await page.goto('https://chzzk.naver.com/');await page.addScriptTag({content:read('src/content/site-launcher.js')});
  assert.equal(await page.locator('.mv-root').count(),0);
@@ -55,6 +55,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    assert.equal(await page.locator(selector+'[data-uid="bbbbbb"].in-multiview').count(),0);
  }
 
+ await require('./important-chat-browser-helpers.cjs')(page);
  // Closing destroys chat; a main change while closed must not reconnect it.
  await page.evaluate(()=>{const root=document.getElementById('__chzzk_multiview_v09__').shadowRoot;window.__oldChat=root.querySelector('.chat-frame');window.__player=root.querySelector('#videoGrid iframe');});
  await page.locator('#chatToggleBtn').click();assert.equal(await page.locator('.chat-frame').count(),0);
