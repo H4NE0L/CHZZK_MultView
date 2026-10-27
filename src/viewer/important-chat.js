@@ -1,4 +1,4 @@
-globalThis.CZImportantChatPanel = {create({chatPanel,getFrame,getState,notify}) {
+globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');
@@ -6,14 +6,13 @@ globalThis.CZImportantChatPanel = {create({chatPanel,getFrame,getState,notify}) 
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
-  for(const [key,title] of [['enabled','주요 채팅 사용'],['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함']]){
+  for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함']]){
     const label=document.createElement('label');label.className='ic-option';
     const text=document.createElement('span');text.textContent=title;
     const toggle=document.createElement('span');toggle.className='settings-switch';
     const input=document.createElement('input');input.type='checkbox';input.className='ic-'+key;if(key==='enabled')input.id='importantChatEnabled';input.setAttribute('role','switch');input.setAttribute('aria-label',title);
     const track=document.createElement('span');track.className='settings-switch-track';track.setAttribute('aria-hidden','true');toggle.append(input,track);label.append(text,toggle);$('.ic-options').appendChild(label);
   }
-  const enabledControl=$('.ic-enabled');
   function openSettings(){controls();if(!dialog.open)dialog.showModal();}
   $('.ic-settings-close').onclick=()=>dialog.close();
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom)dialog.close();});

@@ -171,8 +171,22 @@ globalThis.CZChatLayout = (() => {
   let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
   const boundRoots=new WeakSet();
   function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0))};prepare();}
+  function findHeader(scope){
+    const named=scope.querySelector('.cz-native-chat-header,[class*="live_chatting_header"],[class*="video_chatting_header"],[data-chat-toolbar]');
+    if(named)return named;
+    // CHZZK variants use different CSS module prefixes. Restrict fallback to
+    // the short toolbar containing the exact title and font-size controls.
+    for(const el of scope.querySelectorAll('h1,h2,h3,strong,span,div')){
+      if(el.children.length || el.textContent.trim()!=='채팅')continue;
+      let parent=el.parentElement;
+      for(let depth=0;parent && depth<3;depth++,parent=parent.parentElement){
+        if(parent.textContent.length<160 && /\d+\s*%/.test(parent.textContent) && parent.querySelectorAll('button').length>=2)return parent;
+      }
+    }
+    return null;
+  }
   function nativeHeader(root){
-    const header=root.querySelector('[class*="live_chatting_header"],[class*="video_chatting_header"],[data-chat-toolbar]');
+    const header=findHeader(root);
     if(!header)return;
     header.classList.add('cz-native-chat-header');
     if(!boundRoots.has(root)){
@@ -183,22 +197,38 @@ globalThis.CZChatLayout = (() => {
     let title=header.querySelector('.cz-channel-name,[class*="header_title"],[class*="header_name"],h1,h2,h3');
     if(!title){title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);}
     title.classList.add('cz-channel-name');if(title.textContent!==presentation.name)title.textContent=presentation.name;
-    header.querySelectorAll('[class*="font_size"],[class*="fontSize"],[class*="font-size"],[class*="header_font"],[class*="zoom"]').forEach(el=>el.style.setProperty('display','none','important'));
-    // Remove only the bare original label in simplified/fallback headers.
+    header.querySelectorAll('[class*="font_size"],[class*="fontSize"],[class*="font-size"],[class*="header_font"],[class*="zoom"],[aria-label*="글씨"],[aria-label*="글자"],[title*="글씨"],[title*="글자"]').forEach(el=>el.style.setProperty('display','none','important'));
+    for(const el of header.querySelectorAll('*')){
+      if(el===title || el.contains(title) || el.closest('#cz-chat-settings'))continue;
+      const text=el.textContent.trim();
+      if(!el.children.length && text==='채팅')el.style.setProperty('display','none','important');
+      if((/^\d+\s*%$/.test(text) || /^[+−–-]$/.test(text)) && !el.querySelector('button')){
+        const control=el.closest('button')||el;control.style.setProperty('display','none','important');
+      }
+    }
     for(const node of [...header.childNodes])if(node.nodeType===3 && /채팅/.test(node.textContent))node.textContent='';
     let button=header.querySelector('#cz-chat-settings');
-    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');button.textContent='⚙';button.onclick=()=>onSettings();header.appendChild(button);}
+    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');button.textContent='⚙';button.onclick=()=>onSettings();const existing=[...header.querySelectorAll('button')].filter(el=>el!==button).at(-1);if(existing)existing.before(button);else header.appendChild(button);}
     let spacer=root.querySelector('#cz-important-chat-space');
     if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';header.after(spacer);}
     spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
     const height=Math.round(header.getBoundingClientRect().height);if(height>=24)onHeader(height,nativeMenuOpen);
   }
-  let preparedRoot = null;
+  let preparedRoot = null,preparedRootStyle='';
   function prepare() {
     const replay = location.pathname.startsWith('/video/');
-    const root = preparedRoot?.isConnected ? preparedRoot : replay ? (findReplayChatRoot(document) || findChatRoot(document)) : findChatRoot(document);
+    let root = preparedRoot?.isConnected ? preparedRoot : replay ? (findReplayChatRoot(document) || findChatRoot(document)) : findChatRoot(document);
     if (!root) return false;
+    const header=findHeader(document);
+    if(header && !root.contains(header)){
+      let common=root.parentElement;
+      while(common && !common.contains(header))common=common.parentElement;
+      // Include a sibling native toolbar without capturing the full video page.
+      if(common && (location.pathname.endsWith('/chat') || common.getBoundingClientRect().width<=root.getBoundingClientRect().width+40))root=common;
+    }
     if (root !== preparedRoot) {
+      if(preparedRoot?.isConnected)preparedRoot.style.cssText=preparedRootStyle;
+      preparedRootStyle=root.style.cssText;
       prepareChatOnlyFrame(document, root);
       preparedRoot = root;
     }

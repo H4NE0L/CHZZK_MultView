@@ -10,12 +10,15 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
- await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.dataset.chatToolbar='';toolbar.className='live_chatting_header__test';toolbar.innerHTML='<h2>채팅</h2><div class="live_chatting_font_size">100%</div><button id="native-chat-menu">⋮</button>';host.prepend(toolbar);});
+ await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<span>채팅</span><button>−</button><span class="native-font-value">100%</span><button>+</button><button id="native-chat-menu">⋮</button>';const shell=document.createElement('section');shell.style.cssText='height:100%;width:100%;display:flex;flex-direction:column';host.before(shell);shell.append(toolbar,host);});
  await frame.locator('#cz-chat-settings').waitFor();
  assert.equal(await page.locator('.ic-settings-open').count(),0);
  assert.equal(await page.locator('#chatSettingsBtn').count(),0);
  assert(await frame.locator('#native-chat-menu').isVisible());
- assert.equal(await frame.locator('.live_chatting_font_size').isVisible(),false);
+ assert.equal(await frame.locator('.native-font-value').isVisible(),false);
+ assert.equal(await frame.locator('.native-toolbar-test').getByText('채팅',{exact:true}).isVisible(),false);
+ assert.equal(await frame.locator('.native-toolbar-test').getByRole('button',{name:'+',exact:true}).count(),0);
+ assert(await frame.locator('#cz-chat-settings').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'custom settings precedes native settings');
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
  await frame.evaluate(()=>{document.querySelector('.cz-channel-name').remove();CZChatLayout.setPresentation({name:'테스트 방송',height:200});CZChatLayout.setPresentation({name:'테스트 방송',height:200});});
  assert.equal(await frame.locator('.cz-channel-name').count(),1,'fallback title is reused across layout updates');
@@ -30,10 +33,10 @@ module.exports=async function checkImportantChat(page){
  const grown=(await panel.boundingBox()).height;await separator.press('ArrowUp');assert((await panel.boundingBox()).height<grown);
  const openSettings=async()=>{if(!await settings.evaluate(el=>el.open)){await frame.locator('#cz-chat-settings').click();await settings.waitFor({state:'visible'});}};
  const closeSettings=async()=>{if(await settings.isVisible())await settings.locator('.ic-settings-close').click();};
- const setEnabled=async value=>{await openSettings();await settings.locator('#importantChatEnabled').setChecked(value);await closeSettings();};
+ const setEnabled=async value=>{await closeSettings();await page.locator('#settingsManager > summary').click();await page.locator('#importantChatEnabled').setChecked(value);await page.locator('#settingsManager > summary').click();};
  const add=async(name,text,role='',id='')=>frame.evaluate(({name,text,role,id})=>{
    let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}
-   if(!host.querySelector('[data-chat-toolbar]')){const toolbar=document.createElement('div');toolbar.dataset.chatToolbar='';toolbar.className='live_chatting_header__test';toolbar.textContent='채팅 - 100% + ⋮';host.prepend(toolbar);}
+   if(!document.querySelector('.native-toolbar-test')){const toolbar=document.createElement('div');toolbar.dataset.chatToolbar='';toolbar.className='live_chatting_header__test';toolbar.textContent='채팅 - 100% + ⋮';host.prepend(toolbar);}
    const row=document.createElement('div');row.className='live_chatting_list_item__test';if(id)row.dataset.messageId=id;
    const nested=document.createElement('div');nested.className='live_chatting_message_container__test';row.appendChild(nested);
    const author=document.createElement('span');author.className='live_chatting_username_container';
@@ -47,9 +50,10 @@ module.exports=async function checkImportantChat(page){
  await add('일반 사용자','수집되면 안 됨','','normal-1');
  await frame.evaluate(()=>{const image=document.createElement('img');image.alt='스트리머';document.querySelector('[data-message-id="normal-1"] [class*=live_chatting_message_text]').appendChild(image);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message').length===2);
- await frame.waitForFunction(()=>getComputedStyle(document.querySelector('[data-chat-toolbar]')).display!=='none');
+ await frame.waitForFunction(()=>getComputedStyle(document.querySelector('.native-toolbar-test')).display!=='none');
  assert.equal(await page.locator('#chatOriginalBtn').count(),0);
- assert.equal(await page.locator('#settingsManager #importantChatEnabled').count(),0);
+ assert.equal(await page.locator('#settingsManager #importantChatEnabled').count(),1);
+ assert.equal(await settings.locator('#importantChatEnabled').count(),0);
  assert.equal(await panel.locator('.ic-message').count(),2,'nested containers must not duplicate messages');
  await openSettings();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
