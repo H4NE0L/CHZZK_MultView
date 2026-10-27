@@ -14,7 +14,7 @@ globalThis.CZChat = {create(context) {
   function updateChat() {
     const uid = context.state.selectedUid;
     const selected = context.state.channels.find(c => c.uid === uid);
-    context.chatPanel.querySelector('.chat-head strong').textContent = selected ? `채팅 · ${selected.name || selected.uid}` : '채팅';
+
 
     if (context.state.chatOpen === false || !selected) {
       releaseChat();

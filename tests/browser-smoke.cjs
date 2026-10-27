@@ -302,7 +302,7 @@ async function run() {
     await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='true');
     await star.click();
     await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='false');
-    assert.equal(await main.locator('.chat-head strong').textContent(),'채팅 · 테스트 방송');
+    assert.equal(await main.locator('.chat-head').count(),0);
     followingLogin=false;
     await popup.locator('.cf-refresh').click();
     await popup.waitForFunction(() => document.querySelector('.cf-status').textContent.includes('로그인'));
@@ -518,7 +518,7 @@ async function run() {
     const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
     assert.equal(await main.locator('#chatOriginalBtn').count(),0);
-    assert.equal(await main.locator('#chatSettingsBtn').count(),1);
+    assert.equal(await main.locator('#chatSettingsBtn').count(),0);
     // Capture again while the non-modal preview is open.
     await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-index').textContent==='2 / 2');
     await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-index').textContent(),'1 / 2');await main.locator('.media-body img').waitFor();

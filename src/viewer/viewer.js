@@ -214,9 +214,6 @@ function saveState() {
         <div id="videoGrid" class="video-grid"></div>
 
         <aside id="chatPanel" class="chat-panel">
-          <div class="chat-head">
-            <strong>채팅</strong><button id="chatSettingsBtn" type="button" title="채팅 설정" aria-label="채팅 설정">⋮</button>
-          </div>
           <div class="chat-frame-wrap">
             <div id="chatEmpty" class="chat-empty">
               메인 방송을 선택하면<br>실제 CHZZK 채팅을 불러옵니다.
@@ -233,7 +230,7 @@ function saveState() {
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
-    importantChat = CZImportantChatPanel.create({chatPanel,onChatSideChange:setChatSide,onChatOpenChange:setChatOpen,getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
+    importantChat = CZImportantChatPanel.create({chatPanel,getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
@@ -296,7 +293,6 @@ function saveState() {
 
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
-    ui.querySelector('#chatSettingsBtn').onclick=()=>importantChat.openSettings();
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
     const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
@@ -618,9 +614,11 @@ function saveState() {
 
   window.addEventListener("message", event => {
     const data = event.data;
-    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
+    if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
+    if(data.type==='CHAT_HEADER'){importantChat?.setHeaderHeight(data.height,data.menuOpen);return;}
     if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;

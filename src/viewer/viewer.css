@@ -2413,14 +2413,12 @@ select:hover {
 
 .important-chat-panel[hidden] { display:none; }
 
-.chat-head { flex-basis:32px; min-height:32px; background:#141416; padding:0 9px; }
-.chat-head strong { font-size:12px; font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#chatSettingsBtn { margin-left:auto; border:0; background:transparent; color:#aeb5c0; font-size:20px; padding:0 5px; cursor:pointer; }
 .ic-header { padding:3px 8px; }
 .ic-resizer { flex-basis:5px; background:#303238; border-top:1px solid #383a3e; }
 .ic-resizer:hover,.ic-resizer:focus-visible { background:#00dc9b88; }
-.ic-chat-options { display:grid; gap:12px; margin-bottom:16px; }
-.ic-chat-options label { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.ic-chat-options select { background:#222428; color:#eee; border:1px solid #444; border-radius:4px; padding:4px; }
-.ic-chat-open { accent-color:#00dc9b; }
 .ic-settings-heading { display:block; font-size:12px; margin-bottom:12px; color:#00dc9b; }
+
+/* Native CHZZK header and composer remain in the frame; collection occupies
+   a reserved slice between the native header and message list. */
+.chat-panel { position:relative; }
+.important-chat-panel { position:absolute; z-index:2; top:var(--chat-native-header,36px); left:0; right:0; background:#121214; }
