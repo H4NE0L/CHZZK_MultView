@@ -210,6 +210,7 @@ async function run() {
     await main.locator('#uidInput').fill('');await main.locator('#uidInput').press('f');assert.equal(await main.locator('#uidInput').inputValue(),'f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);await main.locator('#uidInput').fill('');
     console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
     await main.locator('body').click({position:{x:5,y:5}});
+    await require('./audio-isolation-browser-helpers.cjs')(main);
     await require('./important-chat-browser-helpers.cjs')(main);
 
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
@@ -415,7 +416,8 @@ async function run() {
     await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
     const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
     assert.equal(liveFrames.length, 2);
-    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); document.querySelector('video').muted = false; });
+    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); const button=document.createElement('button');button.className='volume-test-control';button.textContent='테스트 음소거 해제';button.onclick=()=>{document.querySelector('video').muted=false;};document.body.appendChild(button); });
+    for(const frame of liveFrames)await frame.locator('.volume-test-control').click({force:true});
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
     const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
     await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
@@ -466,8 +468,9 @@ async function run() {
     await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box').getBoundingClientRect().height===46);
     await replayChat.waitForFunction(() => document.querySelector('video')?.muted && document.querySelector('video').volume === 0 && document.querySelector('aside')?.getBoundingClientRect().width > 0);
     const replayPlayer = main.frames().find(frame => new URL(frame.url()).pathname === '/video/12345678' && !new URL(frame.url()).search);
-    await replayPlayer.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1');
-    await replayPlayer.evaluate(() => { document.querySelector('video').muted = true; });
+    await replayPlayer.waitForFunction(() => document.readyState==='complete' && document.querySelector('video')?.dataset.chzzkMvBound === '1' && document.querySelector('video').volume>0 && !document.querySelector('video').muted);
+    await replayPlayer.evaluate(() => {document.body.tabIndex=-1;document.body.focus();document.addEventListener('keydown',event=>{if(event.key==='m')document.querySelector('video').muted=true;});});
+    await replayPlayer.locator('body').press('m');
     await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-volume-row[data-uid="video:12345678"] .tile-mute-btn')?.dataset.state === 'm');
     console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
     // Use a real generated video stream to exercise capture and recording in Chromium.

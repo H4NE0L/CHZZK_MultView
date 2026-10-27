@@ -3,7 +3,6 @@
   if (window.top === window) return;
 
   let PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
-  let commandedState = null;
   let chatLayoutStarted = false;
   let videoObserver = null;
   let uiObserver = null;
@@ -49,38 +48,12 @@
     }, PARENT_ORIGIN);
   }
 
-  function setMuted(muted) {
-    const video = findVideo();
-    if (!video) return false;
-    video.muted = !!muted;
-    if (!muted) {
-      try { video.volume = Math.max(Number(video.volume) || 0, 0.01); } catch (_) {}
-    }
-    commandedState = {video, muted: video.muted, volume: video.volume};
-    reportVideoState(video, "command");
-    return true;
-  }
-
-  function setVolume(volume, muted = null) {
-    const video = findVideo();
-    if (!video) return false;
-    const value = Math.max(0, Math.min(1, Number(volume) || 0));
-    try { video.volume = value; } catch (_) {}
-    if (typeof muted === "boolean") video.muted = muted;
-    else if (value <= 0) video.muted = true;
-    else video.muted = false;
-    commandedState = {video, muted: video.muted, volume: video.volume};
-    reportVideoState(video, "command");
-    return true;
-  }
-
+  const audio=CZPlayerAudio.create({findVideo,report:reportVideoState});
+  const setMuted=audio.setMuted,setVolume=audio.setVolume;
   function bindVideo(video) {
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
-    video.addEventListener("volumechange", () => {
-      const echo = commandedState?.video === video && commandedState.muted === video.muted && commandedState.volume === video.volume;
-      reportVideoState(video, echo ? 'command' : 'player');
-    });
+    if(!chatMode)audio.bind(video);
     if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 

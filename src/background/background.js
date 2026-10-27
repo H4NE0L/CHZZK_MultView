@@ -112,8 +112,10 @@ chrome.runtime.onStartup.addListener(() => {
 
 
 
+importScripts('audible-tabs.js');
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return;
+  if(message?.type==='UNMUTE_VIEWER_TAB'){CZAudibleTabs.unmute(sender,message.tabId).then(sendResponse).catch(error=>sendResponse({ok:false,error:String(error)}));return true;}
   if (message?.type === 'OPEN_MULTIVIEW_FROM_POPUP') {
     initCookieBridge().then(() => CZViewerTabs.open(message.initialInputs)).then(sendResponse).catch(error => sendResponse({ok: false, error: String(error)}));
     return true;

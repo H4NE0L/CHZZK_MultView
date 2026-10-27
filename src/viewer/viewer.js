@@ -99,7 +99,8 @@ function saveState() {
     // Favorites are independent of the saved session, so always load them.
     await loadFavorites();
 
-    state = await CZSessionStore.read();
+    // An open viewer owns the latest audio state, including debounced edits.
+    if(!initialized)state = await CZSessionStore.read();
   }
 
   function createUI() {
@@ -487,7 +488,12 @@ function saveState() {
 
   const {isChannelVisibleInLayout, createTile, moveSelectedToFront, swapChannels, selectChannel, updateTileMainUI, syncSelection} = CZPlayers.create({get mediaTools() {return mediaTools;}, get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
 
-  const {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState} = CZAudio.create({get state() { return state; }, tileMap, syncVolumeUI, saveStateSoon, saveState});
+  let unmuteRequest=null;
+  function ensureViewerAudible(){
+    if(unmuteRequest)return;
+    unmuteRequest=chrome.runtime.sendMessage({type:'UNMUTE_VIEWER_TAB',tabId:viewerTabId}).then(result=>{if(!result?.ok)showNotice('브라우저 탭 음소거 해제 실패: '+(result?.error || '탭 상태를 확인해주세요.'));}).catch(error=>showNotice('탭 음소거 상태 확인 실패: '+error.message)).finally(()=>{unmuteRequest=null;});
+  }
+  const {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState} = CZAudio.create({ensureAudible:ensureViewerAudible,get state() { return state; }, tileMap, syncVolumeUI, saveStateSoon, saveState});
 
   // While a slider is being dragged, its DOM node must stay alive and keep its
   // own value; rebuilding it mid-drag is what used to break click-and-drag.
