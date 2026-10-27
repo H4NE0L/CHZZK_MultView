@@ -2422,3 +2422,7 @@ select:hover {
    a reserved slice between the native header and message list. */
 .chat-panel { position:relative; }
 .important-chat-panel { position:absolute; z-index:2; top:var(--chat-native-header,36px); left:0; right:0; background:#121214; }
+
+.settings-feature { margin-top:14px; }
+.settings-panel .settings-feature .settings-option { margin-top:0; }
+.settings-panel .settings-feature p { margin:6px 0 0; }

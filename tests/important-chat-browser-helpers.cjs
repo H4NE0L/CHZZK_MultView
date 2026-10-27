@@ -10,7 +10,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
- await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<span>채팅</span><button>−</button><span class="native-font-value">100%</span><button>+</button><button id="native-chat-menu">⋮</button>';const shell=document.createElement('section');shell.style.cssText='height:100%;width:100%;display:flex;flex-direction:column';host.before(shell);shell.append(toolbar,host);});
+ await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<span>채팅</span><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><button id="native-chat-menu">⋮</button>';const shell=document.createElement('section');shell.style.cssText='height:100%;width:100%;display:flex;flex-direction:column';host.before(shell);shell.append(toolbar,host);});
  await frame.locator('#cz-chat-settings').waitFor();
  assert.equal(await page.locator('.ic-settings-open').count(),0);
  assert.equal(await page.locator('#chatSettingsBtn').count(),0);
@@ -20,6 +20,18 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.native-toolbar-test').getByRole('button',{name:'+',exact:true}).count(),0);
  assert(await frame.locator('#cz-chat-settings').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'custom settings precedes native settings');
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
+ assert.equal(await frame.locator('.native-font-svg-minus').isVisible(),false);
+ assert.equal(await frame.locator('.native-font-svg-plus').isVisible(),false);
+ assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
+ assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).textAlign),'left');
+ assert.equal(await frame.locator('#cz-chat-settings svg').evaluate(el=>el.getBoundingClientRect().width),16);
+ assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),28);
+ assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='cz-chat-settings'));
+ assert.equal(await frame.locator('#cz-chat-channel').getAttribute('href'),'https://chzzk.naver.com/live/aaaaaa');
+ assert.equal(await frame.locator('#cz-chat-channel').getAttribute('target'),'_blank');
+ assert(await page.locator('#shortcutsEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
+ assert(await page.locator('#importantChatEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
+
  await frame.evaluate(()=>{document.querySelector('.cz-channel-name').remove();CZChatLayout.setPresentation({name:'테스트 방송',height:200});CZChatLayout.setPresentation({name:'테스트 방송',height:200});});
  assert.equal(await frame.locator('.cz-channel-name').count(),1,'fallback title is reused across layout updates');
  await frame.locator('#native-chat-menu').click();await panel.waitFor({state:'hidden'});assert.equal(await panel.isVisible(),false,'native settings must not be covered by collection');

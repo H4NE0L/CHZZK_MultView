@@ -191,9 +191,10 @@ globalThis.CZChatLayout = (() => {
     header.classList.add('cz-native-chat-header');
     if(!boundRoots.has(root)){
       boundRoots.add(root);
-      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings')return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)onHeader(Math.round(current.getBoundingClientRect().height),nativeMenuOpen);});
+      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)onHeader(Math.round(current.getBoundingClientRect().height),nativeMenuOpen);});
       root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)onHeader(Math.round(current.getBoundingClientRect().height),false);}});
     }
+    if(nativeMenuOpen){onHeader(Math.round(header.getBoundingClientRect().height),true);return;}
     let title=header.querySelector('.cz-channel-name,[class*="header_title"],[class*="header_name"],h1,h2,h3');
     if(!title){title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);}
     title.classList.add('cz-channel-name');if(title.textContent!==presentation.name)title.textContent=presentation.name;
@@ -207,8 +208,20 @@ globalThis.CZChatLayout = (() => {
       }
     }
     for(const node of [...header.childNodes])if(node.nodeType===3 && /채팅/.test(node.textContent))node.textContent='';
+    const native=header.querySelector('.cz-native-settings')||[...header.querySelectorAll('button')].filter(el=>el.id!=='cz-chat-settings').at(-1);
+    // Font controls may be SVG-only buttons without labels or readable text.
+    // Preserve the original menu button and remove every other native header control.
+    for(const control of header.querySelectorAll('button'))if(control!==native && control.id!=='cz-chat-settings')control.style.setProperty('display','none','important');
+    for(const leaf of [title,native]){
+      let wrapper=leaf?.parentElement;
+      while(wrapper && wrapper!==header){wrapper.style.setProperty('display','contents','important');wrapper=wrapper.parentElement;}
+    }
     let button=header.querySelector('#cz-chat-settings');
-    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');button.textContent='⚙';button.onclick=()=>onSettings();const existing=[...header.querySelectorAll('button')].filter(el=>el!==button).at(-1);if(existing)existing.before(button);else header.appendChild(button);}
+    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3z"/><circle cx="12" cy="12" r="3"/></svg>';button.onclick=()=>onSettings();if(native)native.before(button);else header.appendChild(button);}
+    let channel=header.querySelector('#cz-chat-channel');
+    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');channel.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></svg>';button.before(channel);}
+    channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
+    if(native)native.classList.add('cz-native-settings');
     let spacer=root.querySelector('#cz-important-chat-space');
     if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';header.after(spacer);}
     spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
@@ -235,7 +248,7 @@ globalThis.CZChatLayout = (() => {
     root.classList.add('cz-chat-only');
     if(!document.getElementById('cz-chat-chrome')){
       const style=document.createElement('style');style.id='cz-chat-chrome';
-      style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{font-size:13px!important;font-weight:500!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:auto}#cz-chat-settings{flex:0 0 28px;width:28px;height:28px;padding:0;border:0;background:transparent;color:#c6ccd5;font-size:18px;cursor:pointer}';
+      style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
       (document.head||document.documentElement).appendChild(style);
     }
     nativeHeader(root);

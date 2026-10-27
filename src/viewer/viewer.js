@@ -201,7 +201,19 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
+          <details id="settingsManager" class="viewer-settings">
+            <summary title="설정">⚙ 설정</summary>
+            <div class="settings-panel"><strong>설정</strong>
+              <div class="settings-feature">
+                <label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
+              </div>
+              <div class="settings-feature">
+                <label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
+              </div>
+            </div>
+          </details>
         </div>
       </header>
 
