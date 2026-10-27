@@ -11,10 +11,6 @@
         case 'OPEN_MULTIVIEW_ON_SITE':
           await chrome.scripting.executeScript({target:{tabId,frameIds:[0]},files});return {ok:true};
         case 'SITE_VIEWER_TAB':return {ok:true,tabId};
-        case 'SITE_OPEN_ORIGINAL':{
-          const url=CZSessionStore.parseInput(message.url)?.url;if(!url)throw Error('유효하지 않은 방송 주소');
-          const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});return {ok:true};
-        }
         case 'SITE_RECORDING_BEGIN':{
           const record=message.metadata;
           if(!/^[a-f0-9-]{36}$/.test(record?.id) || typeof record.name!=='string' || !/^video\/(webm|mp4)/.test(message.mime))throw Error('유효하지 않은 녹화');

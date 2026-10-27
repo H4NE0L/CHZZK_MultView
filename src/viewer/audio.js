@@ -124,7 +124,7 @@ globalThis.CZAudio = {create(context) {
     if (!channel || message.reason !== 'player') return;
     if(isForcedMuted(channel)){sendTileVolume(channel.uid);return;}
     const master = clamp01(context.state.masterVolume ?? 1);
-    if (master > 0 && typeof message.volume === 'number' && Number.isFinite(message.volume)) channel.volume = clamp01(message.volume / master);
+    if (master > 0 && typeof message.volume === 'number' && Number.isFinite(message.volume) && (message.operation!=='mute' || (!message.muted && channel.volume<=0))) channel.volume = clamp01(message.volume / master);
     if (typeof message.muted === 'boolean') channel.muted = message.muted || channel.volume <= 0;
     if(Math.abs(message.volume-effectiveVolume(channel))>0.00001 || message.muted!==effectiveMuted(channel))sendTileVolume(channel.uid);
     if(!effectiveMuted(channel))context.ensureAudible?.();

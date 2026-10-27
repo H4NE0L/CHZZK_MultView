@@ -26,3 +26,14 @@ test('native volume above master is clamped back without changing another tile',
  const f=fixture();f.audio.receiveVideoState({uid:'A',reason:'player',volume:.9,muted:false});
  assert.equal(f.state.channels[0].volume,1);assert.equal(f.state.channels[1].volume,.2);assert.equal(f.state.masterVolume,.5);assert.equal(f.sent.at(-1).volume,.5);
 });
+
+test('native mute represented as zero volume retains the tile volume for unmuting',()=>{
+ const f=fixture();f.audio.receiveVideoState({uid:'A',reason:'player',operation:'mute',volume:0,muted:true});
+ assert.equal(f.state.channels[0].volume,.6);assert.equal(f.state.channels[0].muted,true);assert.equal(f.sent.at(-1).volume,.3);assert.equal(f.sent.at(-1).muted,true);
+});
+
+test('native unmute restoring a site default volume keeps the existing tile level',()=>{
+ const f=fixture();f.state.channels[0].muted=true;
+ f.audio.receiveVideoState({uid:'A',reason:'player',operation:'mute',volume:1,muted:false});
+ assert.equal(f.state.channels[0].volume,.6);assert.equal(f.state.channels[0].muted,false);assert.equal(f.sent.at(-1).volume,.3);
+});

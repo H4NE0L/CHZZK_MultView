@@ -177,6 +177,12 @@ globalThis.CZChatLayout = (() => {
       prepareChatOnlyFrame(document, root);
       preparedRoot = root;
     }
+    root.classList.add('cz-chat-only');
+    if(!document.getElementById('cz-chat-chrome')){
+      const style=document.createElement('style');style.id='cz-chat-chrome';
+      style.textContent='.cz-chat-only [class*="live_chatting_header"],.cz-chat-only [class*="video_chatting_header"],.cz-chat-only [data-chat-toolbar]{display:none!important}.cz-chat-only{border:0!important;border-radius:0!important}';
+      (document.head||document.documentElement).appendChild(style);
+    }
     stabilizeInput(document,root);
     return true;
   }

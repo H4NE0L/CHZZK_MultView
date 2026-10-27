@@ -416,8 +416,8 @@ async function run() {
     await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
     const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
     assert.equal(liveFrames.length, 2);
-    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); const button=document.createElement('button');button.className='volume-test-control';button.textContent='테스트 음소거 해제';button.onclick=()=>{document.querySelector('video').muted=false;};document.body.appendChild(button); });
-    for(const frame of liveFrames)await frame.locator('.volume-test-control').click({force:true});
+    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); const button=document.createElement('button');button.className='native-player-control-test';button.textContent='테스트 음소거 해제';button.onclick=()=>{document.querySelector('video').muted=false;};document.body.appendChild(button); });
+    for(const frame of liveFrames)await frame.locator('.native-player-control-test').click({force:true});
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
     const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
     await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
@@ -517,7 +517,8 @@ async function run() {
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
     const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
-    await main.locator('#chatOriginalBtn').click();assert.equal(externalTabs[0].url,'https://chzzk.naver.com/video/12345678');assert.equal(externalTabs[1].muted,true);
+    assert.equal(await main.locator('#chatOriginalBtn').count(),0);
+    assert.equal(await main.locator('#chatSettingsBtn').count(),1);
     // Capture again while the non-modal preview is open.
     await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-index').textContent==='2 / 2');
     await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-index').textContent(),'1 / 2');await main.locator('.media-body img').waitFor();

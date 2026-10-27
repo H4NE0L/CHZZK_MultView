@@ -1,25 +1,27 @@
 const assert=require('node:assert/strict');
 module.exports=async function checkImportantChat(page){
+ const settings=page.locator('.ic-dialog');
  const panel=page.locator('.important-chat-panel');await panel.waitFor();
  await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-name').disabled);
  assert.equal(await panel.evaluate(el=>el.tagName),'SECTION');
  assert(await panel.locator('.ic-list').isVisible());
- assert.equal(await panel.locator('.ic-dialog').isVisible(),false);
- assert.equal(await panel.locator('.ic-clear').isVisible(),false);
- assert.equal(await panel.locator('.ic-clear').textContent(),'수집된 내용 초기화');
+ assert.equal(await settings.isVisible(),false);
+ assert.equal(await settings.locator('.ic-clear').isVisible(),false);
+ assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
  const start=await panel.boundingBox(),normal=await page.locator('.chat-frame-wrap').boundingBox();
  const separator=panel.locator('.ic-resizer'),grip=await separator.boundingBox();
  await separator.hover();await page.mouse.down();await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2+40,{steps:8});await page.mouse.up();
  assert((await panel.boundingBox()).height>=start.height+30);
  assert((await page.locator('.chat-frame-wrap').boundingBox()).height<normal.height);
  const grown=(await panel.boundingBox()).height;await separator.press('ArrowUp');assert((await panel.boundingBox()).height<grown);
- const openSettings=async()=>{if(!await panel.locator('.ic-dialog').isVisible())await panel.locator('.ic-settings-open').click();};
- const closeSettings=async()=>{if(await panel.locator('.ic-dialog').isVisible())await panel.locator('.ic-settings-close').click();};
- const setEnabled=async value=>{await closeSettings();await page.locator('#settingsManager > summary').click();await page.locator('#importantChatEnabled').setChecked(value);await page.locator('#settingsManager > summary').click();};
+ const openSettings=async()=>{if(!await settings.isVisible())await page.locator('#chatSettingsBtn').click();};
+ const closeSettings=async()=>{if(await settings.isVisible())await settings.locator('.ic-settings-close').click();};
+ const setEnabled=async value=>{await openSettings();await settings.locator('#importantChatEnabled').setChecked(value);await closeSettings();};
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
  const add=async(name,text,role='',id='')=>frame.evaluate(({name,text,role,id})=>{
-   let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';document.body.appendChild(host);}
+   let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}
+   if(!host.querySelector('[data-chat-toolbar]')){const toolbar=document.createElement('div');toolbar.dataset.chatToolbar='';toolbar.className='live_chatting_header__test';toolbar.textContent='채팅 - 100% + ⋮';host.prepend(toolbar);}
    const row=document.createElement('div');row.className='live_chatting_list_item__test';if(id)row.dataset.messageId=id;
    const nested=document.createElement('div');nested.className='live_chatting_message_container__test';row.appendChild(nested);
    const author=document.createElement('span');author.className='live_chatting_username_container';
@@ -33,8 +35,12 @@ module.exports=async function checkImportantChat(page){
  await add('일반 사용자','수집되면 안 됨','','normal-1');
  await frame.evaluate(()=>{const image=document.createElement('img');image.alt='스트리머';document.querySelector('[data-message-id="normal-1"] [class*=live_chatting_message_text]').appendChild(image);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message').length===2);
+ await frame.waitForFunction(()=>getComputedStyle(document.querySelector('[data-chat-toolbar]')).display==='none');
+ assert.equal(await page.locator('#chatOriginalBtn').count(),0);
+ assert.equal(await page.locator('#settingsManager #importantChatEnabled').count(),0);
  assert.equal(await panel.locator('.ic-message').count(),2,'nested containers must not duplicate messages');
  await openSettings();
+ const previousSide=await settings.locator('.ic-chat-side').inputValue();await settings.locator('.ic-chat-side').selectOption(previousSide==='left'?'right':'left');await settings.locator('.ic-chat-side').selectOption(previousSide);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('onerror'));
@@ -44,7 +50,7 @@ module.exports=async function checkImportantChat(page){
  assert(await panel.locator('.ic-message').first().isVisible());
  await add('지정 사용자','목록은 항상 표시','','visible-1');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('항상 표시'));
- await openSettings();await page.keyboard.press('Escape');assert.equal(await panel.locator('.ic-dialog').isVisible(),false);
+ await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
  await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
  assert.equal(await panel.locator('.ic-message').count(),0);
@@ -60,9 +66,9 @@ module.exports=async function checkImportantChat(page){
  });
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message').length===100);
  assert((await panel.locator('.ic-message').last().textContent()).includes('제한 검사 124'));
- await panel.locator('.ic-clear').click();
+ await settings.locator('.ic-clear').click();
  assert.equal(await panel.locator('.ic-message').count(),0);
- assert.equal(await panel.locator('.ic-names button').count(),1);
+ assert.equal(await settings.locator('.ic-names button').count(),1);
  assert(await page.locator('#importantChatEnabled').isChecked());
  // Disable automatic roles, then reset choices for the rest of the smoke suite.
  await page.locator('.ic-streamers').uncheck();await page.locator('.ic-managers').uncheck();await page.waitForTimeout(350);await page.locator('.ic-clear').click();
@@ -70,8 +76,8 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await panel.locator('.ic-message').count(),0);
  await page.locator('.ic-streamers').check();await page.locator('.ic-managers').check();
  await page.locator('.ic-names button').click();await page.locator('.ic-clear').click();
- await closeSettings();
- await page.locator('#chatToggleBtn').click();assert.equal(await page.locator('.chat-frame').count(),0);assert.equal(await panel.locator('.ic-message').count(),0);
+ await openSettings();await settings.locator('.ic-chat-open').uncheck();assert.equal(await settings.isVisible(),false);
+ assert.equal(await page.locator('.chat-frame').count(),0);assert.equal(await panel.locator('.ic-message').count(),0);
  await page.locator('#chatToggleBtn').click();
  console.log('PASS: important chat roles, exact nicknames, safe text, vertical resize, settings dialog, global toggle, 100-message cap and chat teardown.');
 };

@@ -38,13 +38,13 @@
     return video.muted === true || Number(video.volume) <= 0;
   }
 
-  function reportVideoState(video, reason = "player") {
+  function reportVideoState(video, reason = "player", operation = "volume") {
     // The chat iframe silences its own <video>; it must never report that
     // state as if it were the broadcast player.
     if (!frameUid || !video || chatMode) return;
     window.parent.postMessage({
       source: "chzzk-multiview", type: "VIDEO_STATE", uid: frameUid,
-      muted: isVideoMuted(video), volume: Number(video.volume), reason
+      muted: isVideoMuted(video), volume: Number(video.volume), reason, operation
     }, PARENT_ORIGIN);
   }
 

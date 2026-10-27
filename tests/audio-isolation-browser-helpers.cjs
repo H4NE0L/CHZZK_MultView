@@ -36,6 +36,13 @@ module.exports=async function checkAudioIsolation(page){
  await page.locator('#masterMuteBtn').click();await playing();
  assert.equal(await frame.evaluate(()=>window.__preferenceWrites),0,'extension commands must not reach site preference listeners');
  if(typeof earlyPreferenceCount==='number')assert.equal(await frame.evaluate(()=>window.__earlyPreferenceCount),earlyPreferenceCount,'pre-existing native listeners must also be isolated');
+ await frame.evaluate(()=>{const button=document.createElement('button');button.id='audioMuteTest';button.textContent='직접 음소거 검사';button.style.cssText='position:fixed;top:60px;left:12px;z-index:2147483647';button.onclick=()=>{const video=document.querySelector('video');const muted=video.muted || video.volume===0;video.volume=muted?1:0;video.muted=!muted;};document.body.appendChild(button);});
+ await frame.locator('#audioMuteTest').click({force:true});
+ await page.waitForFunction(channel=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector(`.tile-volume-row[data-uid="${channel}"] .tile-mute-btn`).dataset.state==='m',uid);
+ assert.equal(await row.locator('input').inputValue(),'60','native mute must retain the tile volume');
+ await frame.locator('#audioMuteTest').click({force:true});await playing();
+ assert.equal(await row.locator('input').inputValue(),'60','native unmute must not replace the remembered volume');
+ await row.locator('.tile-mute-btn').click();await row.locator('.tile-mute-btn').click();await playing();await frame.evaluate(()=>document.querySelector('#audioMuteTest').remove());
  await slider(page.locator('#masterVolume'),initialMaster);await slider(row.locator('input'),initialVolume);
  if(initialMuted==='m')await row.locator('.tile-mute-btn').click();
  await page.locator('#volumeManager > summary').click();

@@ -201,7 +201,7 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p><label class="settings-option"><span>주요 채팅 사용</span><span class="settings-switch"><input id="importantChatEnabled" class="ic-enabled" type="checkbox" role="switch" aria-label="주요 채팅 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="importantChatDescription">스트리머·관리자·지정 사용자 채팅을 별도로 모아봅니다. 끄면 수집을 중지하고 영역을 숨깁니다.</p></div></details>
+          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
         </div>
       </header>
 
@@ -215,7 +215,7 @@ function saveState() {
 
         <aside id="chatPanel" class="chat-panel">
           <div class="chat-head">
-            <strong>채팅</strong><button id="chatOriginalBtn" type="button" title="채팅 수집 확장을 사용할 원본 방송을 별도 탭에서 열기">원본 방송 열기</button>
+            <strong>채팅</strong><button id="chatSettingsBtn" type="button" title="채팅 설정" aria-label="채팅 설정">⋮</button>
           </div>
           <div class="chat-frame-wrap">
             <div id="chatEmpty" class="chat-empty">
@@ -233,7 +233,7 @@ function saveState() {
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
-    importantChat = CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
+    importantChat = CZImportantChatPanel.create({chatPanel,onChatSideChange:setChatSide,onChatOpenChange:setChatOpen,getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
@@ -296,17 +296,9 @@ function saveState() {
 
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
-    ui.querySelector('#chatOriginalBtn').onclick=async()=>{
-      const channel=state.channels.find(c=>c.uid===state.selectedUid);
-      if(!channel){showNotice('메인 방송을 먼저 선택하세요.');return;}
-      try {const url=CZSessionStore.parseInput(channel.url || channel.uid)?.url;if(!url)return;
-        if(globalThis.CZ_SITE_VIEWER){const result=await chrome.runtime.sendMessage({type:'SITE_OPEN_ORIGINAL',url});if(!result?.ok)throw Error(result?.error || '탭 열기 실패');}else{const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});}
-        showNotice('원본 방송을 음소거 탭으로 열었습니다. 채팅 수집은 해당 탭에서 확인하세요.');
-      }catch(error){showNotice('원본 방송 열기 실패: '+error.message);}
-    };
+    ui.querySelector('#chatSettingsBtn').onclick=()=>importantChat.openSettings();
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-
     const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
     shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
     ui.querySelector('#settingsManager').addEventListener('toggle',event=>{if(event.target.open)for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id)?.removeAttribute('open');});

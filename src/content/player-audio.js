@@ -1,6 +1,6 @@
 // The viewer owns desired audio. Site initialization/storage echoes are not user edits.
 globalThis.CZPlayerAudio = {create({findVideo,report}) {
-  let desired=null,intentUntil=0,pointer=null,timer=null;
+  let desired=null,intentUntil=0,pointer=null,timer=null,intentKind='volume';
   const recoveries=[];
   const matches=video=>desired && Math.abs(video.volume-desired.volume)<0.00001 && video.muted===desired.muted;
   function apply(video){
@@ -18,9 +18,11 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   }
   function setVolume(volume,muted){
     if(!Number.isFinite(volume))return false;
-    desired={volume:Math.max(0,Math.min(1,volume)),muted:typeof muted==='boolean'?muted:volume<=0};
-    intentUntil=0;pointer=null;clearTimeout(timer);timer=null;
-    const video=findVideo();if(!video)return false;apply(video);report(video,'command');return true;
+    const next={volume:Math.max(0,Math.min(1,volume)),muted:typeof muted==='boolean'?muted:volume<=0};
+    const changed=!desired || next.volume!==desired.volume || next.muted!==desired.muted;
+    desired=next;
+    if(changed){intentUntil=0;pointer=null;}clearTimeout(timer);timer=null;
+    const video=findVideo();if(!video)return false;if(changed || Date.now()>=intentUntil)apply(video);report(video,'command');return true;
   }
   function setMuted(muted){
     const video=findVideo(),volume=desired?.volume ?? video?.volume ?? 1;
@@ -31,7 +33,8 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
     const video=event.target;
     if(video!==findVideo() || !bound.has(video) || !desired)return;
     if(!matches(video) && Date.now()<intentUntil){
-      desired={volume:video.volume,muted:video.muted};report(video,'player');
+      const operation=intentKind==='mute' && (video.muted!==desired.muted || video.volume===0 || desired.muted)?'mute':'volume';
+      desired={volume:video.volume,muted:video.muted};report(video,'player',operation);
       return;
     }
     // Do not let extension commands/automatic echoes become shared site preferences.
@@ -43,12 +46,15 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   const controls='[class*="volume" i],[class*="sound" i],[class*="mute" i],[aria-label*="음소거"],[aria-label*="볼륨"],[aria-label*="소리"],[aria-label*="mute" i],[aria-label*="volume" i],[title*="음소거"],[title*="볼륨"],[title*="소리"]';
   function gesture(event){
     if(!event.isTrusted)return;
-    const target=event.target;
+    const target=event.target,path=event.composedPath?.() || [target];
+    const audioControl=path.some(el=>el.closest?.(controls)) || (target.tagName==='VIDEO' && target.controls);
+    const genericControl=path.some(el=>el.matches?.('button,[role="button"],input[type="range"]'));
     if(event.type==='keydown' || event.type==='keyup'){
       if(event.altKey || event.ctrlKey || event.metaKey || target.closest?.('textarea,[contenteditable="true"],input:not([type="range"])'))return;
-      if(!['m','M','ArrowUp','ArrowDown'].includes(event.key) && !target.closest?.(controls))return;
-    }else if(!target.closest?.(controls) && !(target.tagName==='VIDEO' && target.controls))return;
-    intentUntil=Date.now()+800;
+      if(!['m','M','ArrowUp','ArrowDown'].includes(event.key) && !audioControl && !(genericControl && ['Enter',' '].includes(event.key)))return;
+    }else if(!audioControl && !genericControl)return;
+    intentKind=['m','M'].includes(event.key) || path.some(el=>el.matches?.('button,[role="button"]'))?'mute':'volume';
+    intentUntil=Date.now()+(audioControl?800:400);
     if(event.type==='pointerdown')pointer=event.pointerId;
   }
   for(const type of ['pointerdown','click','input','change','keydown','keyup'])document.addEventListener(type,gesture,true);
