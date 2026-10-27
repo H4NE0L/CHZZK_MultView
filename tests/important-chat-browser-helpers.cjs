@@ -24,7 +24,17 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.native-font-svg-plus').isVisible(),false);
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).textAlign),'left');
- assert.equal(await frame.locator('#cz-chat-settings svg').evaluate(el=>el.getBoundingClientRect().width),16);
+ // Simulate site rules that would turn ordinary inline SVGs into filled/clipped shapes.
+ await frame.addStyleTag({content:'svg{width:80px!important;height:2px!important;fill:red!important;stroke:none!important;transform:scale(.1)!important}svg path,svg circle{fill:red!important;stroke:none!important}'});
+ for(const id of ['cz-chat-settings','cz-chat-channel']){
+   assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
+   const icon=frame.locator('#'+id+' svg');
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),16);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),16);
+   assert.equal(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
+   assert.notEqual(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
+ }
+
  assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),28);
  assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='cz-chat-settings'));
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('href'),'https://chzzk.naver.com/live/aaaaaa');

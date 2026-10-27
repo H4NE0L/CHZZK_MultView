@@ -185,6 +185,12 @@ globalThis.CZChatLayout = (() => {
     }
     return null;
   }
+  function mountHeaderIcon(host,content){
+    // Keep CHZZK's SVG/path rules outside extension-owned icons.
+    const icon=document.createElement('span');icon.setAttribute('aria-hidden','true');host.appendChild(icon);
+    const shadow=icon.attachShadow({mode:'open'});
+    shadow.innerHTML='<style>:host{display:block!important;width:16px!important;height:16px!important;flex:none!important;line-height:0!important}svg{display:block;width:16px;height:16px;min-width:16px;max-width:16px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'+content+'</svg>';
+  }
   function nativeHeader(root){
     const header=findHeader(root);
     if(!header)return;
@@ -217,9 +223,9 @@ globalThis.CZChatLayout = (() => {
       while(wrapper && wrapper!==header){wrapper.style.setProperty('display','contents','important');wrapper=wrapper.parentElement;}
     }
     let button=header.querySelector('#cz-chat-settings');
-    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3z"/><circle cx="12" cy="12" r="3"/></svg>';button.onclick=()=>onSettings();if(native)native.before(button);else header.appendChild(button);}
+    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');mountHeaderIcon(button,'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m9.5 3-.5 3-2 1-3-.5-2 3.5 2.5 2v2L2 16l2 3.5 3-.5 2 1 .5 3h5l.5-3 2-1 3 .5 2-3.5-2.5-2v-2l2.5-2L20 6.5l-3 .5-2-1-.5-3Z"/>');button.onclick=()=>onSettings();if(native)native.before(button);else header.appendChild(button);}
     let channel=header.querySelector('#cz-chat-channel');
-    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');channel.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></svg>';button.before(channel);}
+    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>');button.before(channel);}
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
     if(native)native.classList.add('cz-native-settings');
     let spacer=root.querySelector('#cz-important-chat-space');
