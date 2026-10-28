@@ -283,7 +283,7 @@
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
-      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start({onSettings:()=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_SETTINGS_OPEN',uid:frameUid},PARENT_ORIGIN),onHeader:(height,menuOpen)=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_HEADER',uid:frameUid,height,menuOpen},PARENT_ORIGIN)}); }
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start({onSettings:()=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_SETTINGS_OPEN',uid:frameUid},PARENT_ORIGIN),onHeader:(height,menuOpen,overlays)=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_HEADER',uid:frameUid,height,menuOpen,overlays},PARENT_ORIGIN)}); }
     }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);

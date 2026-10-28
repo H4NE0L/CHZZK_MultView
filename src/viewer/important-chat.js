@@ -95,5 +95,31 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
   chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.clear();controls();configure();render();});
   controls();render();
-  return {openSettings,setHeaderHeight(height,menuOpen){panel.style.visibility=menuOpen===true?'hidden':'';if(Number.isFinite(height)&&height>=24&&height<=chatPanel.clientHeight && parseFloat(chatPanel.style.getPropertyValue('--chat-native-header'))!==height){chatPanel.style.setProperty('--chat-native-header',height+'px');resize();}},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
+  return {openSettings,setHeaderHeight(height,menuOpen,overlays){
+    // Cut holes only where native iframe popups overlap the collection. CSS
+    // clipping also removes hit testing there, preserving popup interaction.
+    panel.style.visibility='';
+    const frame=getFrame(),box=panel.getBoundingClientRect(),origin=frame?.getBoundingClientRect();
+    const regions=[];
+    if(menuOpen && origin && Array.isArray(overlays))for(const rect of overlays.slice(0,16)){
+      if(!rect || !['left','top','right','bottom'].every(key=>Number.isFinite(rect[key])))continue;
+      const left=Math.max(0,origin.left+rect.left-box.left-2),top=Math.max(0,origin.top+rect.top-box.top-2);
+      const right=Math.min(box.width,origin.left+rect.right-box.left+2),bottom=Math.min(box.height,origin.top+rect.bottom-box.top+2);
+      if(right<=left || bottom<=top)continue;
+      const region={left,top,right,bottom};
+      // Nested/overlapping native layers must form one hole: even-odd holes
+      // would otherwise paint their shared area back over the native button.
+      for(let i=0;i<regions.length;){
+        const other=regions[i];
+        if(region.left<=other.right && region.right>=other.left && region.top<=other.bottom && region.bottom>=other.top){
+          region.left=Math.min(region.left,other.left);region.top=Math.min(region.top,other.top);
+          region.right=Math.max(region.right,other.right);region.bottom=Math.max(region.bottom,other.bottom);
+          regions.splice(i,1);i=0;
+        }else i++;
+      }
+      regions.push(region);
+    }
+    const holes=regions.map(({left,top,right,bottom})=>`${left}px ${top}px,${right}px ${top}px,${right}px ${bottom}px,${left}px ${bottom}px,${left}px ${top}px,0px 0px`);
+    panel.style.clipPath=holes.length?`polygon(evenodd,0px 0px,${box.width}px 0px,${box.width}px ${box.height}px,0px ${box.height}px,0px 0px,${holes.join(',')})`:'';
+    if(Number.isFinite(height)&&height>=24&&height<=chatPanel.clientHeight && parseFloat(chatPanel.style.getPropertyValue('--chat-native-header'))!==height){chatPanel.style.setProperty('--chat-native-header',height+'px');resize();}},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){panel.style.clipPath='';model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
 }};
