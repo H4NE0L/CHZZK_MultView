@@ -22,7 +22,7 @@ globalThis.CZPlayers = {create(context) {
         <span class="tile-head-spacer"></span>
         <button class="tile-screenshot" type="button" title="스크린샷 (S)" aria-label="스크린샷 (S)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="tile-record" type="button" title="녹화 시작/종료 (R)" aria-label="녹화 시작/종료 (R)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg></button>
-        <button class="tile-address" title="방송 주소 복사">방송 주소 복사</button>
+        <button class="tile-address" title="방송 주소 복사">주소 복사</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
       <div class="tile-content">
@@ -106,7 +106,7 @@ globalThis.CZPlayers = {create(context) {
         }
         addressBtn.textContent = '주소 복사됨';
         showNotice('방송 주소 복사됨');
-        setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = '방송 주소 복사'; }, 900);
+        setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = '주소 복사'; }, 900);
       } catch (_) {
         showNotice('방송 주소를 복사하지 못했습니다.');
       }
