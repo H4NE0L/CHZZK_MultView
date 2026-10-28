@@ -143,7 +143,7 @@ async function run() {
       const url = new URL(route.request().url());
       if (url.host === 'popup.invalid' || url.host === 'viewer.invalid') {
         const file = url.pathname.slice(1);
-        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
+        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: /\.m?js$/.test(file) ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
         if (url.pathname.endsWith('/followings')) {
@@ -198,6 +198,9 @@ async function run() {
     await main.waitForFunction(() => document.body.classList.contains('ready'));
     assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
+    await main.locator('#settingsManager > summary').click();await main.locator('#recordingProfile').selectOption('original');
+    assert.equal((await main.evaluate(()=>chrome.storage.local.get('chzzkRecordingProfileV1'))).chzzkRecordingProfileV1,'original');
+    await main.locator('#recordingProfile').selectOption('balanced');await main.locator('#settingsManager > summary').click();
     assert.equal(await main.locator('.layout-toggle-btn[data-layout="grid"]').textContent(),'그리드');
     await main.bringToFront();await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),'');

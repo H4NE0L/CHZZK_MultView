@@ -1,8 +1,13 @@
 globalThis.CZMediaTools = {create(context) {
   const recordings=new Map(), pending=new Map(), positions=new Map(), results=[];
   let openingResult=false;
+  let recordingProfile='balanced',profileLoaded=false;
+  let profileControl=null;
+  function bindSettings(){profileControl=context.ui?.querySelector('#recordingProfile');if(!profileControl)return;profileControl.value=recordingProfile;profileControl.disabled=!profileLoaded;profileControl.onchange=()=>{recordingProfile=profileControl.value==='original'?'original':'balanced';chrome.storage.local.set({chzzkRecordingProfileV1:recordingProfile}).catch(error=>context.showNotice(error.message));};}
+  chrome.storage.local.get('chzzkRecordingProfileV1').then(value=>{recordingProfile=value.chzzkRecordingProfileV1==='original'?'original':'balanced';profileLoaded=true;if(profileControl){profileControl.value=recordingProfile;profileControl.disabled=false;}}).catch(()=>{profileLoaded=true;if(profileControl)profileControl.disabled=false;});
+
   let sequence=0;
-  const formats=[['video/webm;codecs=vp9,opus','WebM'],['video/webm;codecs=vp8,opus','WebM'],['video/mp4;codecs=avc1,mp4a.40.2','MP4'],['video/mp4;codecs=avc1.42E01E,mp4a.40.2','MP4']].filter(([mime])=>typeof MediaRecorder!=='undefined' && MediaRecorder.isTypeSupported(mime));
+  const formats=[['video/webm;codecs=vp8,opus','WebM'],['video/webm;codecs=vp9,opus','WebM'],['video/mp4;codecs=avc1,mp4a.40.2','MP4'],['video/mp4;codecs=avc1.42E01E,mp4a.40.2','MP4']].filter(([mime])=>typeof MediaRecorder!=='undefined' && MediaRecorder.isTypeSupported(mime));
   const uniqueFormats=formats.filter((f,i)=>formats.findIndex(x=>x[1]===f[1])===i);
   function frame(uid){return context.tileMap.get(uid)?.querySelector('iframe');}
   function request(uid,type,extra={}) {
@@ -37,7 +42,7 @@ globalThis.CZMediaTools = {create(context) {
       if(recordings.has(uid)){request(uid,'MEDIA_STOP');return;}
       const mime=uniqueFormats.find(([,label])=>label==='MP4')?.[0] || uniqueFormats[0]?.[0];
       if(!mime)throw Error('이 환경에서는 녹화를 지원하지 않습니다.');
-      const id=request(uid,'MEDIA_RECORD',{mime});pending.set(id,{uid,name:fileName(uid,new Date(),'recording'),kind:'recording'});
+      const id=request(uid,'MEDIA_RECORD',{mime,profile:recordingProfile});pending.set(id,{uid,name:fileName(uid,new Date(),'recording'),kind:'recording'});
       recordings.set(uid,{startedAt:Date.now()});updateRecord(uid);
     }catch(e){context.showNotice(e.message);}
   }
@@ -112,5 +117,5 @@ globalThis.CZMediaTools = {create(context) {
   },true);
   window.addEventListener('beforeunload',event=>{if(recordings.size || results.length || gallery?.hasUnsaved()){event.preventDefault();event.returnValue='';}});
   setInterval(()=>recordings.forEach((_,uid)=>updateRecord(uid)),1000);
-  return {screenshot,toggleRecording,attachTile,receive,hasRecordings:()=>recordings.size>0, isRecording:uid=>recordings.has(uid)};
+  return {bindSettings,screenshot,toggleRecording,attachTile,receive,hasRecordings:()=>recordings.size>0, isRecording:uid=>recordings.has(uid)};
 }};

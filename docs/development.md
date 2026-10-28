@@ -108,3 +108,5 @@ python3 scripts/package.py
 원본 채팅 상호작용: /live/{id}/chat에서는 원본 DOM을 재배치하거나 바깥 포털 호스트를 숨기지 않습니다. 스트리머 라벨은 별도 strong으로 추가하고 원본 제목/텍스트 노드를 React가 계속 관리하도록 보존합니다. nativeHeader는 폰트 버튼 외의 원본 버튼을 숨기지 않고 부모의 display:contents 변환도 하지 않습니다. 모아보기는 부모의 별도 flex 영역이며 원본 iframe 위에 겹쳐 표시하지 않습니다. 원본 iframe 내부에는 모아보기용 예약 공간이나 부모 클리핑을 사용하지 않습니다. 검사에서는 빈 포털 호스트·제목 텍스트 노드·버튼 위치 컨테이너 보존과 모의 차단·승부예측 핸들러 실행을 확인합니다. 실제 인증 API 호출이나 승부예측 참여는 모의 검사 범위 밖입니다.
 
 모아보기는 채팅 패널의 첫 번째 flex 영역이고 원본 iframe 래퍼는 남은 높이를 차지합니다. 경계 드래그는 모아보기 높이와 실제 iframe viewport를 함께 조절하며 높이만 저장합니다. 이전 위치 저장 값은 사용하지 않습니다. 원본 채팅창의 헤더·입력·팝업 DOM은 iframe 내부에 유지합니다.
+
+녹화 변경 검증: `node tests/recording-capture-browser.cjs`는 실제 1080p 소스에서 저부하 720p 캡처·연속 프레임 콜백·원본 트랙 보존을 검사합니다. `node tests/recording-export-browser.cjs`는 실제 생성한 WebM과 지원되는 MP4를 Worker로 자르고, 영상·음성 보존과 결과 디코딩 및 재생/MediaRecorder 재호출이 없는지 확인합니다. 실제 CHZZK·장시간·최소화 상태 검증을 대신하지 않습니다.

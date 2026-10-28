@@ -212,6 +212,10 @@ function saveState() {
                 <label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p><button id="importantChatSettings" type="button">수집 설정·점검</button>
               </div>
+              <div class="settings-feature">
+                <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
+                <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
+              </div>
             </div>
           </details>
         </div>
@@ -242,6 +246,7 @@ function saveState() {
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
+    mediaTools.bindSettings();
     importantChat = CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 

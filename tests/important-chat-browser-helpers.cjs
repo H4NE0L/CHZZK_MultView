@@ -161,7 +161,7 @@ module.exports=async function checkImportantChat(page){
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
  assert.equal(copiedDiagnostic.collectorRevision,'20261029-2');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
- assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
+ assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
  await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);

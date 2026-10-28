@@ -10,7 +10,7 @@ test('manifest and HTML references point to packaged local resources', () => {
   exists(manifest.action.default_popup);
   Object.values(manifest.icons).forEach(exists);
   manifest.content_scripts.flatMap(s => s.js || []).forEach(exists);
-  for (const html of [manifest.action.default_popup,'src/viewer/viewer.html']) {
+  for (const html of [manifest.action.default_popup,'src/viewer/viewer.html','src/viewer/recording.html']) {
     const text = fs.readFileSync(path.join(root,html),'utf8');
     for (const [,resource] of text.matchAll(/(?:src|href)="([^"]+)"/g)) exists(path.posix.join(path.posix.dirname(html),resource));
     assert(!/<script(?![^>]*\bsrc=)[^>]*>/i.test(text), 'extension CSP requires external scripts');
