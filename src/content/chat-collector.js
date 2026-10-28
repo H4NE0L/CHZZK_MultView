@@ -1,12 +1,32 @@
 // Read only visible chat markup. No socket interception or extra connection.
 globalThis.CZChatCollector = {create({send,status=()=>{}}) {
-  const rows='[class*="live_chatting_list_item"],[class*="live_chatting_message_container"],[data-chat-message],[class*="live_chatting_message_item"],[role="listitem"]';
+  const rows='[class*="live_chatting_list_item"],[class*="live_chatting_message_container"],[data-chat-message],[class*="live_chatting_message_item"],[role="listitem"],[class*="live_chatting_message_wrapper"],[class*="live_chatting_chat_item"]';
   const names='[class*="live_chatting_username_nickname"],[class*="name_text"],[data-chat-nickname],[class*="username"] [class*="nickname"]';
   const texts='[class*="live_chatting_message_text"],[data-chat-text]';
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
   const identities=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0};let structure=null;const pending=new Map();
   const nameKey=value=>String(value||'').normalize('NFC').trim().toLocaleLowerCase('ko-KR');
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-2',ownerKnown:!!ownerName,enabled:filter.enabled,structure});},500);}
+  function domSummary(){
+    return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
+      classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
+  }
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-3',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
+  const leafNames=node=>[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
+  function textAfter(row,nickname){
+    const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(nickname);
+    const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());
+    return content(fragment).trim();
+  }
+  function rowForName(nickname){
+    if(nickname.closest('.cz-native-chat-header,[role="menu"],#cz-chat-settings'))return null;
+    let row=nickname.parentElement;
+    for(let depth=0;row && row!==document.body && depth<7;depth++,row=row.parentElement){
+      const found=leafNames(row);if(found.length>1)return null;
+      if(found.length!==1 || /username|nickname/.test(String(row.className)))continue;
+      if(row.querySelector(texts) || textAfter(row,nickname))return row;
+    }
+    return null;
+  }
   function role(row,textElements,nickname) {
     if(ownerName && nameKey(nickname.textContent)===nameKey(ownerName))return 'streamer';
     // Role badges can be siblings of the username rather than its children.
@@ -36,12 +56,13 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   function flush(){timer=null;if(pending.size){const batch=Array.from(pending.values());send(batch);counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
     const outer=row.closest('[class*="live_chatting_list_item"],[data-chat-message]');
-    const leafNames=node=>[...node.querySelectorAll(names)].filter(el=>![...el.querySelectorAll(names)].length);
     if(outer && leafNames(outer).length===1)row=outer;
     if(leafNames(row).length>1){for(const child of [...row.querySelectorAll(rows)].slice(-200))if(leafNames(child).length===1)read(child);return;}
     const header=document.querySelector('.cz-native-chat-header');
-    if(header && !(header.compareDocumentPosition(row)&Node.DOCUMENT_POSITION_FOLLOWING))return;
     if(!observed.has(row)){observed.add(row);counts.scanned++;report();}
+    // DOM order can differ from visual order (flex order / injected toolbars).
+    // Exclude only rows actually above the native header, not all earlier DOM nodes.
+    if(header && !(header.compareDocumentPosition(row)&Node.DOCUMENT_POSITION_FOLLOWING)){const box=row.getBoundingClientRect(),toolbar=header.getBoundingClientRect();if(box.height>0 && box.bottom<=toolbar.top)return;}
     const nickname=leafNames(row)[0],parts=Array.from(row.querySelectorAll(texts));
     structure={row:String(row.className||row.tagName).slice(0,180),nickname:nickname?String(nickname.className||nickname.tagName).slice(0,180):'찾지 못함',text:parts[0]?String(parts[0].className||parts[0].tagName).slice(0,180):'찾지 못함'};report();
     if(!nickname)return;
@@ -49,9 +70,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     let body=topParts.map(content).join(' ').trim();
     if(!body){
       // Preserve inline text/emotes when CHZZK changes the body CSS module name.
-      const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(nickname);
-      const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());
-      body=content(fragment).trim();
+      body=textAfter(row,nickname);
       if(body)structure.text='이름 뒤 DOM (대체 경로)';
     }
     const name=nickname.textContent.trim().slice(0,80),text=body.slice(0,1000);
@@ -70,15 +89,25 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   }
   function scan(node) {
     const el=node.nodeType===1?node:node.parentElement;if(!el)return;
-    const closest=el.closest(rows);if(closest){read(closest);return;}
-    Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
+    const closest=el.closest(rows);if(closest)read(closest);
+    else Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
+    // CSS module changes can remove every known row marker. Seed discovery
+    // from nicknames instead, including mutations to an unknown message body.
+    const candidates=new Set([...el.querySelectorAll(names)].slice(-200));
+    const own=el.closest(names);if(own)candidates.add(own);
+    let ancestor=el;
+    for(let depth=0;ancestor && ancestor!==document.body && depth<5;depth++,ancestor=ancestor.parentElement){
+      const found=leafNames(ancestor);if(found.length===1){candidates.add(found[0]);break;}if(found.length>1)break;
+    }
+    for(const nickname of candidates){const row=rowForName(nickname);if(row)read(row);}
+    if(!counts.scanned)report();
   }
   function stop(){observer?.disconnect();observer=null;clearTimeout(timer);timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();clearTimeout(statusTimer);statusTimer=null;}
   function configure(value,identity={}) {
     stop();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
       const candidates=new Set();
-      for(const record of records){candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
+      for(const record of records){if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
       for(const node of candidates)scan(node);
     });
     observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role']});

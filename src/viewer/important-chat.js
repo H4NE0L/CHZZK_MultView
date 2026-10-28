@@ -77,7 +77,8 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   $('.ic-copy-diagnostics').onclick=async()=>{
     const structure={};for(const key of ['row','nickname','text'])structure[key]=typeof stats?.structure?.[key]==='string'?stats.structure[key].slice(0,180):'';
     const counts={};for(const key of ['scanned','parsed','matched','sent'])counts[key]=Number.isFinite(stats?.[key])?Math.max(0,Math.floor(stats[key])):0;
-    const report={collectorRevision:typeof stats?.revision==='string'?stats.revision.slice(0,40):'응답 없음',version:chrome.runtime.getManifest?.().version||'2.0.2',enabled:filter.enabled,streamers:filter.streamers,managers:filter.managers,ownerKnown:!!owners.get(getState().selectedUid)?.name,frameReady:getFrame()?.dataset.playerReady==='true',counts,received,displayed:model.items.length,structure};
+    const dom={rowCandidates:Number(stats?.dom?.rowCandidates)||0,nicknameCandidates:Number(stats?.dom?.nicknameCandidates)||0,classes:Array.isArray(stats?.dom?.classes)?stats.dom.classes.filter(value=>typeof value==='string').map(value=>value.slice(0,160)).slice(-40):[]};
+    const report={dom,collectorRevision:typeof stats?.revision==='string'?stats.revision.slice(0,40):'응답 없음',version:chrome.runtime.getManifest?.().version||'2.0.2',enabled:filter.enabled,streamers:filter.streamers,managers:filter.managers,ownerKnown:!!owners.get(getState().selectedUid)?.name,frameReady:getFrame()?.dataset.playerReady==='true',counts,received,displayed:model.items.length,structure};
     try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));notify('채팅 내용 없이 점검 정보를 복사했습니다.');}catch(_){notify('점검 정보 복사 실패: 아래 수치를 직접 복사해주세요.');}
   };
   $('.ic-clear').onclick=()=>{model.clear();render();};

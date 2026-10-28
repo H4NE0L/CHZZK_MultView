@@ -108,6 +108,14 @@ module.exports=async function checkImportantChat(page){
    return batches.map(batch=>batch.find(item=>item.name==='방송인')?.id);
  });
  assert.equal(stableIds.length,2);assert.equal(stableIds[0],stableIds[1],'API identity refresh must not duplicate existing chat rows');
+ const reorderedCaptured=await frame.evaluate(async()=>{
+   const row=document.createElement('div');row.dataset.chatMessage='';row.style.cssText='position:fixed;top:500px;height:24px';row.innerHTML='<span data-chat-nickname>범위 점검 사용자</span><span data-chat-text>DOM 순서와 화면 순서가 다른 채팅</span>';
+   document.querySelector('.cz-native-chat-header').before(row);
+   const captured=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch)});collector.configure({enabled:true,names:['범위 점검 사용자']});await new Promise(resolve=>setTimeout(resolve,300));collector.stop();row.remove();
+   return captured.some(item=>item.name==='범위 점검 사용자');
+ });
+ assert(reorderedCaptured,'a visually lower chat row must not be rejected just because it precedes the header in DOM order');
+
 
  await page.locator('#settingsManager > summary').click();await page.locator('#importantChatSettings').click();assert(await settings.isVisible());
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent.includes('스트리머 확인: 테스트 방송'));
@@ -116,14 +124,14 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261028-2');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261028-3');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
  await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
- await frame.evaluate(()=>{const row=document.createElement('div');row.setAttribute('role','listitem');row.innerHTML='<span class="new_username"><span class="new_nickname">지정 사용자</span></span><span class="changed_message_body">본문 CSS가 달라진 채팅 <img alt="웃음"></span>';document.querySelector('aside.live_chat').appendChild(row);});
+ await frame.evaluate(()=>{const row=document.createElement('div');row.className='unknown_virtual_row';row.innerHTML='<span class="new_username"><span class="new_nickname">지정 사용자</span></span><span class="changed_message_body">본문 CSS가 달라진 채팅 <img alt="웃음"></span>';document.querySelector('aside.live_chat').appendChild(row);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('본문 CSS가 달라진 채팅 웃음'));
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('onerror'));
