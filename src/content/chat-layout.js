@@ -89,6 +89,20 @@ globalThis.CZChatLayout = (() => {
     // The native pop-out chat already owns its viewport. Moving/hiding its
     // surrounding DOM breaks React portals used by user menus and predictions.
     if(location.pathname.endsWith('/chat')){
+      // Remove the site's minimum popup width without changing positioning,
+      // stacking, overflow or React portal hosts used by native actions.
+      let container=chatRoot;
+      while(container){
+        container.classList.add('cz-chat-width');
+        if(container===doc.documentElement)break;
+        container=container.parentElement;
+      }
+      if(!doc.getElementById('cz-chat-viewport-width')){
+        const style=doc.createElement('style');style.id='cz-chat-viewport-width';
+        style.textContent='.cz-chat-width{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}html.cz-chat-width,body.cz-chat-width,.cz-chat-only{width:100%!important}.cz-native-chat-header{min-width:0!important;max-width:100%!important}';
+        (doc.head||doc.documentElement).appendChild(style);
+      }
+      chatRoot.style.setProperty('width','100%','important');
       doc.querySelectorAll('video').forEach(video=>video.style.setProperty('display','none','important'));
       return;
     }
