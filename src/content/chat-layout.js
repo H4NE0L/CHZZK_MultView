@@ -191,7 +191,7 @@ globalThis.CZChatLayout = (() => {
   }
   let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
   const boundRoots=new WeakSet();
-  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0))};prepare();}
+  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0)),position:value.position==='bottom'?'bottom':'top'};prepare();}
   const managedHeaders=new WeakSet();
   function isNativeHeader(header){
     if(managedHeaders.has(header))return true;
@@ -225,13 +225,13 @@ globalThis.CZChatLayout = (() => {
     // Keep CHZZK's SVG/path rules outside extension-owned icons.
     const icon=document.createElement('span');icon.setAttribute('aria-hidden','true');host.appendChild(icon);
     const shadow=icon.attachShadow({mode:'open'});
-    shadow.innerHTML='<style>:host{display:block!important;width:16px!important;height:16px!important;flex:none!important;line-height:0!important}svg{display:block;width:16px;height:16px;min-width:16px;max-width:16px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
+    shadow.innerHTML='<style>:host{display:block!important;width:18px!important;height:18px!important;flex:none!important;line-height:0!important}svg{display:block;width:18px;height:18px;min-width:18px;max-width:18px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
   }
   function overlayRects(){
-    return [...document.querySelectorAll('[role="dialog"],[role="menu"],[aria-modal="true"],[class^="_layer_"],[class*=" _layer_"],[class*="layer_popup"]')].filter(el=>{
+    return [...document.querySelectorAll('[role="dialog"],[role="menu"],[aria-modal="true"],[class^="_layer_"],[class*=" _layer_"],[class*="layer_popup"],.cz-native-chat-header div,.cz-native-chat-header ul')].filter(el=>{
       if(el.matches('.cz-chat-only') || el.querySelector('.cz-chat-only'))return false;
       if(!isVisible(el) || !el.children.length && !el.textContent.trim())return false;
-      const style=getComputedStyle(el);return el.matches('[role="dialog"],[role="menu"],[aria-modal="true"]') || ['fixed','absolute'].includes(style.position);
+      const style=getComputedStyle(el),rect=el.getBoundingClientRect();if(el.closest('.cz-native-chat-header') && !el.matches('[role=dialog],[role=menu]') && (rect.width<80 || rect.height<40))return false;return el.matches('[role="dialog"],[role="menu"],[aria-modal="true"]') || ['fixed','absolute'].includes(style.position);
     }).slice(0,16).map(el=>{const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};});
   }
   function overlayOpen(){return overlayRects().length>0;}
@@ -280,7 +280,8 @@ globalThis.CZChatLayout = (() => {
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
     if(native)native.classList.add('cz-native-settings');
     let spacer=root.querySelector('#cz-important-chat-space');
-    if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';header.after(spacer);}
+    if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';}
+    if(presentation.position==='bottom'){if(root.lastElementChild!==spacer)root.appendChild(spacer);}else if(header.nextElementSibling!==spacer)header.after(spacer);
     spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
     const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)reportHeader(header);
   }
@@ -307,7 +308,7 @@ globalThis.CZChatLayout = (() => {
     if(!document.getElementById('cz-chat-chrome')){
       const style=document.createElement('style');style.id='cz-chat-chrome';
       style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
-      style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:16px!important;height:16px!important;margin:0!important;transform:none!important}';
+      style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:18px!important;height:18px!important;margin:0!important;transform:none!important}';
       (document.head||document.documentElement).appendChild(style);
     }
     nativeHeader(root);

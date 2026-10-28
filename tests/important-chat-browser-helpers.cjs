@@ -54,8 +54,8 @@ module.exports=async function checkImportantChat(page){
  for(const id of ['cz-chat-settings','cz-chat-channel']){
    assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
    const icon=frame.locator('#'+id+' svg');
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),16);
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),16);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),18);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),18);
    assert.notEqual(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
@@ -67,6 +67,25 @@ module.exports=async function checkImportantChat(page){
  assert(await page.locator('#shortcutsEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
  assert(await page.locator('#importantChatEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
 
+ assert.equal(await panel.locator('.ic-header,.ic-count,.ic-status,.ic-empty').count(),0,'collection contains no heading or placeholder notices');
+ await frame.locator('#cz-chat-settings').click();await settings.waitFor();
+ await settings.locator('.ic-position').selectOption('bottom');
+ await settings.locator('.ic-settings-close').click();
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').dataset.position==='bottom');
+ const bottomBox=await panel.boundingBox(),chatBox=await page.locator('.chat-frame').boundingBox();
+ assert(Math.abs(bottomBox.y+bottomBox.height-chatBox.y-chatBox.height)<2,'bottom collection aligns with the bottom of chat');
+ await frame.waitForFunction(()=>document.querySelector('#cz-important-chat-space')===document.querySelector('.cz-chat-only').lastElementChild);
+ const bottomGrip=await panel.locator('.ic-resizer').boundingBox();assert(Math.abs(bottomGrip.y-bottomBox.y)<2,'bottom collection has its resize handle above the list');
+ await frame.evaluate(()=>{const menu=document.createElement('div');menu.setAttribute('role','menu');menu.id='bottom-settings-popup';menu.style.cssText='position:fixed;bottom:24px;left:8px;background:#333;z-index:1000;padding:12px';const button=document.createElement('button');button.id='bottom-settings-confirm';button.textContent='설정 적용';button.onclick=()=>{window.__bottomSettingsApplied=true;menu.remove();};menu.append(button);document.body.append(menu);});
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath!=='');
+ assert(await panel.isVisible(),'bottom collection stays visible beside native settings');
+ await frame.locator('#bottom-settings-confirm').click();assert(await frame.evaluate(()=>window.__bottomSettingsApplied),'bottom native settings receives clicks');
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath==='');
+ await panel.locator('.ic-resizer').focus();await page.keyboard.press('ArrowUp');
+ assert((await panel.boundingBox()).height>bottomBox.height,'up arrow grows bottom collection');
+ await frame.locator('#cz-chat-settings').click();await settings.waitFor();
+ await settings.locator('.ic-position').selectOption('top');await settings.locator('.ic-settings-close').click();
+ await frame.waitForFunction(()=>document.querySelector('.cz-native-chat-header').nextElementSibling?.id==='cz-important-chat-space');
  await frame.evaluate(()=>{document.querySelector('.cz-channel-name').remove();CZChatLayout.setPresentation({name:'테스트 방송',height:200});CZChatLayout.setPresentation({name:'테스트 방송',height:200});});
  assert.equal(await frame.locator('.cz-channel-name').count(),1,'fallback title is reused across layout updates');
  await frame.locator('.cz-native-chat-header #native-chat-menu').click();assert(await panel.isVisible(),'opening native settings keeps collection visible');

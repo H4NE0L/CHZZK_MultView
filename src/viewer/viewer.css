@@ -2385,7 +2385,6 @@ select:hover {
 .center-controls.has-site-return { width:max-content; min-width:200px; }
 
 .important-chat-panel { flex:0 0 auto; height:var(--ic-height,200px); min-height:0; overflow:hidden; border-bottom:1px solid #393c42; font-size:12px; display:flex; flex-direction:column; }
-.ic-header { display:flex; align-items:center; justify-content:space-between; padding:5px 9px; flex:none; color:#00dc9b; }
 .ic-settings-open { display:flex; align-items:center; justify-content:center; width:26px; height:26px; padding:0; background:transparent; color:#c6ccd5; border:1px solid #444; border-radius:4px; cursor:pointer; }
 .ic-body { padding:0 8px 4px; min-height:0; flex:1; display:flex; flex-direction:column; }
 .ic-list { flex:1; min-height:0; overflow-y:auto; overflow-wrap:anywhere; scrollbar-width:none; }
@@ -2405,8 +2404,6 @@ select:hover {
 .ic-badges { display:inline; }
 .ic-badge { width:14px; height:14px; object-fit:contain; vertical-align:-2px; margin-right:3px; }
 .ic-emote { max-width:40px; height:24px; object-fit:contain; vertical-align:middle; margin:0 1px; }
-.ic-empty,.ic-status { color:#a2a9b5; font-size:10px; }
-.ic-bottom { flex:none; margin-top:4px; }
 .ic-resizer { flex:0 0 8px; cursor:ns-resize; touch-action:none; background:linear-gradient(#555,#555) center/36px 2px no-repeat; }
 .ic-resizer:hover,.ic-resizer:focus-visible { background-color:#00dc9b22; outline:1px solid #00dc9b; outline-offset:-1px; }
 .chat-panel.ic-resizing { user-select:none; }
@@ -2425,7 +2422,6 @@ select:hover {
 
 .important-chat-panel[hidden] { display:none; }
 
-.ic-header { padding:3px 8px; }
 .ic-resizer { flex-basis:5px; background:#303238; border-top:1px solid #383a3e; }
 .ic-resizer:hover,.ic-resizer:focus-visible { background:#00dc9b88; }
 .ic-settings-heading { display:block; font-size:12px; margin-bottom:12px; color:#00dc9b; }
@@ -2442,3 +2438,8 @@ select:hover {
 .ic-diagnostics { white-space:pre-line; color:#b9c1cc; font-size:11px; line-height:1.7; margin:12px 0; }
 
 .ic-role-help { color:#aeb7c4; font-size:11px; line-height:1.6; margin:0 0 12px; }
+
+.important-chat-panel[data-position="bottom"] { top:auto; bottom:0; border-top:1px solid #393c42; border-bottom:0; }
+.important-chat-panel[data-position="bottom"] .ic-resizer { order:-1; }
+.ic-position-option { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.ic-position { color:#eee; background:#222428; border:1px solid #444; border-radius:4px; padding:5px 8px; }
