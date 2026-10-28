@@ -52,15 +52,15 @@ globalThis.CZViewerTabs = (() => {
     if(!owner)await chrome.storage.local.set({[OWNER_KEY]:{tabId}});
     await CZSessionStore.write(message.state);return {ok:true,saved:true};
   });}
-  function open(initialInputs) {
+  function open(initialInputs,{target='window'}={}) {
     return serialized(async () => {
       const inputs=[...new Set((Array.isArray(initialInputs)?initialInputs:[]).map(value=>CZSessionStore.parseInput(value)?.url).filter(Boolean))];
       await snapshotLatest();
       const previous=await latest(),tabs=await viewerTabs();
-      const win=await chrome.windows.create({url:'about:blank',type:'normal',focused:true});
-      let tab;
+      let win,tab;
       try{
-        tab=win.tabs?.[0] || (await chrome.tabs.query({windowId:win.id}))[0];
+        if(target==='tab')tab=await chrome.tabs.create({url:'about:blank',active:true});
+        else{win=await chrome.windows.create({url:'about:blank',type:'normal',focused:true});tab=win.tabs?.[0] || (await chrome.tabs.query({windowId:win.id}))[0];}
         if(!Number.isInteger(tab?.id))throw Error('새 멀티뷰 창을 확인할 수 없습니다.');
         // Keep rules for every existing viewer and install the new rule before navigation.
         await configureRules([...tabs.map(item=>item.id),tab.id]);
@@ -68,11 +68,11 @@ globalThis.CZViewerTabs = (() => {
         await chrome.tabs.update(tab.id,{url:inputs.length?`${pageURL()}?inputs=${encodeURIComponent(JSON.stringify(inputs))}`:pageURL()});
       }catch(error){
         if(previous)await chrome.storage.local.set({[OWNER_KEY]:previous});else await chrome.storage.local.remove(OWNER_KEY);
-        await chrome.windows.remove(win.id).catch(()=>{});
+        if(win)await chrome.windows.remove(win.id).catch(()=>{});else if(tab)await chrome.tabs.remove(tab.id).catch(()=>{});
         await configureRules(tabs.map(item=>item.id)).catch(()=>{});
         throw error;
       }
-      return {ok:true,tabId:tab.id,windowId:win.id};
+      return {ok:true,tabId:tab.id,windowId:win?.id??tab.windowId};
     });
   }
   return Object.freeze({open,refreshRules,remember,session,OWNER_KEY});

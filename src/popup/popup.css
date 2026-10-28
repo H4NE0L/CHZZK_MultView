@@ -897,3 +897,6 @@ button {
 .favorite-viewers { min-width:0; overflow:hidden; }
 .favorite-viewer-count { overflow:hidden; text-overflow:ellipsis; }
 .favorite-row.offline .favorite-identity { grid-template-columns: minmax(0, 1fr); }
+
+.open-multiview-actions { display:flex; gap:8px; margin-top:12px; }
+.open-multiview-actions .primary { flex:1; min-width:0; width:auto; margin:0; white-space:nowrap; }

@@ -179,6 +179,15 @@ async function run() {
     await popup.locator('#clearList').click();
     assert(!(await popup.locator('#multiList').textContent()).includes('cccccc'));
 
+    const buttons=await popup.locator('.open-multiview-actions button').evaluateAll(nodes=>nodes.map(node=>({top:node.getBoundingClientRect().top,fits:node.scrollWidth<=node.clientWidth})));
+    assert.equal(buttons.length,2);assert.equal(buttons[0].top,buttons[1].top);assert(buttons.every(button=>button.fits));
+    await popup.evaluate(()=>{window.__openRequests=[];window.__originalSend=chrome.runtime.sendMessage;window.__originalClose=window.close;window.close=()=>{};chrome.runtime.sendMessage=async message=>{if(message.type==='OPEN_MULTIVIEW_FROM_POPUP'){window.__openRequests.push(message);return {ok:true};}return window.__originalSend(message);};});
+    await popup.locator('#openTab').click();await popup.locator('#open').click();
+    assert.deepEqual(await popup.evaluate(()=>window.__openRequests.map(message=>message.target)),['tab','window']);
+    await popup.evaluate(()=>{chrome.runtime.sendMessage=window.__originalSend;window.close=window.__originalClose;});
+    console.log('PASS: popup tab/window buttons fit and send independent opening modes.');
+    if(process.argv.includes('--popup-only')){assert.deepEqual(errors,[]);return;}
+
     const main = await context.newPage();
     main.on('pageerror', e => errors.push(e.message));
     main.on('framenavigated', async frame => {

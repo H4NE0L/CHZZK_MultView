@@ -151,18 +151,20 @@ function addToList(value = uidInput.value) {
   return true;
 }
 
-async function openMultiView() {
+async function openMultiView(target='window') {
+  const destination=target==='tab'?'새 탭':'새 창';
   const current = uidFromInput(uidInput.value);
   if (uidInput.value.trim() && !current) { setStatus("올바른 방송 URL 또는 UID를 입력해주세요.", true); return; }
   if (current) addToList(uidInput.value);
-  setStatus("새 멀티뷰 창을 여는 중...");
+  setStatus(`${destination}에 멀티뷰를 여는 중...`);
   try {
     const result = await chrome.runtime.sendMessage({
       type: "OPEN_MULTIVIEW_FROM_POPUP",
+      target,
       initialInputs: multiList.map(x => x.uid.startsWith('video:') ? `video/${x.uid.slice(6)}` : x.uid)
     });
     if (!result?.ok) { setStatus("멀티뷰 페이지를 열지 못했습니다.", true); return; }
-    setStatus("새 멀티뷰 창을 열었습니다.");
+    setStatus(`${destination}에 멀티뷰를 열었습니다.`);
     window.close();
   } catch (err) { setStatus("멀티뷰를 열지 못했습니다.", true); }
 }
@@ -170,7 +172,8 @@ async function openMultiView() {
 uidInput.addEventListener("keydown", e => { if (e.key === "Enter") addToList(); });
 document.getElementById("addList").addEventListener("click", () => addToList());
 document.getElementById("clearList").addEventListener("click", () => { multiList = []; renderList(); });
-document.getElementById("open").addEventListener("click", openMultiView);
+document.getElementById("open").addEventListener("click",()=>openMultiView('window'));
+document.getElementById("openTab").addEventListener("click",()=>openMultiView('tab'));
 
 // 관리 버튼은 팝업 전체 영역에서 위임 처리하여 동적으로 렌더링되는 UI와도 동일하게 동작하도록 한다.
 document.getElementById('manageGroups').addEventListener('click', () => groupManager.open().catch(error => setStatus(error.message, true)));

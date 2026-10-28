@@ -50,6 +50,19 @@ test('every popup open creates a separate window and leaves existing players unt
  assert.deepEqual(f.storage[f.manager.OWNER_KEY],{tabId:second.tabId});
  assert.deepEqual(JSON.parse(new URL(f.tabs.at(-1).url).searchParams.get('inputs')),['https://chzzk.naver.com/video/12345678']);
 });
+test('new-tab selection creates tabs in the current window without reusing viewers',async()=>{
+ const f=fixture(),window=await f.manager.open([]),tab=await f.manager.open(['aaaaaa'],{target:'tab'});
+ assert.notEqual(window.tabId,tab.tabId);assert.equal(tab.windowId,4);
+ assert.equal(f.operations.filter(op=>op[0]==='window').length,1);assert.equal(f.operations.filter(op=>op[0]==='create').length,1);
+ assert.deepEqual(f.storage[f.manager.OWNER_KEY],{tabId:tab.tabId});
+ assert.deepEqual(f.operations.filter(op=>op[0]==='rules').at(-1)[1].addRules[0].condition.tabIds,[window.tabId,tab.tabId]);
+});
+test('failed new-tab navigation closes only the temporary tab and restores the latest writer',async()=>{
+ const f=fixture(),first=await f.manager.open([]);f.chrome.tabs.update=async()=>{throw Error('navigation failed');};
+ await assert.rejects(f.manager.open([],{target:'tab'}),/navigation failed/);
+ assert.equal(f.tabs.length,1);assert.equal(f.tabs[0].id,first.tabId);assert.equal(f.storage[f.manager.OWNER_KEY].tabId,first.tabId);
+ assert.equal(f.operations.filter(op=>op[0]==='removeWindow').length,0);
+});
 test('simultaneous opens create distinct windows and rules are removed when none remain',async()=>{
  const f=fixture(),results=await Promise.all([f.manager.open([]),f.manager.open([])]);
  assert.notEqual(results[0].tabId,results[1].tabId);f.tabs.length=0;await f.manager.refreshRules();
