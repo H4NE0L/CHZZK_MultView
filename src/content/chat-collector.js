@@ -10,7 +10,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-5',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-1',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
     return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
@@ -38,24 +38,54 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     }
     return null;
   }
+  function colorRole(color){
+    const values=String(color).match(/^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/);if(!values)return '';
+    const [r,g,b]=values.slice(1,4).map(value=>Number(value)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+    if(max<.5 || delta/max<.45)return '';
+    let hue=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;hue=(hue*60+360)%360;
+    if(hue>=20 && hue<=60)return 'streamer';
+    if(hue>=190 && hue<=250)return 'manager';
+    if(hue>=90 && hue<185)return 'partner';
+    return '';
+  }
+  function bodyColor(row,nickname,parts){
+    for(const part of parts){const role=colorRole(getComputedStyle(part).color);if(role)return {role,color:getComputedStyle(part).color};}
+    const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);let node;
+    while((node=walker.nextNode())){
+      if(nickname.contains(node) || !String(node.textContent).trim() || !(nickname.compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
+      const parent=node.parentElement;if(!parent || parent.closest('button,svg,script,style,time,[class*="badge"],[class*="Badge"]'))continue;
+      const style=getComputedStyle(parent);if(style.display==='none' || style.visibility==='hidden')continue;
+      return {role:colorRole(style.color),color:style.color};
+    }
+    const color=getComputedStyle(row).color;return {role:colorRole(color),color};
+  }
+  let roleSample=[];
   function role(row,textElements,nickname) {
     if(ownerName && nameKey(nickname.textContent)===nameKey(ownerName))return 'streamer';
-    // Role badges can be siblings of the username rather than its children.
-    // Only inspect author markup before the nickname, never message content.
-    const author=nickname.closest('[class*="live_chatting_username"],[data-chat-author]');
-    let manager=false;
-    const badges=[...row.querySelectorAll('img,svg title,[data-role],[aria-label],[title]')];
-    for(const badge of badges){
-      if(textElements.some(el=>el===badge || el.contains(badge)) || badge.contains(nickname))continue;
+    let author=nickname.parentElement;
+    for(let node=author,depth=0;node && node!==row && depth<4;node=node.parentElement,depth++)if(/username|nickname|author/.test(String(node.className)))author=node;
+    let detected='';const priority={streamer:3,manager:2,partner:1};roleSample=[];
+    const candidates=row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]');
+    for(const badge of candidates){
+      if(textElements.some(el=>el===badge || el.contains(badge)))continue;
       const beforeName=!!(badge.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING);
-      if(!beforeName && !(author && author!==nickname && author.contains(badge)))continue;
-      const raw=['alt','title','aria-label','data-role'].map(key=>badge.getAttribute(key));
-      if(badge.matches('svg title'))raw.push(badge.textContent);
+      if(!beforeName && !badge.contains(nickname) && !(author && author!==nickname && author.contains(badge)))continue;
+      const raw=['alt','title','aria-label','data-role','data-user-role','data-user-type'].map(key=>{const value=badge.getAttribute(key);return badge.contains(nickname) && ['alt','title','aria-label'].includes(key) && nameKey(value)===nameKey(nickname.textContent)?'':value;});
+      if(badge.matches('svg'))raw.push(...[...badge.querySelectorAll('title')].map(el=>el.textContent));
+      const semantic=[badge.getAttribute('class'),badge.getAttribute('id')];
+      if(badge.matches('use'))semantic.push(badge.getAttribute('href'),badge.getAttribute('xlink:href'));
+      if(badge.matches('img')){try{semantic.push(new URL(badge.currentSrc||badge.src).pathname.split('/').at(-1));}catch(_){}}
       const values=raw.map(value=>String(value||'').normalize('NFC').trim().toLowerCase().replace(/(?:\s*(?:배지|아이콘)|\s+(?:badge|icon))$/,'').trim());
-      if(values.some(v=>['스트리머','방송자','방송인','streamer','owner','streaming_channel_owner'].includes(v)))return 'streamer';
-      if(values.some(v=>['채널 관리자','채널관리자','채널 매니저','매니저','방송 관리자','manager','channel manager','channel_manager','streaming_channel_manager'].includes(v)))manager=true;
+      const markers=semantic.map(value=>String(value||'').toLowerCase());
+      if(roleSample.length<8)roleSample.push({tag:badge.tagName,labels:values.filter(Boolean).slice(0,4).map(value=>value.slice(0,80)),markers:markers.filter(Boolean).slice(0,3).map(value=>value.slice(0,120))});
+      let next='';
+      if(values.some(v=>['스트리머','방송자','방송인','streamer','broadcaster','owner','streaming_channel_owner'].includes(v)) || markers.some(v=>!/(?:^|[._\s/#-])partner(?:$|[._\s/#-])/.test(v) && /(?:^|[._\s/#-])(?:streamer|broadcaster|streaming_channel_owner)(?:$|[._\s/#-])/.test(v)))next='streamer';
+      else if(values.some(v=>['채널 관리자','채널관리자','채널 매니저','매니저','방송 관리자','관리자','manager','channel manager','channel_manager','streaming_channel_manager'].includes(v)) || markers.some(v=>/(?:^|[._\s/#-])(?:manager|channel_manager|streaming_channel_manager)(?:$|[._\s/#-])/.test(v)))next='manager';
+      else if(values.some(v=>['파트너','파트너 스트리머','공식 파트너','partner','partner streamer','partner_streamer'].includes(v)) || markers.some(v=>/(?:^|[._\s/#-])partner(?:$|[._\s/#-])/.test(v)))next='partner';
+      if((priority[next]||0)>(priority[detected]||0))detected=next;
     }
-    return manager?'manager':'';
+    if(detected)return detected;
+    const body=bodyColor(row,nickname,textElements);roleSample.unshift({tag:'BODY_COLOR',labels:[body.color],markers:[]});return body.role;
   }
   function content(node) {
     if(node.nodeType===3)return node.textContent;
@@ -121,10 +151,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     stop();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
       const candidates=new Set();
-      for(const record of records){if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
+      for(const record of records){if(record.type==='attributes' && ['class','style'].includes(record.attributeName) && !record.target.closest(rows))continue;if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
       for(const node of candidates)scan(node);
     });
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','src','srcset']});
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','class','style']});
     scan(document.body);
   }
   window.addEventListener('pagehide',stop);

@@ -4,7 +4,7 @@ globalThis.CZImportantChat = (() => {
   const nameKey=value=>clean(value).toLocaleLowerCase('ko-KR');
   function settings(value={}) {
     if(!value || typeof value!=='object')value={};
-    return {enabled:value.enabled!==false,streamers:value.streamers!==false,managers:value.managers!==false,
+    return {enabled:value.enabled!==false,streamers:value.streamers!==false,managers:value.managers!==false,partners:value.partners!==false,
       names:[...new Map((Array.isArray(value.names)?value.names:[]).filter(n=>typeof n==='string').map(n=>clean(n).slice(0,40)).filter(Boolean).map(n=>[nameKey(n),n])).values()].slice(0,50)};
   }
   function imageUrl(value){
@@ -31,10 +31,10 @@ globalThis.CZImportantChat = (() => {
     const name=clean(value.name).slice(0,80),text=clean(value.text).slice(0,1000);
     if(!name || !text)return null;
     const badges=(Array.isArray(value.badges)?value.badges:[]).slice(0,4).map(badge=>({src:imageUrl(badge?.src),alt:clean(badge?.alt).slice(0,80)})).filter(badge=>badge.src);
-    return {id:value.id,name,text,segments:segments(value.segments,text),badges,role:['streamer','manager'].includes(value.role)?value.role:'',time:Number.isFinite(value.time) && Math.abs(value.time)<=8640000000000000?value.time:Date.now()};
+    return {id:value.id,name,text,segments:segments(value.segments,text),badges,role:['streamer','manager','partner'].includes(value.role)?value.role:'',time:Number.isFinite(value.time) && Math.abs(value.time)<=8640000000000000?value.time:Date.now()};
   }
   function matches(item,filter) {
-    return filter.enabled && ((item.role==='streamer' && filter.streamers) || (item.role==='manager' && filter.managers) || filter.names.some(n=>nameKey(n)===nameKey(item.name)));
+    return filter.enabled && ((item.role==='streamer' && filter.streamers) || (item.role==='manager' && filter.managers) || (item.role==='partner' && filter.partners) || filter.names.some(n=>nameKey(n)===nameKey(item.name)));
   }
   function create() {
     let uid=null,items=[];

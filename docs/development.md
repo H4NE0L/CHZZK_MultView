@@ -102,3 +102,5 @@ python3 scripts/package.py
 멀티뷰 창과 복원 상태: viewer-tabs.js는 요청 방식에 따라 현재 창의 새 탭 또는 새 일반 창의 about:blank 탭을 먼저 만들고 전체 멀티뷰에 대한 DNR을 설치한 뒤 viewer URL로 이동합니다. chzzkMultiviewLatestTabV1의 tabId가 복원 저장 권한을 갖습니다. VIEWER_SAVE_STATE/REGISTER_SESSION과 새 창 열기는 같은 큐에서 처리해 이전 창의 지연 저장이 새 창 상태를 덮어쓰지 않도록 합니다. VIEWER_GET_STATE는 저장 대기 중인 메모리 상태를 가져오며 콜백 안에서 저장을 기다리지 않아 큐 교착을 피합니다. 최신 창을 닫아도 이전 창으로 저장 권한을 되돌리지 않습니다. 사이트 모드는 명시적으로 열 때 저장 권한을 받으며, 기존 방송 시작 시 10%·음소거 초기화 규칙은 유지합니다.
 
 팝업 열기 버튼의 DOM·요청 분기는 `node tests/browser-smoke.cjs --popup-only`로 검사합니다. 생성 실패 시 새 탭 모드는 임시 탭만 닫고, 새 창 모드는 임시 창만 닫아 기존 창을 유지합니다.
+
+테스트 브랜치의 수집기 revision 20261029-1은 streamer/manager/partner를 지원합니다. 저장된 partners 값이 없으면 true이며 각 필터는 독립적으로 끌 수 있습니다. 역할은 API 채널명·배지 메타데이터/SVG 표식으로 판별하고, 표식이 없으면 본문 텍스트 노드의 computed color를 HSV 범위로 구분합니다. 닉네임 색은 제외합니다. CSS 색상 추론은 역할의 확정적 서버 정보가 아니며 명시적 배지 판정을 우선합니다. class/style 변경은 메시지 행 내부에 한해서만 다시 검사해 헤더 레이아웃 변경에 따른 반복 스캔을 피합니다.

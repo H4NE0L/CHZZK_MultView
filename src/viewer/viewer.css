@@ -2391,11 +2391,16 @@ select:hover {
 .ic-list { flex:1; min-height:0; overflow-y:auto; overflow-wrap:anywhere; scrollbar-width:none; }
 .ic-list::-webkit-scrollbar { display:none; width:0; height:0; }
 .ic-message { margin:4px 0; border:1px solid #3d638c; border-radius:6px; padding:5px 7px; background:#19222b; color:#e4e9ef; font-size:12px; line-height:21px; overflow-wrap:anywhere; }
-.ic-message[data-role="streamer"] { border-color:#357b67; background:#162722; }
+.ic-message[data-role="streamer"] { border-color:#9c6539; background:#2b2118; }
 .ic-message time { display:inline; color:#a2afbd; font-size:10px; margin-right:6px; white-space:nowrap; }
 .ic-message .ic-author { color:#91baff; display:inline; font-size:12px; font-weight:600; }
-.ic-message[data-role="streamer"] .ic-author { color:#55e2b6; }
-.ic-message[data-role="manager"] .ic-author { color:#f1ce83; }
+.ic-message[data-role="streamer"] .ic-author { color:#ffad59; }
+.ic-message[data-role="manager"] .ic-author { color:#78b5ff; }
+.ic-message[data-role="partner"] { border-color:#357b67; background:#162722; }
+.ic-message[data-role="partner"] .ic-author { color:#55e2b6; }
+.ic-option[data-role="streamers"]>span:first-child { color:#ffad59; }
+.ic-option[data-role="managers"]>span:first-child { color:#78b5ff; }
+.ic-option[data-role="partners"]>span:first-child { color:#55e2b6; }
 .ic-message-text { white-space:pre-wrap; }
 .ic-badges { display:inline; }
 .ic-badge { width:14px; height:14px; object-fit:contain; vertical-align:-2px; margin-right:3px; }
@@ -2435,3 +2440,5 @@ select:hover {
 .settings-panel .settings-feature p { margin:6px 0 0; }
 
 .ic-diagnostics { white-space:pre-line; color:#b9c1cc; font-size:11px; line-height:1.7; margin:12px 0; }
+
+.ic-role-help { color:#aeb7c4; font-size:11px; line-height:1.6; margin:0 0 12px; }

@@ -131,12 +131,34 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261028-5');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-1');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
  await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
+ assert(await settings.locator('.ic-streamers').isChecked());assert(await settings.locator('.ic-managers').isChecked());assert(await settings.locator('.ic-partners').isChecked());
+ await frame.evaluate(()=>{
+   const host=document.querySelector('aside.live_chat');
+   const fixtures=[['streamer','주황스트리머','<svg class="_badge_x_1"><use href="#icon_chat_badge_streamer"></use></svg>'],['manager','파랑관리자','<span class="_badge_x_1" data-user-role="manager"></span>'],['partner','초록파트너','<svg class="_badge_partner_x_1"></svg>']];
+   for(const [role,name,badge] of fixtures){const row=document.createElement('div');row.className='_chatting_message_role_21';row.dataset.messageId='role-'+role;row.innerHTML=badge+'<span class="_nickname_role_33"><span class="_nickname_leaf_80">'+name+'</span></span><span>역할 필터 '+role+'</span>';host.appendChild(row);}
+   const row=document.createElement('div');row.className='_chatting_message_role_21';row.innerHTML='<span class="_nickname_role_33"><span class="_nickname_leaf_80" style="color:orange">일반 시청자</span></span>색상만 같은 일반 채팅';host.appendChild(row);
+ });
+ await page.waitForFunction(()=>{const root=document.querySelector('#__chzzk_multiview_v09__').shadowRoot;return ['streamer','manager','partner'].every(role=>[...root.querySelectorAll('.ic-message[data-role="'+role+'"]')].some(row=>row.textContent.includes('역할 필터')));});
+ assert(!(await panel.locator('.ic-list').textContent()).includes('색상만 같은 일반 채팅'));
+ await frame.evaluate(()=>{const host=document.querySelector('aside.live_chat');for(const [role,color] of [['streamer','#ff9900'],['manager','#409cff'],['partner','#00d58a']]){const row=document.createElement('div');row.className='_chatting_message_color_21';row.dataset.messageId='role-color-'+role;row.style.color=color;row.innerHTML='<span class="_nickname_color_33"><span class="_nickname_leaf_80" style="color:#dddddd">본문색상 '+role+'</span></span> 본문색상 역할 '+role;host.appendChild(row);}});
+ await page.waitForFunction(()=>{const root=document.querySelector('#__chzzk_multiview_v09__').shadowRoot;return ['streamer','manager','partner'].every(role=>[...root.querySelectorAll('.ic-message[data-role="'+role+'"]')].some(row=>row.textContent.includes('본문색상 역할')));});
+
+ await frame.evaluate(()=>{const row=document.createElement('div');row.className='_chatting_message_late_21';row.dataset.messageId='role-late';row.style.color='#dddddd';row.innerHTML='<span class="_nickname_late_33"><span class="_nickname_leaf_80">늦은역할색</span></span> 늦게 적용된 역할 색상';document.querySelector('aside.live_chat').appendChild(row);});
+ await page.waitForTimeout(300);
+ assert(!(await panel.locator('.ic-list').textContent()).includes('늦게 적용된 역할 색상'));
+ await frame.evaluate(()=>document.querySelector('[data-message-id="role-late"]').style.color='#00d58a');
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('늦게 적용된 역할 색상'));
+ await settings.locator('.ic-partners').uncheck();
+ await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-message[data-role="partner"]'));
+ await settings.locator('.ic-partners').check();
+ await page.waitForFunction(()=>!!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-message[data-role="partner"]'));
+ await frame.evaluate(()=>document.querySelectorAll('[data-message-id^="role-"]').forEach(row=>row.remove()));await settings.locator('.ic-clear').click();
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
  const imageUrl='https://ssl.pstatic.net/__cz_collected_chat_test.png';
  await page.route(imageUrl,route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKf8AAAAASUVORK5CYII=','base64')}));

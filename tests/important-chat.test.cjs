@@ -37,3 +37,12 @@ test('collected chat limits image segments and accepts only HTTPS Naver image CD
  for(const url of ['data:image/svg+xml,bad','http://ssl.pstatic.net/a','https://user:pass@ssl.pstatic.net/a','https://evil.invalid/a'])assert.equal(api.imageUrl(url),'');
  assert.equal(api.imageUrl(valid),valid);
 });
+
+test('streamer, manager and partner default on and remain independently filterable',()=>{
+ const api=setup(),filter=api.settings({names:[]});
+ assert.equal(filter.streamers,true);assert.equal(filter.managers,true);assert.equal(filter.partners,true);
+ const item=api.message({id:'partner',name:'파트너 사용자',text:'안녕하세요',role:'partner'});
+ assert.equal(item.role,'partner');assert(api.matches(item,filter));assert(!api.matches(item,api.settings({partners:false})));
+ assert(api.matches({name:'owner',role:'streamer'},api.settings({partners:false})));
+ assert.equal(api.settings({streamers:false,managers:false}).partners,true);
+});
