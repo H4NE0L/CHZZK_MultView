@@ -2427,9 +2427,8 @@ select:hover {
 .ic-settings-heading { display:block; font-size:12px; margin-bottom:12px; color:#00dc9b; }
 
 /* Native CHZZK header and composer remain in the frame; collection occupies
-   a reserved slice between the native header and message list. */
+   a separate flex row above the original chat iframe. */
 .chat-panel { position:relative; }
-.important-chat-panel { position:absolute; z-index:2; top:var(--chat-native-header,36px); left:0; right:0; background:#121214; }
 
 .settings-feature { margin-top:14px; }
 .settings-panel .settings-feature .settings-option { margin-top:0; }
@@ -2438,8 +2437,3 @@ select:hover {
 .ic-diagnostics { white-space:pre-line; color:#b9c1cc; font-size:11px; line-height:1.7; margin:12px 0; }
 
 .ic-role-help { color:#aeb7c4; font-size:11px; line-height:1.6; margin:0 0 12px; }
-
-.important-chat-panel[data-position="bottom"] { top:auto; bottom:0; border-top:1px solid #393c42; border-bottom:0; }
-.important-chat-panel[data-position="bottom"] .ic-resizer { order:-1; }
-.ic-position-option { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
-.ic-position { color:#eee; background:#222428; border:1px solid #444; border-radius:4px; padding:5px 8px; }

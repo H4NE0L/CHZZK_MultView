@@ -191,7 +191,7 @@ globalThis.CZChatLayout = (() => {
   }
   let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
   const boundRoots=new WeakSet();
-  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0)),position:value.position==='bottom'?'bottom':'top'};prepare();}
+  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
   const managedHeaders=new WeakSet();
   function isNativeHeader(header){
     if(managedHeaders.has(header))return true;
@@ -225,7 +225,7 @@ globalThis.CZChatLayout = (() => {
     // Keep CHZZK's SVG/path rules outside extension-owned icons.
     const icon=document.createElement('span');icon.setAttribute('aria-hidden','true');host.appendChild(icon);
     const shadow=icon.attachShadow({mode:'open'});
-    shadow.innerHTML='<style>:host{display:block!important;width:18px!important;height:18px!important;flex:none!important;line-height:0!important}svg{display:block;width:18px;height:18px;min-width:18px;max-width:18px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
+    shadow.innerHTML='<style>:host{display:block!important;width:20px!important;height:20px!important;flex:none!important;line-height:0!important}svg{display:block;width:20px;height:20px;min-width:20px;max-width:20px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
   }
   function overlayRects(){
     return [...document.querySelectorAll('[role="dialog"],[role="menu"],[aria-modal="true"],[class^="_layer_"],[class*=" _layer_"],[class*="layer_popup"],.cz-native-chat-header div,.cz-native-chat-header ul')].filter(el=>{
@@ -278,11 +278,14 @@ globalThis.CZChatLayout = (() => {
     let channel=header.querySelector('#cz-chat-channel');
     if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M10 1h5v5h-1.5V3.56L7.53 9.53 6.47 8.47l5.97-5.97H10V1ZM2.5 3H7v1.5H2.5v9h9V9H13v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 1 13.5v-9A1.5 1.5 0 0 1 2.5 3Z"/>');button.before(channel);}
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
-    if(native)native.classList.add('cz-native-settings');
-    let spacer=root.querySelector('#cz-important-chat-space');
-    if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';}
-    if(presentation.position==='bottom'){if(root.lastElementChild!==spacer)root.appendChild(spacer);}else if(header.nextElementSibling!==spacer)header.after(spacer);
-    spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
+    if(native){
+      native.classList.add('cz-native-settings');
+      let wrapper=native.parentElement;
+      while(wrapper && wrapper!==header){
+        wrapper.classList.add('cz-native-action-wrapper');wrapper=wrapper.parentElement;
+      }
+    }
+    root.querySelector('#cz-important-chat-space')?.remove();
     const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)reportHeader(header);
   }
   let preparedRoot = null,preparedRootStyle='';
@@ -309,6 +312,7 @@ globalThis.CZChatLayout = (() => {
       const style=document.createElement('style');style.id='cz-chat-chrome';
       style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
       style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:18px!important;height:18px!important;margin:0!important;transform:none!important}';
+      style.textContent+='.cz-native-chat-header{height:40px!important;min-height:40px!important;padding:0 8px!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;flex:0 0 32px!important;box-sizing:border-box!important}.cz-native-chat-header #cz-chat-channel:before,.cz-native-chat-header #cz-chat-channel:after,.cz-native-chat-header #cz-chat-settings:before,.cz-native-chat-header #cz-chat-settings:after,.cz-native-settings:before,.cz-native-settings:after{content:none!important}.cz-native-settings{font-size:20px!important;line-height:1!important}.cz-native-settings svg{width:20px!important;height:20px!important}.cz-native-action-wrapper{position:relative!important;inset:auto!important;transform:none!important;align-self:center!important;align-items:center!important;min-height:32px!important;margin-top:0!important;margin-bottom:0!important}';
       (document.head||document.documentElement).appendChild(style);
     }
     nativeHeader(root);

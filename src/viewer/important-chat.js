@@ -1,9 +1,9 @@
 globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
   const rendered=new Map(),owners=new Map();let stats=null,received=0;
-  const HEIGHT_KEY='chzzkImportantChatHeightV1',POSITION_KEY='chzzkImportantChatPositionV1';let desiredHeight=200,position='top',drag=null;
+  const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');
-  panel.innerHTML='<div class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><label class="ic-position-option">모아보기 위치<select class="ic-position" aria-label="모아보기 위치"><option value="top">상단</option><option value="bottom">하단</option></select></label><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><p class="ic-diagnostics" aria-live="polite"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button><button class="ic-clear" type="button">수집된 내용 초기화</button></div></dialog>';
+  panel.innerHTML='<div class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><p class="ic-diagnostics" aria-live="polite"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button><button class="ic-clear" type="button">수집된 내용 초기화</button></div></dialog>';
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
@@ -17,24 +17,23 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   function openSettings(){controls();if(!dialog.open)dialog.showModal();}
   $('.ic-settings-close').onclick=()=>dialog.close();
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom)dialog.close();});
-  function bounds(){const offset=parseFloat(chatPanel.style.getPropertyValue('--chat-native-header'))||36;const max=Math.max(64,chatPanel.clientHeight-offset-124);return {min:Math.min(100,max),max};}
+  function bounds(){const max=Math.max(64,chatPanel.clientHeight-160);return {min:Math.min(100,max),max};}
   function resize(){
     if(!chatPanel.clientHeight)return;
     const {min,max}=bounds(),height=Math.round(Math.max(min,Math.min(max,desiredHeight)));
-    panel.dataset.position=position;
     panel.style.setProperty('--ic-height',height+'px');
     present();
     handle.setAttribute('aria-valuemin',String(min));handle.setAttribute('aria-valuemax',String(max));handle.setAttribute('aria-valuenow',String(height));
   }
   function storeHeight(){chrome.storage.local.set({[HEIGHT_KEY]:desiredHeight}).catch(error=>notify('주요 채팅 높이 저장 실패: '+error.message));}
   handle.onpointerdown=event=>{if(event.button!==0)return;event.preventDefault();drag={y:event.clientY,height:panel.getBoundingClientRect().height};chatPanel.classList.add('ic-resizing');handle.setPointerCapture(event.pointerId);};
-  handle.onpointermove=event=>{if(!drag)return;const {min,max}=bounds();desiredHeight=Math.round(Math.max(min,Math.min(max,drag.height+(event.clientY-drag.y)*(position==='bottom'?-1:1))));resize();};
+  handle.onpointermove=event=>{if(!drag)return;const {min,max}=bounds();desiredHeight=Math.round(Math.max(min,Math.min(max,drag.height+(event.clientY-drag.y))));resize();};
   function endResize(){if(!drag)return;drag=null;chatPanel.classList.remove('ic-resizing');storeHeight();}
   handle.onpointerup=handle.onpointercancel=handle.onlostpointercapture=endResize;
-  handle.onkeydown=event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const {min,max}=bounds(),step=event.shiftKey?50:10;desiredHeight=Math.max(min,Math.min(max,event.key==='Home'?min:event.key==='End'?max:Number(handle.getAttribute('aria-valuenow'))+(event.key==='ArrowDown'?step:-step)*(position==='bottom'?-1:1)));resize();storeHeight();};
+  handle.onkeydown=event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const {min,max}=bounds(),step=event.shiftKey?50:10;desiredHeight=Math.max(min,Math.min(max,event.key==='Home'?min:event.key==='End'?max:Number(handle.getAttribute('aria-valuenow'))+(event.key==='ArrowDown'?step:-step)));resize();storeHeight();};
   const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(chatPanel);resize();
   window.addEventListener('pagehide',()=>{sizeObserver.disconnect();chatPanel.classList.remove('ic-resizing');});
-  function present(){const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',position,name:channel?.name||channel?.uid||'',height:filter.enabled?Math.round(panel.getBoundingClientRect().height):0});}
+  function present(){const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name:channel?.name||channel?.uid||'',height:0});}
   function diagnostics(){
     const owner=owners.get(getState().selectedUid);
     const number=key=>Number.isFinite(stats?.[key])?Math.max(0,Math.floor(stats[key])):0;
@@ -72,14 +71,12 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   }
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);
-    $('.ic-position').value=position;
     enabledControl.checked=filter.enabled;enabledControl.disabled=!ready;
     for(const key of ['streamers','managers','partners'])$('.ic-'+key).checked=filter[key];
     $('.ic-names').replaceChildren();
     filter.names.forEach((name,index)=>{const button=document.createElement('button');button.type='button';button.textContent=name+' ×';button.title='사용자 제외';button.onclick=()=>save({...filter,names:filter.names.filter((_,i)=>i!==index)});$('.ic-names').appendChild(button);});
   }
   function save(value){filter=CZImportantChat.settings(value);model.clear();controls();configure();render();chrome.storage.local.set({[CZImportantChat.KEY]:filter}).catch(error=>notify('채팅 설정 저장 실패: '+error.message));}
-  $('.ic-position').onchange=event=>{position=event.target.value==='bottom'?'bottom':'top';panel.style.clipPath='';resize();chrome.storage.local.set({[POSITION_KEY]:position}).catch(error=>notify('모아보기 위치 저장 실패: '+error.message));};
   enabledControl.onchange=event=>save({...filter,enabled:event.target.checked});
   for(const key of ['streamers','managers','partners'])$('.ic-'+key).onchange=event=>save({...filter,[key]:event.target.checked});
   $('.ic-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-name');if(!input.value.trim())return;if(filter.names.length>=50){notify('사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,names:[...filter.names,input.value]});input.value='';};
@@ -92,34 +89,8 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));notify('채팅 내용 없이 점검 정보를 복사했습니다.');}catch(_){notify('점검 정보 복사 실패: 아래 수치를 직접 복사해주세요.');}
   };
   $('.ic-clear').onclick=()=>{model.clear();render();};
-  chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY,POSITION_KEY]).then(value=>{position=value[POSITION_KEY]==='bottom'?'bottom':'top';const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes[POSITION_KEY]){position=changes[POSITION_KEY].newValue==='bottom'?'bottom':'top';panel.style.clipPath='';controls();resize();}if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.clear();controls();configure();render();});
+  chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
+  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.clear();controls();configure();render();});
   controls();render();
-  return {openSettings,setHeaderHeight(height,menuOpen,overlays){
-    // Cut holes only where native iframe popups overlap the collection. CSS
-    // clipping also removes hit testing there, preserving popup interaction.
-    panel.style.visibility='';
-    const frame=getFrame(),box=panel.getBoundingClientRect(),origin=frame?.getBoundingClientRect();
-    const regions=[];
-    if(menuOpen && origin && Array.isArray(overlays))for(const rect of overlays.slice(0,16)){
-      if(!rect || !['left','top','right','bottom'].every(key=>Number.isFinite(rect[key])))continue;
-      const left=Math.max(0,origin.left+rect.left-box.left-2),top=Math.max(0,origin.top+rect.top-box.top-2);
-      const right=Math.min(box.width,origin.left+rect.right-box.left+2),bottom=Math.min(box.height,origin.top+rect.bottom-box.top+2);
-      if(right<=left || bottom<=top)continue;
-      const region={left,top,right,bottom};
-      // Nested/overlapping native layers must form one hole: even-odd holes
-      // would otherwise paint their shared area back over the native button.
-      for(let i=0;i<regions.length;){
-        const other=regions[i];
-        if(region.left<=other.right && region.right>=other.left && region.top<=other.bottom && region.bottom>=other.top){
-          region.left=Math.min(region.left,other.left);region.top=Math.min(region.top,other.top);
-          region.right=Math.max(region.right,other.right);region.bottom=Math.max(region.bottom,other.bottom);
-          regions.splice(i,1);i=0;
-        }else i++;
-      }
-      regions.push(region);
-    }
-    const holes=regions.map(({left,top,right,bottom})=>`${left}px ${top}px,${right}px ${top}px,${right}px ${bottom}px,${left}px ${bottom}px,${left}px ${top}px,0px 0px`);
-    panel.style.clipPath=holes.length?`polygon(evenodd,0px 0px,${box.width}px 0px,${box.width}px ${box.height}px,0px ${box.height}px,0px 0px,${holes.join(',')})`:'';
-    if(Number.isFinite(height)&&height>=24&&height<=chatPanel.clientHeight && parseFloat(chatPanel.style.getPropertyValue('--chat-native-header'))!==height){chatPanel.style.setProperty('--chat-native-header',height+'px');resize();}},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){panel.style.clipPath='';model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
+  return {openSettings,sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
 }};

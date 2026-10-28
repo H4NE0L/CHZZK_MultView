@@ -631,7 +631,7 @@ function saveState() {
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
     if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
-    if(data.type==='CHAT_HEADER'){importantChat?.setHeaderHeight(data.height,data.menuOpen,data.overlays);return;}
+    if(data.type==='CHAT_HEADER')return;
     if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}
     if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {

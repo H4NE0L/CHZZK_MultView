@@ -10,7 +10,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
- await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<h2 class="_title_native_12">채팅</h2><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><div id="native-action-wrap" style="display:flex"><button id="native-prediction">승부예측</button><button id="native-chat-menu" style="position:absolute;top:0;right:0;transform:translateY(-4px)">⋮</button></div>';window.__nativeTitle=toolbar.querySelector('h2').firstChild;const portal=document.createElement('div');portal.id='native-overlay-root';document.body.appendChild(portal);const shell=document.createElement('section');shell.id='native-width-shell';shell.style.cssText='height:100%;width:500px;min-width:500px;display:flex;flex-direction:column';host.before(shell);const foreign=document.createElement('div');foreign.className='live_chatting_header__foreign';foreign.innerHTML='<strong>배지 채팅 모아보기</strong><button class="foreign-filter">필터 펴기</button>';shell.append(foreign,toolbar,host);});
+ await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<h2 class="_title_native_12">채팅</h2><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><div id="native-action-wrap" style="display:flex;position:absolute;top:0;transform:translateY(-6px)"><button id="native-prediction">승부예측</button><button id="native-chat-menu" style="position:absolute;top:0;right:0;transform:translateY(-4px)">⋮</button></div>';window.__nativeTitle=toolbar.querySelector('h2').firstChild;const portal=document.createElement('div');portal.id='native-overlay-root';document.body.appendChild(portal);const shell=document.createElement('section');shell.id='native-width-shell';shell.style.cssText='height:100%;width:500px;min-width:500px;display:flex;flex-direction:column';host.before(shell);const foreign=document.createElement('div');foreign.className='live_chatting_header__foreign';foreign.innerHTML='<strong>배지 채팅 모아보기</strong><button class="foreign-filter">필터 펴기</button>';shell.append(foreign,toolbar,host);});
  await frame.locator('#cz-chat-settings').waitFor();
  await frame.waitForFunction(()=>document.querySelector('#native-width-shell').getBoundingClientRect().width<=innerWidth);
  assert(await frame.evaluate(()=>document.querySelector('.cz-chat-only').getBoundingClientRect().right<=innerWidth+1),'native chat fits the iframe despite a fixed/minimum-width shell');
@@ -24,6 +24,8 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
  const centers=await frame.evaluate(()=>['cz-chat-channel','cz-chat-settings','native-chat-menu'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return r.y+r.height/2;}));
  assert(Math.max(...centers)-Math.min(...centers)<1,'header controls share the same vertical center despite native absolute positioning');
+ const headerCenter=await frame.locator('.cz-native-chat-header').evaluate(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2;});
+ assert(centers.every(center=>Math.abs(center-headerCenter)<1),'icons are centered within the header itself');
  assert(await frame.evaluate(()=>window.__nativeTitle.isConnected && window.__nativeTitle.nodeValue==='채팅'),'native app title text node remains connected');
  assert.equal(await frame.locator('#native-overlay-root').evaluate(el=>getComputedStyle(el).display==='none'),false,'empty portal hosts are not hidden');
  assert(await frame.locator('.cz-native-chat-header #native-prediction').isVisible(),'native prediction control is retained');
@@ -36,9 +38,9 @@ module.exports=async function checkImportantChat(page){
  await frame.waitForFunction(()=>!document.querySelector('.foreign-clone #cz-chat-settings'));
  assert.equal(await frame.locator('.foreign-clone.cz-native-chat-header').count(),0);
  assert.equal(await frame.locator('.foreign-clone').textContent().then(text=>text.includes('다른 확장 수집 목록')),true);
- const nativeRect=await frame.locator('.cz-native-chat-header').boundingBox();
- await page.waitForFunction(()=>{const panel=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel');return parseFloat(getComputedStyle(panel).top)>36;});
- assert(Math.abs((await panel.boundingBox()).y-(nativeRect.y+nativeRect.height))<2,'collection starts below native header, after third-party panels');
+ const splitPanelBox=await panel.boundingBox(),splitFrameBox=await page.locator('.chat-frame').boundingBox();
+ assert(Math.abs(splitPanelBox.y+splitPanelBox.height-splitFrameBox.y)<2,'collection and original chat occupy separate non-overlapping rows');
+ assert.equal(await frame.locator('#cz-important-chat-space').count(),0,'native chat has no extension spacer');
  await frame.evaluate(()=>{window.__presentationCount=0;window.__countPresentation=event=>{if(event.data?.type==='CHAT_PRESENTATION')window.__presentationCount++;};window.addEventListener('message',window.__countPresentation);});
  await page.waitForTimeout(200);
  const presentations=await frame.evaluate(()=>{window.removeEventListener('message',window.__countPresentation);return window.__presentationCount;});
@@ -54,13 +56,13 @@ module.exports=async function checkImportantChat(page){
  for(const id of ['cz-chat-settings','cz-chat-channel']){
    assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
    const icon=frame.locator('#'+id+' svg');
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),18);
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),18);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),20);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),20);
    assert.notEqual(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
 
- assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),28);
+ assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),32);
  assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='cz-chat-settings'));
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('href'),'https://chzzk.naver.com/live/aaaaaa');
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('target'),'_blank');
@@ -68,24 +70,6 @@ module.exports=async function checkImportantChat(page){
  assert(await page.locator('#importantChatEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
 
  assert.equal(await panel.locator('.ic-header,.ic-count,.ic-status,.ic-empty').count(),0,'collection contains no heading or placeholder notices');
- await frame.locator('#cz-chat-settings').click();await settings.waitFor();
- await settings.locator('.ic-position').selectOption('bottom');
- await settings.locator('.ic-settings-close').click();
- await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').dataset.position==='bottom');
- const bottomBox=await panel.boundingBox(),chatBox=await page.locator('.chat-frame').boundingBox();
- assert(Math.abs(bottomBox.y+bottomBox.height-chatBox.y-chatBox.height)<2,'bottom collection aligns with the bottom of chat');
- await frame.waitForFunction(()=>document.querySelector('#cz-important-chat-space')===document.querySelector('.cz-chat-only').lastElementChild);
- const bottomGrip=await panel.locator('.ic-resizer').boundingBox();assert(Math.abs(bottomGrip.y-bottomBox.y)<2,'bottom collection has its resize handle above the list');
- await frame.evaluate(()=>{const menu=document.createElement('div');menu.setAttribute('role','menu');menu.id='bottom-settings-popup';menu.style.cssText='position:fixed;bottom:24px;left:8px;background:#333;z-index:1000;padding:12px';const button=document.createElement('button');button.id='bottom-settings-confirm';button.textContent='설정 적용';button.onclick=()=>{window.__bottomSettingsApplied=true;menu.remove();};menu.append(button);document.body.append(menu);});
- await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath!=='');
- assert(await panel.isVisible(),'bottom collection stays visible beside native settings');
- await frame.locator('#bottom-settings-confirm').click();assert(await frame.evaluate(()=>window.__bottomSettingsApplied),'bottom native settings receives clicks');
- await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath==='');
- await panel.locator('.ic-resizer').focus();await page.keyboard.press('ArrowUp');
- assert((await panel.boundingBox()).height>bottomBox.height,'up arrow grows bottom collection');
- await frame.locator('#cz-chat-settings').click();await settings.waitFor();
- await settings.locator('.ic-position').selectOption('top');await settings.locator('.ic-settings-close').click();
- await frame.waitForFunction(()=>document.querySelector('.cz-native-chat-header').nextElementSibling?.id==='cz-important-chat-space');
  await frame.evaluate(()=>{document.querySelector('.cz-channel-name').remove();CZChatLayout.setPresentation({name:'테스트 방송',height:200});CZChatLayout.setPresentation({name:'테스트 방송',height:200});});
  assert.equal(await frame.locator('.cz-channel-name').count(),1,'fallback title is reused across layout updates');
  await frame.locator('.cz-native-chat-header #native-chat-menu').click();assert(await panel.isVisible(),'opening native settings keeps collection visible');
@@ -97,18 +81,19 @@ module.exports=async function checkImportantChat(page){
    document.querySelector('.cz-native-chat-header #native-prediction').onclick=()=>window.__openNativeMenu('prediction');
    const nickname=document.createElement('button');nickname.id='native-user-name';nickname.textContent='사용자 메뉴';nickname.onclick=()=>window.__openNativeMenu('block');document.querySelector('aside.live_chat').append(nickname);
  });
- await frame.locator('#native-user-name').click();await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath!=='');assert(await panel.isVisible(),'collection remains visible around native popup');
- await frame.locator('#native-confirm').click();await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath==='');
- await frame.locator('.cz-native-chat-header #native-prediction').click();await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath!=='');
- await frame.locator('#native-confirm').click();await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').style.clipPath==='');
+ await frame.locator('#native-user-name').click();assert(await panel.isVisible());assert(await panel.isVisible(),'collection remains visible around native popup');
+ await frame.locator('#native-confirm').click();assert(await panel.isVisible());
+ await frame.locator('.cz-native-chat-header #native-prediction').click();assert(await panel.isVisible());
+ await frame.locator('#native-confirm').click();assert(await panel.isVisible());
  assert.deepEqual(await frame.evaluate(()=>window.__nativeActions),['block','prediction'],'native popup buttons receive clicks and execute their handlers');
  await frame.locator('#native-user-name').evaluate(el=>el.remove());
  const start=await panel.boundingBox();
  const separator=panel.locator('.ic-resizer'),grip=await separator.boundingBox();
- const reserved=await frame.locator('#cz-important-chat-space').evaluate(el=>el.getBoundingClientRect().height);
+ const originalFrameHeight=(await page.locator('.chat-frame').boundingBox()).height;
  await separator.hover();await page.mouse.down();await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2+40,{steps:8});await page.mouse.up();
  assert((await panel.boundingBox()).height>=start.height+30);
- assert((await frame.locator('#cz-important-chat-space').evaluate(el=>el.getBoundingClientRect().height))>reserved);
+ assert((await page.locator('.chat-frame').boundingBox()).height<originalFrameHeight,'resizing the collection reduces the actual iframe viewport');
+ assert.equal(await frame.locator('#cz-important-chat-space').count(),0);
  const grown=(await panel.boundingBox()).height;await separator.press('ArrowUp');assert((await panel.boundingBox()).height<grown);
  const openSettings=async()=>{if(!await settings.evaluate(el=>el.open)){await frame.locator('#cz-chat-settings').click();await settings.waitFor({state:'visible'});}};
  const closeSettings=async()=>{if(await settings.isVisible())await settings.locator('.ic-settings-close').click();};
