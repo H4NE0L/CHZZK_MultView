@@ -2426,3 +2426,5 @@ select:hover {
 .settings-feature { margin-top:14px; }
 .settings-panel .settings-feature .settings-option { margin-top:0; }
 .settings-panel .settings-feature p { margin:6px 0 0; }
+
+.ic-diagnostics { white-space:pre-line; color:#b9c1cc; font-size:11px; line-height:1.7; margin:12px 0; }

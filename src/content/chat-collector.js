@@ -1,11 +1,14 @@
 // Read only visible chat markup. No socket interception or extra connection.
-globalThis.CZChatCollector = {create({send}) {
+globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   const rows='[class*="live_chatting_list_item"],[class*="live_chatting_message_container"],[data-chat-message]';
   const names='[class*="live_chatting_username_nickname"],[class*="name_text"],[data-chat-nickname]';
   const texts='[class*="live_chatting_message_text"],[data-chat-text]';
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
-  let seen=new WeakMap();const pending=new Map();
+  const identities=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0};const pending=new Map();
+  const nameKey=value=>String(value||'').normalize('NFC').trim().toLocaleLowerCase('ko-KR');
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,ownerKnown:!!ownerName,enabled:filter.enabled});},500);}
   function role(row,textElements,nickname) {
+    if(ownerName && nameKey(nickname.textContent)===nameKey(ownerName))return 'streamer';
     // Role badges can be siblings of the username rather than its children.
     // Only inspect author markup before the nickname, never message content.
     const author=nickname.closest('[class*="live_chatting_username"],[data-chat-author]');
@@ -30,21 +33,24 @@ globalThis.CZChatCollector = {create({send}) {
     if(node.tagName==='BR')return '\n';
     return Array.from(node.childNodes,content).join('');
   }
-  function flush(){timer=null;if(pending.size){send(Array.from(pending.values()));pending.clear();}}
+  function flush(){timer=null;if(pending.size){const batch=Array.from(pending.values());send(batch);counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
     row=row.closest('[class*="live_chatting_list_item"],[data-chat-message]') || row;
+    if(!observed.has(row)){observed.add(row);counts.scanned++;report();}
     const nickname=row.querySelector(names),parts=Array.from(row.querySelectorAll(texts));
     if(!nickname || !parts.length)return;
     const topParts=parts.filter(part=>!parts.some(other=>other!==part && other.contains(part)));
     const name=nickname.textContent.trim().slice(0,80),text=topParts.map(content).join(' ').trim().slice(0,1000);
     if(!name || !text)return;
-    const fingerprint=JSON.stringify([name,text]),previous=seen.get(row);
+    const fingerprint=JSON.stringify([name,text]),previous=identities.get(row);
     const id=String(row.getAttribute('data-message-id') || row.getAttribute('data-chat-id') || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
     const item={id,name,text,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()};
     const signature=JSON.stringify(item);
-    if(previous?.signature===signature)return;
-    seen.set(row,{fingerprint,id,time:item.time,signature});
+    if(seen.get(row)?.signature===signature)return;
+    counts.parsed++;report();
+    const identity={fingerprint,id,time:item.time,signature};identities.set(row,identity);seen.set(row,identity);
     if(!CZImportantChat.matches(item,filter))return;
+    counts.matched++;
     pending.set(id,item);if(pending.size>CZImportantChat.LIMIT)pending.delete(pending.keys().next().value);
     if(!timer)timer=setTimeout(flush,250);
   }
@@ -53,9 +59,9 @@ globalThis.CZChatCollector = {create({send}) {
     const closest=el.closest(rows);if(closest){read(closest);return;}
     Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
   }
-  function stop(){observer?.disconnect();observer=null;clearTimeout(timer);timer=null;pending.clear();seen=new WeakMap();}
-  function configure(value) {
-    stop();filter=CZImportantChat.settings(value);if(!filter.enabled)return;
+  function stop(){observer?.disconnect();observer=null;clearTimeout(timer);timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();clearTimeout(statusTimer);statusTimer=null;}
+  function configure(value,identity={}) {
+    stop();counts={scanned:0,parsed:0,matched:0,sent:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
       const candidates=new Set();
       for(const record of records){candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}

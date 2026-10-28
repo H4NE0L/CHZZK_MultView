@@ -1,8 +1,9 @@
 globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
+  const owners=new Map();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');
-  panel.innerHTML='<header class="ic-header"><strong>주요 채팅 <span class="ic-count">(0)</span></strong></header><div class="ic-body"><div class="ic-list"></div><div class="ic-bottom"><small class="ic-status"></small></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><button class="ic-clear" type="button">수집된 내용 초기화</button></div></dialog>';
+  panel.innerHTML='<header class="ic-header"><strong>주요 채팅 <span class="ic-count">(0)</span></strong></header><div class="ic-body"><div class="ic-list"></div><div class="ic-bottom"><small class="ic-status"></small></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><p class="ic-diagnostics" aria-live="polite"></p><button class="ic-clear" type="button">수집된 내용 초기화</button></div></dialog>';
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
@@ -33,7 +34,19 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(chatPanel);resize();
   window.addEventListener('pagehide',()=>{sizeObserver.disconnect();chatPanel.classList.remove('ic-resizing');});
   function present(){const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name:channel?.name||channel?.uid||'',height:filter.enabled?Math.round(panel.getBoundingClientRect().height):0});}
-  function configure(){present();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter]);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter}))configured.set(frame,signature);}
+  function diagnostics(){
+    const owner=owners.get(getState().selectedUid);
+    const number=key=>Number.isFinite(stats?.[key])?Math.max(0,Math.floor(stats[key])):0;
+    $('.ic-diagnostics').textContent=(filter.enabled?'수집 켜짐':'수집 꺼짐')+' · 스트리머 확인: '+(owner?.name|| (owner?.pending?'조회 중':'확인 안 됨'))+'\n'+(!stats?'수집 프레임 응답 대기':'읽은 항목 '+number('scanned')+' · 해석 '+number('parsed')+' · 대상 '+number('matched')+' · 전송 '+number('sent'))+' · 수신 '+received+' · 표시 '+model.items.length;
+  }
+  function resolveOwner(){
+    const uid=getState().selectedUid;if(!ready || getState().chatOpen===false || !uid || owners.has(uid) || !filter.enabled)return;
+    const channel=getState().channels.find(c=>c.uid===uid);if(!channel)return;
+    owners.set(uid,{pending:true,name:''});
+    const request=channel.type==='video'?CZChzzkApi.fetchVideoChannelName(channel.sourceId||uid.replace(/^video:/,'')):CZChzzkApi.fetchChannelName(channel.sourceId||uid);
+    Promise.resolve(request).then(name=>{owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{owners.set(uid,{pending:false,name:''});diagnostics();});
+  }
+  function configure(){present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
   function render(){
     panel.hidden=ready && !filter.enabled;
     present();
@@ -48,7 +61,7 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
       row.append(time,author,text);list.appendChild(row);
     }
     if(!model.items.length){const empty=document.createElement('p');empty.className='ic-empty';empty.textContent='대상 사용자의 채팅이 이곳에 표시됩니다.';list.appendChild(empty);}
-    list.scrollTop=atBottom?list.scrollHeight:scrollTop;
+    list.scrollTop=atBottom?list.scrollHeight:scrollTop;diagnostics();
   }
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);
@@ -65,5 +78,5 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
   chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.clear();controls();configure();render();});
   controls();render();
-  return {openSettings,setHeaderHeight(height,menuOpen){panel.style.visibility=menuOpen===true?'hidden':'';if(Number.isFinite(height)&&height>=24&&height<=100)chatPanel.style.setProperty('--chat-native-header',height+'px');},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid)model.reset(uid);configure();render();},receive(data){if(ready && model.add(data.uid,data.messages,filter))render();},panel};
+  return {openSettings,setHeaderHeight(height,menuOpen){panel.style.visibility=menuOpen===true?'hidden':'';if(Number.isFinite(height)&&height>=24&&height<=100)chatPanel.style.setProperty('--chat-native-header',height+'px');},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame())configured.delete(getFrame());const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
 }};

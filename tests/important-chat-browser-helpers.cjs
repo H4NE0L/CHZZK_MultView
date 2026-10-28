@@ -31,8 +31,8 @@ module.exports=async function checkImportantChat(page){
    const icon=frame.locator('#'+id+' svg');
    assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),16);
    assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),16);
-   assert.equal(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
-   assert.notEqual(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
+   assert.notEqual(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
+   assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
 
  assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),28);
@@ -67,6 +67,11 @@ module.exports=async function checkImportantChat(page){
    const body=document.createElement('span');body.className='live_chatting_message_text__test';body.textContent=text;
    nested.append(author,body);host.appendChild(row);
  },{name,text,role,id});
+ await add('테스트 방송','배지 없는 실제 스트리머','','api-owner');
+ await add('테스트 방송2','다른 닉네임은 제외','','not-owner');
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('배지 없는 실제 스트리머'));
+ await frame.evaluate(()=>document.querySelector('[data-message-id="api-owner"]').remove());
+ await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
  await add('방송인','스트리머 메시지','스트리머','owner-1');
  await add('관리자A','관리자 메시지','채널 관리자 배지','manager-1');
  await add('일반 사용자','수집되면 안 됨','','normal-1');
@@ -79,7 +84,18 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await panel.locator('.ic-message').count(),2,'nested containers must not duplicate messages');
  assert((await panel.locator('.ic-list').textContent()).includes('방송인 · 스트리머'),'streamer badge outside username is recognized');
  assert(!(await panel.locator('.ic-list').textContent()).includes('일반 사용자'),'message-body badge must not grant a role');
+ const stableIds=await frame.evaluate(async()=>{
+   const row=document.querySelector('[data-message-id="owner-1"]');row.removeAttribute('data-message-id');
+   const batches=[],collector=CZChatCollector.create({send:batch=>batches.push(batch)});
+   collector.configure({enabled:true});await new Promise(resolve=>setTimeout(resolve,300));
+   collector.configure({enabled:true},{streamerName:'테스트 방송'});await new Promise(resolve=>setTimeout(resolve,300));collector.stop();row.dataset.messageId='owner-1';
+   return batches.map(batch=>batch.find(item=>item.name==='방송인')?.id);
+ });
+ assert.equal(stableIds.length,2);assert.equal(stableIds[0],stableIds[1],'API identity refresh must not duplicate existing chat rows');
+
  await openSettings();
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent.includes('스트리머 확인: 테스트 방송'));
+ await page.waitForFunction(()=>{const text=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent;return /읽은 항목 [1-9]/.test(text)&&/수신 [1-9]/.test(text)&&/표시 2/.test(text);});
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');

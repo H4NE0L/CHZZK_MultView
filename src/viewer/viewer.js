@@ -626,11 +626,12 @@ function saveState() {
 
   window.addEventListener("message", event => {
     const data = event.data;
-    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
     if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
     if(data.type==='CHAT_HEADER'){importantChat?.setHeaderHeight(data.height,data.menuOpen);return;}
+    if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}
     if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;

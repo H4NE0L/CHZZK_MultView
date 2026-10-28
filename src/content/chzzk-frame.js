@@ -271,14 +271,14 @@
     }, 500);
   }
 
-  const importantCollector=chatMode?CZChatCollector.create({send:messages=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_BATCH',uid:frameUid,messages},PARENT_ORIGIN)}):null;
+  const importantCollector=chatMode?CZChatCollector.create({status:stats=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_STATUS',uid:frameUid,stats},PARENT_ORIGIN),send:messages=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_BATCH',uid:frameUid,messages},PARENT_ORIGIN)}):null;
   bindObserver();
   if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
-    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings);
+    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
