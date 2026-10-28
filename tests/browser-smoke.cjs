@@ -123,7 +123,7 @@ async function run() {
       window.chrome = {
         windows: {create:args=>window.__createResultWindow(args.url)},
         tabs: {getCurrent: async () => ({id: 1}),create:props=>window.__openOriginalTab(props),update:(id,props)=>window.__updateOriginalTab(id,props)},
-        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
+        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => {if(message.type==='VIEWER_SAVE_STATE')await window.__storageSet({chzzkMultiviewV09:message.state});return message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true});}, onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
             get: keys => {
@@ -179,6 +179,15 @@ async function run() {
     await popup.locator('#clearList').click();
     assert(!(await popup.locator('#multiList').textContent()).includes('cccccc'));
 
+    const buttons=await popup.locator('.open-multiview-actions button').evaluateAll(nodes=>nodes.map(node=>({top:node.getBoundingClientRect().top,fits:node.scrollWidth<=node.clientWidth})));
+    assert.equal(buttons.length,2);assert.equal(buttons[0].top,buttons[1].top);assert(buttons.every(button=>button.fits));
+    await popup.evaluate(()=>{window.__openRequests=[];window.__originalSend=chrome.runtime.sendMessage;window.__originalClose=window.close;window.close=()=>{};chrome.runtime.sendMessage=async message=>{if(message.type==='OPEN_MULTIVIEW_FROM_POPUP'){window.__openRequests.push(message);return {ok:true};}return window.__originalSend(message);};});
+    await popup.locator('#openTab').click();await popup.locator('#open').click();
+    assert.deepEqual(await popup.evaluate(()=>window.__openRequests.map(message=>message.target)),['tab','window']);
+    await popup.evaluate(()=>{chrome.runtime.sendMessage=window.__originalSend;window.close=window.__originalClose;});
+    console.log('PASS: popup tab/window buttons fit and send independent opening modes.');
+    if(process.argv.includes('--popup-only')){assert.deepEqual(errors,[]);return;}
+
     const main = await context.newPage();
     main.on('pageerror', e => errors.push(e.message));
     main.on('framenavigated', async frame => {
@@ -209,6 +218,9 @@ async function run() {
     await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
     await main.locator('#uidInput').fill('');await main.locator('#uidInput').press('f');assert.equal(await main.locator('#uidInput').inputValue(),'f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);await main.locator('#uidInput').fill('');
     console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
+    await main.locator('body').click({position:{x:5,y:5}});
+    await require('./audio-isolation-browser-helpers.cjs')(main);
+    await require('./important-chat-browser-helpers.cjs')(main);
 
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));
     await main.evaluate(() => { window.__originalFrames = [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('#videoGrid iframe')]; });
@@ -299,7 +311,7 @@ async function run() {
     await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='true');
     await star.click();
     await popup.waitForFunction(() => document.querySelector('.cf-row[data-uid="aaaaaa"] .cf-star').getAttribute('aria-pressed')==='false');
-    assert.equal(await main.locator('.chat-head strong').textContent(),'채팅 · 테스트 방송');
+    assert.equal(await main.locator('.chat-head').count(),0);
     followingLogin=false;
     await popup.locator('.cf-refresh').click();
     await popup.waitForFunction(() => document.querySelector('.cf-status').textContent.includes('로그인'));
@@ -413,7 +425,8 @@ async function run() {
     await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
     const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));
     assert.equal(liveFrames.length, 2);
-    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); document.querySelector('video').muted = false; });
+    for (const frame of liveFrames) await frame.evaluate(() => { window.parent.postMessage({source:'chzzk-multiview',type:'CHANNEL_INFO',uid:location.pathname.split('/').pop(),channelName:'채팅 시청자 오염 이름'},'https://viewer.invalid'); const button=document.createElement('button');button.className='native-player-control-test';button.textContent='테스트 음소거 해제';button.onclick=()=>{document.querySelector('video').muted=false;};document.body.appendChild(button); });
+    for(const frame of liveFrames)await frame.locator('.native-player-control-test').click({force:true});
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-volume-row .tile-mute-btn')].every(el => el.dataset.state === 'u'));
     const survivor = main.frames().find(frame => new URL(frame.url()).pathname === '/live/bbbbbb');
     await main.locator('#videoGrid .video-tile[data-uid="aaaaaa"] .remove-btn').click();
@@ -464,8 +477,9 @@ async function run() {
     await replayChat.waitForFunction(()=>document.querySelector('.live_chatting_input_box').getBoundingClientRect().height===46);
     await replayChat.waitForFunction(() => document.querySelector('video')?.muted && document.querySelector('video').volume === 0 && document.querySelector('aside')?.getBoundingClientRect().width > 0);
     const replayPlayer = main.frames().find(frame => new URL(frame.url()).pathname === '/video/12345678' && !new URL(frame.url()).search);
-    await replayPlayer.waitForFunction(() => document.querySelector('video')?.dataset.chzzkMvBound === '1');
-    await replayPlayer.evaluate(() => { document.querySelector('video').muted = true; });
+    await replayPlayer.waitForFunction(() => document.readyState==='complete' && document.querySelector('video')?.dataset.chzzkMvBound === '1' && document.querySelector('video').volume>0 && !document.querySelector('video').muted);
+    await replayPlayer.evaluate(() => {document.body.tabIndex=-1;document.body.focus();document.addEventListener('keydown',event=>{if(event.key==='m')document.querySelector('video').muted=true;});});
+    await replayPlayer.locator('body').press('m');
     await main.waitForFunction(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.tile-volume-row[data-uid="video:12345678"] .tile-mute-btn')?.dataset.state === 'm');
     console.log('PASS: popup-list replacement retains players; replay UID messages and cross-origin chat-only layout work.');
     // Use a real generated video stream to exercise capture and recording in Chromium.
@@ -512,7 +526,8 @@ async function run() {
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
     const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
-    await main.locator('#chatOriginalBtn').click();assert.equal(externalTabs[0].url,'https://chzzk.naver.com/video/12345678');assert.equal(externalTabs[1].muted,true);
+    assert.equal(await main.locator('#chatOriginalBtn').count(),0);
+    assert.equal(await main.locator('#chatSettingsBtn').count(),0);
     // Capture again while the non-modal preview is open.
     await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.gallery-index').textContent==='2 / 2');
     await main.locator('.gallery-prev').click();assert.equal(await main.locator('.gallery-index').textContent(),'1 / 2');await main.locator('.media-body img').waitFor();

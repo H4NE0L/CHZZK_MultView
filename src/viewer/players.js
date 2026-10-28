@@ -22,7 +22,7 @@ globalThis.CZPlayers = {create(context) {
         <span class="tile-head-spacer"></span>
         <button class="tile-screenshot" type="button" title="스크린샷 (S)" aria-label="스크린샷 (S)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="tile-record" type="button" title="녹화 시작/종료 (R)" aria-label="녹화 시작/종료 (R)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg></button>
-        <button class="tile-address" title="방송 링크 생성">링크 생성</button>
+        <button class="tile-address" title="방송 주소 복사">주소 복사</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
       <div class="tile-content">
@@ -87,48 +87,28 @@ globalThis.CZPlayers = {create(context) {
     addressBtn.addEventListener("click", async e => {
       e.stopPropagation();
       const url = channel.url || `https://chzzk.naver.com/live/${encodeURIComponent(channel.uid)}`;
-      const current = context.state.channels.find(c => c.uid === channel.uid) || channel;
-      const streamerName = String(current.name || "").trim() || String(current.linkTitle || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || String(current.title || "").replace(/\s*-\s*CHZZK\s*$/i, "").trim() || `CHZZK ${channel.uid}`;
-      const linkTitle = `${streamerName} - CHZZK`;
-      const html = `<a href="${escapeHtml(url)}">${escapeHtml(linkTitle)}</a>`;
-
       try {
-        if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-          const item = new ClipboardItem({
-            "text/html": new Blob([html], { type: "text/html" }),
-            "text/plain": new Blob([url], { type: "text/plain" })
-          });
-          await navigator.clipboard.write([item]);
-        } else {
-          throw new Error("Rich clipboard API unavailable");
-        }
-
-        addressBtn.textContent = "링크 복사됨";
-        showNotice("방송 링크 복사됨");
-        setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
-      } catch (_) {
         try {
-          // Fallback: copy a real anchor element through the browser's rich-text clipboard path.
-          const wrapper = document.createElement("div");
-          wrapper.contentEditable = "true";
-          wrapper.style.position = "fixed";
-          wrapper.style.left = "-9999px";
-          wrapper.innerHTML = html;
-          document.body.appendChild(wrapper);
-
-          const range = document.createRange();
-          range.selectNodeContents(wrapper);
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(range);
-          document.execCommand("copy");
-          selection.removeAllRanges();
-          wrapper.remove();
-
-          addressBtn.textContent = "링크 복사됨";
-          showNotice("방송 링크 복사됨");
-          setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = "링크 생성"; }, 900);
-        } catch (_) {}
+          await navigator.clipboard.writeText(url);
+        } catch (_) {
+          const input = document.createElement('textarea');
+          input.value = url;
+          input.style.cssText = 'position:fixed;left:-9999px;top:0';
+          const previousFocus = document.activeElement;
+          document.body.appendChild(input);
+          try {
+            input.select();
+            if (!document.execCommand('copy')) throw new Error('주소 복사 실패');
+          } finally {
+            input.remove();
+            previousFocus?.focus({preventScroll:true});
+          }
+        }
+        addressBtn.textContent = '주소 복사됨';
+        showNotice('방송 주소 복사됨');
+        setTimeout(() => { if (addressBtn.isConnected) addressBtn.textContent = '주소 복사'; }, 900);
+      } catch (_) {
+        showNotice('방송 주소를 복사하지 못했습니다.');
       }
     });
 

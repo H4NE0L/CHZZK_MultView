@@ -1,5 +1,5 @@
 (() => {
-  const files=['src/content/site-context.js','src/shared/chzzk-api.js','src/shared/favorites-store.js','src/shared/session-store.js','src/shared/messages.js','src/shared/followings-store.js','src/shared/group-manager.js','src/viewer/audio.js','src/viewer/chat.js','src/viewer/players.js','src/viewer/sync.js','src/shared/recordings-store.js','src/viewer/screenshot-crop.js','src/viewer/screenshot-gallery.js','src/viewer/media-tools.js','src/viewer/viewer.js'];
+  const files=['src/content/site-context.js','src/shared/chzzk-api.js','src/shared/favorites-store.js','src/shared/session-store.js','src/shared/messages.js','src/shared/followings-store.js','src/shared/group-manager.js','src/viewer/audio.js','src/shared/important-chat.js','src/viewer/important-chat.js','src/viewer/chat.js','src/viewer/players.js','src/viewer/sync.js','src/shared/recordings-store.js','src/viewer/screenshot-crop.js','src/viewer/screenshot-gallery.js','src/viewer/media-tools.js','src/viewer/viewer.js'];
   const transfers=new Map();
   function siteSender(sender){try{return sender.id===chrome.runtime.id && sender.frameId===0 && Number.isInteger(sender.tab?.id) && new URL(sender.url).origin==='https://chzzk.naver.com';}catch(_){return false;}}
   chrome.runtime.onMessage.addListener((message,sender,reply)=>{
@@ -9,12 +9,9 @@
     (async()=>{
       switch(message.type){
         case 'OPEN_MULTIVIEW_ON_SITE':
+          await CZViewerTabs.remember(tabId);
           await chrome.scripting.executeScript({target:{tabId,frameIds:[0]},files});return {ok:true};
         case 'SITE_VIEWER_TAB':return {ok:true,tabId};
-        case 'SITE_OPEN_ORIGINAL':{
-          const url=CZSessionStore.parseInput(message.url)?.url;if(!url)throw Error('유효하지 않은 방송 주소');
-          const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});return {ok:true};
-        }
         case 'SITE_RECORDING_BEGIN':{
           const record=message.metadata;
           if(!/^[a-f0-9-]{36}$/.test(record?.id) || typeof record.name!=='string' || !/^video\/(webm|mp4)/.test(message.mime))throw Error('유효하지 않은 녹화');

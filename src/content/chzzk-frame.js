@@ -3,7 +3,6 @@
   if (window.top === window) return;
 
   let PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
-  let commandedState = null;
   let chatLayoutStarted = false;
   let videoObserver = null;
   let uiObserver = null;
@@ -39,48 +38,22 @@
     return video.muted === true || Number(video.volume) <= 0;
   }
 
-  function reportVideoState(video, reason = "player") {
+  function reportVideoState(video, reason = "player", operation = "volume") {
     // The chat iframe silences its own <video>; it must never report that
     // state as if it were the broadcast player.
     if (!frameUid || !video || chatMode) return;
     window.parent.postMessage({
       source: "chzzk-multiview", type: "VIDEO_STATE", uid: frameUid,
-      muted: isVideoMuted(video), volume: Number(video.volume), reason
+      muted: isVideoMuted(video), volume: Number(video.volume), reason, operation
     }, PARENT_ORIGIN);
   }
 
-  function setMuted(muted) {
-    const video = findVideo();
-    if (!video) return false;
-    video.muted = !!muted;
-    if (!muted) {
-      try { video.volume = Math.max(Number(video.volume) || 0, 0.01); } catch (_) {}
-    }
-    commandedState = {video, muted: video.muted, volume: video.volume};
-    reportVideoState(video, "command");
-    return true;
-  }
-
-  function setVolume(volume, muted = null) {
-    const video = findVideo();
-    if (!video) return false;
-    const value = Math.max(0, Math.min(1, Number(volume) || 0));
-    try { video.volume = value; } catch (_) {}
-    if (typeof muted === "boolean") video.muted = muted;
-    else if (value <= 0) video.muted = true;
-    else video.muted = false;
-    commandedState = {video, muted: video.muted, volume: video.volume};
-    reportVideoState(video, "command");
-    return true;
-  }
-
+  const audio=CZPlayerAudio.create({findVideo,report:reportVideoState});
+  const setMuted=audio.setMuted,setVolume=audio.setVolume;
   function bindVideo(video) {
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
-    video.addEventListener("volumechange", () => {
-      const echo = commandedState?.video === video && commandedState.muted === video.muted && commandedState.volume === video.volume;
-      reportVideoState(video, echo ? 'command' : 'player');
-    });
+    if(!chatMode)audio.bind(video);
     if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 
@@ -298,16 +271,19 @@
     }, 500);
   }
 
+  const importantCollector=chatMode?CZChatCollector.create({status:stats=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_STATUS',uid:frameUid,stats},PARENT_ORIGIN),send:messages=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_BATCH',uid:frameUid,messages},PARENT_ORIGIN)}):null;
   bindObserver();
   if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
+    if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
+    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
-      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start(); }
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start({onSettings:()=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_SETTINGS_OPEN',uid:frameUid},PARENT_ORIGIN),onHeader:(height,menuOpen)=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_HEADER',uid:frameUid,height,menuOpen},PARENT_ORIGIN)}); }
     }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);

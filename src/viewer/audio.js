@@ -57,6 +57,7 @@ globalThis.CZAudio = {create(context) {
     if (!channel) return;
     channel.volume = clamp01(volume);
     channel.muted = channel.volume <= 0;
+    if(!effectiveMuted(channel))context.ensureAudible?.();
     sendTileVolume(uid);
     syncVolumeUI();
     saveStateSoon();
@@ -72,6 +73,7 @@ globalThis.CZAudio = {create(context) {
     } else {
       channel.muted = true;
     }
+    if(!effectiveMuted(channel))context.ensureAudible?.();
     sendTileVolume(uid);
     syncVolumeUI();
     saveStateSoon();
@@ -79,6 +81,7 @@ globalThis.CZAudio = {create(context) {
 
   function setMasterVolume(value) {
     context.state.masterVolume = clamp01(value);
+    if(context.state.channels.some(channel=>!effectiveMuted(channel)))context.ensureAudible?.();
     sendAllTileVolumes();
     syncVolumeUI();
     saveStateSoon();
@@ -93,6 +96,7 @@ globalThis.CZAudio = {create(context) {
       context.state._previousMasterVolume = current;
       context.state.masterVolume = 0;
     }
+    if(context.state.channels.some(channel=>!effectiveMuted(channel)))context.ensureAudible?.();
     sendAllTileVolumes();
     syncVolumeUI();
     saveStateSoon();
@@ -103,11 +107,13 @@ globalThis.CZAudio = {create(context) {
     if (!main) return;
     main.muted = false;
     if (clamp01(main.volume ?? 1) <= 0) main.volume = 0.5;
+    if(!effectiveMuted(main))context.ensureAudible?.();
   }
 
   function setMainOnly(on) {
     context.state.mainOnly = !!on;
     if (context.state.mainOnly) makeMainAudible();
+    if(context.state.channels.some(channel=>!effectiveMuted(channel)))context.ensureAudible?.();
     sendAllTileVolumes();
     syncVolumeUI();
     saveState();
@@ -115,10 +121,13 @@ globalThis.CZAudio = {create(context) {
 
   function receiveVideoState(message) {
     const channel = context.state.channels.find(c => c.uid === message.uid);
-    if (!channel || message.reason !== 'player' || isForcedMuted(channel)) return;
+    if (!channel || message.reason !== 'player') return;
+    if(isForcedMuted(channel)){sendTileVolume(channel.uid);return;}
     const master = clamp01(context.state.masterVolume ?? 1);
-    if (master > 0 && typeof message.volume === 'number' && Number.isFinite(message.volume)) channel.volume = clamp01(message.volume / master);
+    if (master > 0 && typeof message.volume === 'number' && Number.isFinite(message.volume) && (message.operation!=='mute' || (!message.muted && channel.volume<=0))) channel.volume = clamp01(message.volume / master);
     if (typeof message.muted === 'boolean') channel.muted = message.muted || channel.volume <= 0;
+    if(Math.abs(message.volume-effectiveVolume(channel))>0.00001 || message.muted!==effectiveMuted(channel))sendTileVolume(channel.uid);
+    if(!effectiveMuted(channel))context.ensureAudible?.();
     syncVolumeUI();
     saveStateSoon();
   }

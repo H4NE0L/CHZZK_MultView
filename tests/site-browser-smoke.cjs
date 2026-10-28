@@ -17,13 +17,13 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    window.MediaRecorder=class extends NativeRecorder{constructor(...args){super(...args);this.addEventListener('dataavailable',event=>{window.__recordedBytes=(window.__recordedBytes || 0)+event.data.size;});}};
    const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{chatOpen:!new URL(location.href).searchParams.has('chatClosed'),channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
    window.__messages=[];
-   window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
+   window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='VIEWER_SAVE_STATE')data.chzzkMultiviewV09=m.state;if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
  });
  await page.route('https://chzzk.naver.com/**',route=>{
    const frame=new URL(route.request().url()).pathname.startsWith('/live/');
    let body='<h1>CHZZK 원본 페이지</h1>';
-   if(frame)body=`<video autoplay muted></video><script>const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
-   return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body>'+body+'</body></html>'});
+   if(frame)body=`<video autoplay muted></video><script>window.__earlyPreferenceCount=0;document.querySelector('video').addEventListener('volumechange',()=>window.__earlyPreferenceCount++);const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/shared/important-chat.js','src/content/chat-collector.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/player-audio.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
+   return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"></head><body>'+body+'</body></html>'});
  });
  await page.goto('https://chzzk.naver.com/');await page.addScriptTag({content:read('src/content/site-launcher.js')});
  assert.equal(await page.locator('.mv-root').count(),0);
@@ -55,6 +55,9 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    assert.equal(await page.locator(selector+'[data-uid="bbbbbb"].in-multiview').count(),0);
  }
 
+ await require('./audio-isolation-browser-helpers.cjs')(page);
+ await require('./important-chat-browser-helpers.cjs')(page);
+ if(process.argv.includes('--chat-only')){console.log('PASS: focused chat DOM smoke (mock CHZZK/Chrome APIs).');return;}
  // Closing destroys chat; a main change while closed must not reconnect it.
  await page.evaluate(()=>{const root=document.getElementById('__chzzk_multiview_v09__').shadowRoot;window.__oldChat=root.querySelector('.chat-frame');window.__player=root.querySelector('#videoGrid iframe');});
  await page.locator('#chatToggleBtn').click();assert.equal(await page.locator('.chat-frame').count(),0);

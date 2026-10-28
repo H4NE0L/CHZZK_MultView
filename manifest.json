@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "치지직 통합관제실",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "CHZZK 방송 통합관제 시스템. 여러 방송을 한 화면에서 동시에 시청하고 관리할 수 있습니다.",
   "permissions": [
     "storage",
@@ -30,8 +30,11 @@
       ],
       "js": [
         "src/shared/messages.js",
+        "src/shared/important-chat.js",
         "src/content/chat-layout.js",
         "src/content/media-frame.js",
+        "src/content/chat-collector.js",
+        "src/content/player-audio.js",
         "src/content/chzzk-frame.js"
       ],
       "all_frames": true,

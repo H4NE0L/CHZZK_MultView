@@ -14,6 +14,7 @@
   let videoGrid = null;
   let chatPanel = null;
   let chatFrame = null;
+  let importantChat = null;
   let tileMap = new Map();
   let dragUid = null;
   let toolbarCollapsed = false;
@@ -61,7 +62,7 @@ function saveState() {
     // 확장 프로그램 컨텍스트가 유효하지 않으면 저장을 시도하지 않는다.
     if (!chrome?.runtime?.id || !chrome?.storage?.local) return;
 
-    CZSessionStore.write(state).catch(error => console.warn("멀티뷰 상태 저장 실패:", error));
+    chrome.runtime.sendMessage({type:'VIEWER_SAVE_STATE',tabId:viewerTabId,state:CZSessionStore.normalize(state)}).then(result=>{if(!result?.ok)throw Error(result?.error||'상태 저장 응답 없음');}).catch(error => console.warn("멀티뷰 상태 저장 실패:", error));
 
   } catch (error) {
     const message = String(error?.message || error);
@@ -98,7 +99,8 @@ function saveState() {
     // Favorites are independent of the saved session, so always load them.
     await loadFavorites();
 
-    state = await CZSessionStore.read();
+    // An open viewer owns the latest audio state, including debounced edits.
+    if(!initialized)state = await CZSessionStore.read();
   }
 
   function createUI() {
@@ -199,7 +201,19 @@ function saveState() {
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
-          <details id="settingsManager" class="viewer-settings"><summary title="설정">⚙ 설정</summary><div class="settings-panel"><strong>설정</strong><label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p></div></details>
+          <details id="settingsManager" class="viewer-settings">
+            <summary title="설정">⚙ 설정</summary>
+            <div class="settings-panel"><strong>설정</strong>
+              <div class="settings-feature">
+                <label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
+              </div>
+              <div class="settings-feature">
+                <label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p><button id="importantChatSettings" type="button">수집 설정·점검</button>
+              </div>
+            </div>
+          </details>
         </div>
       </header>
 
@@ -212,9 +226,6 @@ function saveState() {
         <div id="videoGrid" class="video-grid"></div>
 
         <aside id="chatPanel" class="chat-panel">
-          <div class="chat-head">
-            <strong>채팅</strong><button id="chatOriginalBtn" type="button" title="채팅 수집 확장을 사용할 원본 방송을 별도 탭에서 열기">원본 방송 열기</button>
-          </div>
           <div class="chat-frame-wrap">
             <div id="chatEmpty" class="chat-empty">
               메인 방송을 선택하면<br>실제 CHZZK 채팅을 불러옵니다.
@@ -231,6 +242,7 @@ function saveState() {
 
     videoGrid = ui.querySelector("#videoGrid");
     chatPanel = ui.querySelector("#chatPanel");
+    importantChat = CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
@@ -293,17 +305,9 @@ function saveState() {
 
     ui.querySelector("#collapseBtn").addEventListener("click", toggleToolbar);
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
-    ui.querySelector('#chatOriginalBtn').onclick=async()=>{
-      const channel=state.channels.find(c=>c.uid===state.selectedUid);
-      if(!channel){showNotice('메인 방송을 먼저 선택하세요.');return;}
-      try {const url=CZSessionStore.parseInput(channel.url || channel.uid)?.url;if(!url)return;
-        if(globalThis.CZ_SITE_VIEWER){const result=await chrome.runtime.sendMessage({type:'SITE_OPEN_ORIGINAL',url});if(!result?.ok)throw Error(result?.error || '탭 열기 실패');}else{const tab=await chrome.tabs.create({url,active:true});await chrome.tabs.update(tab.id,{muted:true});}
-        showNotice('원본 방송을 음소거 탭으로 열었습니다. 채팅 수집은 해당 탭에서 확인하세요.');
-      }catch(error){showNotice('원본 방송 열기 실패: '+error.message);}
-    };
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-
+    ui.querySelector('#importantChatSettings').onclick=()=>{ui.querySelector('#settingsManager').open=false;importantChat.openSettings();};
     const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
     shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
     ui.querySelector('#settingsManager').addEventListener('toggle',event=>{if(event.target.open)for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id)?.removeAttribute('open');});
@@ -485,7 +489,12 @@ function saveState() {
 
   const {isChannelVisibleInLayout, createTile, moveSelectedToFront, swapChannels, selectChannel, updateTileMainUI, syncSelection} = CZPlayers.create({get mediaTools() {return mediaTools;}, get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
 
-  const {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState} = CZAudio.create({get state() { return state; }, tileMap, syncVolumeUI, saveStateSoon, saveState});
+  let unmuteRequest=null;
+  function ensureViewerAudible(){
+    if(unmuteRequest)return;
+    unmuteRequest=chrome.runtime.sendMessage({type:'UNMUTE_VIEWER_TAB',tabId:viewerTabId}).then(result=>{if(!result?.ok)showNotice('브라우저 탭 음소거 해제 실패: '+(result?.error || '탭 상태를 확인해주세요.'));}).catch(error=>showNotice('탭 음소거 상태 확인 실패: '+error.message)).finally(()=>{unmuteRequest=null;});
+  }
+  const {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState} = CZAudio.create({ensureAudible:ensureViewerAudible,get state() { return state; }, tileMap, syncVolumeUI, saveStateSoon, saveState});
 
   // While a slider is being dragged, its DOM node must stay alive and keep its
   // own value; rebuilding it mid-drag is what used to break click-and-drag.
@@ -618,12 +627,17 @@ function saveState() {
 
   window.addEventListener("message", event => {
     const data = event.data;
-    const fromChat=data?.type==='CHAT_READY' || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
+    if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
+    if(data.type==='CHAT_HEADER'){importantChat?.setHeaderHeight(data.height,data.menuOpen);return;}
+    if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}
+    if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;
       frame.dataset.playerReady = 'true';
+      importantChat?.sync(true);
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});
     } else if (data.type === 'PLAYER_READY') {
@@ -787,7 +801,7 @@ function saveState() {
     });
   }
 
-  const {updateChat} = CZChat.create({get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
+  const {updateChat} = CZChat.create({onUpdated:()=>importantChat?.sync(),get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
 
   function applyTileLock(tile, locked) {
     if (!tile) return;
@@ -1138,6 +1152,7 @@ function saveState() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message) return;
 
+    if(message.type==='VIEWER_GET_STATE' && sender.id===chrome.runtime.id && message.tabId===viewerTabId){sendResponse(initialized?{ok:true,state:CZSessionStore.normalize(state)}:{ok:false});return;}
     if (message.type !== 'VIEWER_SET_INPUTS' || sender.id !== chrome.runtime.id || message.tabId !== viewerTabId) return;
     if (!initialized) { sendResponse({ok: false}); return; }
     openMultiView('', message.initialInputs || []).then(() => sendResponse({ok: true})).catch(error => sendResponse({ok: false, error: String(error)}));
@@ -1147,6 +1162,8 @@ function saveState() {
 
   const boot = async () => {
     viewerTabId = globalThis.CZ_SITE_VIEWER ? (await chrome.runtime.sendMessage({type:'SITE_VIEWER_TAB'}))?.tabId : (await chrome.tabs.getCurrent())?.id;
+    const registered=await chrome.runtime.sendMessage({type:'VIEWER_REGISTER_SESSION',tabId:viewerTabId});
+    if(!registered?.ok)throw Error(registered?.error||'멀티뷰 저장 세션 등록 실패');
     const query = new URL(location.href).searchParams;
     let inputs = [];
     if (!globalThis.CZ_SITE_VIEWER && query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
