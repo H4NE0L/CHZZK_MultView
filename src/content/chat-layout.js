@@ -171,19 +171,34 @@ globalThis.CZChatLayout = (() => {
   let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
   const boundRoots=new WeakSet();
   function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0))};prepare();}
+  const managedHeaders=new WeakSet();
+  function isNativeHeader(header){
+    if(managedHeaders.has(header))return true;
+    // Third-party collectors clone CHZZK classes but replace the title.
+    // A CSS class alone is not evidence that this is the native toolbar.
+    const title=[...header.querySelectorAll('h1,h2,h3,strong,span,div')].some(el=>!el.children.length && ['채팅','라이브 채팅 다시보기','실시간 채팅 다시보기'].includes(el.textContent.trim()));
+    const bare=[...header.childNodes].some(node=>node.nodeType===3 && node.textContent.trim()==='채팅');
+    const replay=/^(라이브|실시간) 채팅 다시보기$/.test(header.textContent.trim()) || [...header.querySelectorAll('h1,h2,h3,strong,span')].some(el=>['라이브 채팅 다시보기','실시간 채팅 다시보기'].includes(el.textContent.trim()));
+    return (title||bare) && (replay?header.querySelectorAll('button').length>=1:/\d+\s*%/.test(header.textContent) && header.querySelectorAll('button').length>=2);
+  }
   function findHeader(scope){
-    const named=scope.querySelector('.cz-native-chat-header,[class*="live_chatting_header"],[class*="video_chatting_header"],[data-chat-toolbar]');
-    if(named)return named;
-    // CHZZK variants use different CSS module prefixes. Restrict fallback to
-    // the short toolbar containing the exact title and font-size controls.
+    const candidates=[...scope.querySelectorAll('.cz-native-chat-header,[class*="live_chatting_header"],[class*="video_chatting_header"],[data-chat-toolbar]')].filter(isNativeHeader);
+    const owned=candidates.find(node=>managedHeaders.has(node));if(owned)return owned;
+    const innermost=candidates.find(node=>!candidates.some(other=>other!==node && node.contains(other)));if(innermost)return innermost;
     for(const el of scope.querySelectorAll('h1,h2,h3,strong,span,div')){
       if(el.children.length || el.textContent.trim()!=='채팅')continue;
       let parent=el.parentElement;
-      for(let depth=0;parent && depth<3;depth++,parent=parent.parentElement){
-        if(parent.textContent.length<160 && /\d+\s*%/.test(parent.textContent) && parent.querySelectorAll('button').length>=2)return parent;
-      }
+      for(let depth=0;parent && depth<3;depth++,parent=parent.parentElement)if(parent.textContent.length<160 && isNativeHeader(parent))return parent;
     }
     return null;
+  }
+  function cleanClonedControls(){
+    for(const header of document.querySelectorAll('.cz-native-chat-header')){
+      if(managedHeaders.has(header))continue;
+      header.classList.remove('cz-native-chat-header');
+      header.querySelectorAll('#cz-chat-settings,#cz-chat-channel').forEach(el=>el.remove());
+      header.querySelectorAll('.cz-channel-name,.cz-native-settings').forEach(el=>el.classList.remove('cz-channel-name','cz-native-settings'));
+    }
   }
   function mountHeaderIcon(host,content){
     // Keep CHZZK's SVG/path rules outside extension-owned icons.
@@ -194,13 +209,14 @@ globalThis.CZChatLayout = (() => {
   function nativeHeader(root){
     const header=findHeader(root);
     if(!header)return;
+    managedHeaders.add(header);
     header.classList.add('cz-native-chat-header');
     if(!boundRoots.has(root)){
       boundRoots.add(root);
-      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)onHeader(Math.round(current.getBoundingClientRect().height),nativeMenuOpen);});
-      root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)onHeader(Math.round(current.getBoundingClientRect().height),false);}});
+      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)onHeader(Math.round(current.getBoundingClientRect().bottom),nativeMenuOpen);});
+      root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)onHeader(Math.round(current.getBoundingClientRect().bottom),false);}});
     }
-    if(nativeMenuOpen){onHeader(Math.round(header.getBoundingClientRect().height),true);return;}
+    if(nativeMenuOpen){onHeader(Math.round(header.getBoundingClientRect().bottom),true);return;}
     let title=header.querySelector('.cz-channel-name,[class*="header_title"],[class*="header_name"],h1,h2,h3');
     if(!title){title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);}
     title.classList.add('cz-channel-name');if(title.textContent!==presentation.name)title.textContent=presentation.name;
@@ -231,10 +247,11 @@ globalThis.CZChatLayout = (() => {
     let spacer=root.querySelector('#cz-important-chat-space');
     if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';header.after(spacer);}
     spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
-    const height=Math.round(header.getBoundingClientRect().height);if(height>=24)onHeader(height,nativeMenuOpen);
+    const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)onHeader(height,nativeMenuOpen);
   }
   let preparedRoot = null,preparedRootStyle='';
   function prepare() {
+    cleanClonedControls();
     const replay = location.pathname.startsWith('/video/');
     let root = preparedRoot?.isConnected ? preparedRoot : replay ? (findReplayChatRoot(document) || findChatRoot(document)) : findChatRoot(document);
     if (!root) return false;

@@ -210,7 +210,7 @@ function saveState() {
               </div>
               <div class="settings-feature">
                 <label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p><button id="importantChatSettings" type="button">수집 설정·점검</button>
               </div>
             </div>
           </details>
@@ -307,6 +307,7 @@ function saveState() {
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
+    ui.querySelector('#importantChatSettings').onclick=()=>{ui.querySelector('#settingsManager').open=false;importantChat.openSettings();};
     const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
     shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
     ui.querySelector('#settingsManager').addEventListener('toggle',event=>{if(event.target.open)for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id)?.removeAttribute('open');});

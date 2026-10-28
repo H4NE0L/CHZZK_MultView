@@ -10,18 +10,34 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
- await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<span>채팅</span><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><button id="native-chat-menu">⋮</button>';const shell=document.createElement('section');shell.style.cssText='height:100%;width:100%;display:flex;flex-direction:column';host.before(shell);shell.append(toolbar,host);});
+ await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<span>채팅</span><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><button id="native-chat-menu">⋮</button>';const shell=document.createElement('section');shell.style.cssText='height:100%;width:100%;display:flex;flex-direction:column';host.before(shell);const foreign=document.createElement('div');foreign.className='live_chatting_header__foreign';foreign.innerHTML='<strong>배지 채팅 모아보기</strong><button class="foreign-filter">필터 펴기</button>';shell.append(foreign,toolbar,host);});
  await frame.locator('#cz-chat-settings').waitFor();
  assert.equal(await page.locator('.ic-settings-open').count(),0);
  assert.equal(await page.locator('#chatSettingsBtn').count(),0);
- assert(await frame.locator('#native-chat-menu').isVisible());
+ assert(await frame.locator('.cz-native-chat-header #native-chat-menu').isVisible());
  assert.equal(await frame.locator('.native-font-value').isVisible(),false);
  assert.equal(await frame.locator('.native-toolbar-test').getByText('채팅',{exact:true}).isVisible(),false);
  assert.equal(await frame.locator('.native-toolbar-test').getByRole('button',{name:'+',exact:true}).count(),0);
  assert(await frame.locator('#cz-chat-settings').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'custom settings precedes native settings');
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
- assert.equal(await frame.locator('.native-font-svg-minus').isVisible(),false);
- assert.equal(await frame.locator('.native-font-svg-plus').isVisible(),false);
+ assert.equal(await frame.locator('.live_chatting_header__foreign #cz-chat-settings').count(),0);
+ assert.equal(await frame.locator('.foreign-filter').isVisible(),true);
+ assert.equal(await frame.locator('.live_chatting_header__foreign strong').textContent(),'배지 채팅 모아보기');
+ await frame.evaluate(()=>{const clone=document.querySelector('.cz-native-chat-header').cloneNode(true);clone.classList.add('foreign-clone');clone.querySelector('.cz-channel-name').textContent='다른 확장 수집 목록';document.querySelector('.cz-native-chat-header').before(clone);});
+ await frame.waitForFunction(()=>!document.querySelector('.foreign-clone #cz-chat-settings'));
+ assert.equal(await frame.locator('.foreign-clone.cz-native-chat-header').count(),0);
+ assert.equal(await frame.locator('.foreign-clone').textContent().then(text=>text.includes('다른 확장 수집 목록')),true);
+ const nativeRect=await frame.locator('.cz-native-chat-header').boundingBox();
+ await page.waitForFunction(()=>{const panel=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel');return parseFloat(getComputedStyle(panel).top)>36;});
+ assert(Math.abs((await panel.boundingBox()).y-(nativeRect.y+nativeRect.height))<2,'collection starts below native header, after third-party panels');
+ await frame.evaluate(()=>{window.__presentationCount=0;window.__countPresentation=event=>{if(event.data?.type==='CHAT_PRESENTATION')window.__presentationCount++;};window.addEventListener('message',window.__countPresentation);});
+ await page.waitForTimeout(200);
+ const presentations=await frame.evaluate(()=>{window.removeEventListener('message',window.__countPresentation);return window.__presentationCount;});
+ assert(presentations<10,'unchanged header geometry must not cause a postMessage feedback loop');
+
+
+ assert.equal(await frame.locator('.cz-native-chat-header .native-font-svg-minus').isVisible(),false);
+ assert.equal(await frame.locator('.cz-native-chat-header .native-font-svg-plus').isVisible(),false);
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).textAlign),'left');
  // Simulate site rules that would turn ordinary inline SVGs into filled/clipped shapes.
@@ -44,8 +60,8 @@ module.exports=async function checkImportantChat(page){
 
  await frame.evaluate(()=>{document.querySelector('.cz-channel-name').remove();CZChatLayout.setPresentation({name:'테스트 방송',height:200});CZChatLayout.setPresentation({name:'테스트 방송',height:200});});
  assert.equal(await frame.locator('.cz-channel-name').count(),1,'fallback title is reused across layout updates');
- await frame.locator('#native-chat-menu').click();await panel.waitFor({state:'hidden'});assert.equal(await panel.isVisible(),false,'native settings must not be covered by collection');
- await frame.locator('#native-chat-menu').click();await panel.waitFor({state:'visible'});assert(await panel.isVisible());
+ await frame.locator('.cz-native-chat-header #native-chat-menu').click();await panel.waitFor({state:'hidden'});assert.equal(await panel.isVisible(),false,'native settings must not be covered by collection');
+ await frame.locator('.cz-native-chat-header #native-chat-menu').click();await panel.waitFor({state:'visible'});assert(await panel.isVisible());
  const start=await panel.boundingBox();
  const separator=panel.locator('.ic-resizer'),grip=await separator.boundingBox();
  const reserved=await frame.locator('#cz-important-chat-space').evaluate(el=>el.getBoundingClientRect().height);
@@ -93,11 +109,22 @@ module.exports=async function checkImportantChat(page){
  });
  assert.equal(stableIds.length,2);assert.equal(stableIds[0],stableIds[1],'API identity refresh must not duplicate existing chat rows');
 
- await openSettings();
+ await page.locator('#settingsManager > summary').click();await page.locator('#importantChatSettings').click();assert(await settings.isVisible());
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent.includes('스트리머 확인: 테스트 방송'));
  await page.waitForFunction(()=>{const text=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent;return /읽은 항목 [1-9]/.test(text)&&/수신 [1-9]/.test(text)&&/표시 2/.test(text);});
+ const originalClipboard=await page.evaluateHandle(()=>Object.getOwnPropertyDescriptor(navigator,'clipboard'));
+ await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
+ await settings.locator('.ic-copy-diagnostics').click();
+ const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
+ assert.equal(copiedDiagnostic.collectorRevision,'20261028-2');
+ assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
+ assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
+ assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
+ await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
+ await frame.evaluate(()=>{const row=document.createElement('div');row.setAttribute('role','listitem');row.innerHTML='<span class="new_username"><span class="new_nickname">지정 사용자</span></span><span class="changed_message_body">본문 CSS가 달라진 채팅 <img alt="웃음"></span>';document.querySelector('aside.live_chat').appendChild(row);});
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('본문 CSS가 달라진 채팅 웃음'));
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('onerror'));
  assert.equal(await panel.locator('.ic-message img').count(),0,'message markup must be rendered as text');
