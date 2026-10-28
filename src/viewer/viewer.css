@@ -2437,3 +2437,10 @@ select:hover {
 .ic-diagnostics { white-space:pre-line; color:#b9c1cc; font-size:11px; line-height:1.7; margin:12px 0; }
 
 .ic-role-help { color:#aeb7c4; font-size:11px; line-height:1.6; margin:0 0 12px; }
+
+.ic-settings-footer { margin-top:14px; padding-top:12px; border-top:1px solid #34373d; display:grid; gap:12px; }
+.ic-settings-footer .ic-clear { margin:0; width:100%; padding:8px 12px; }
+.ic-debug summary { color:#aeb6c2; font-size:12px; cursor:pointer; }
+.ic-debug .ic-diagnostics { font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
+.ic-debug .ic-copy-diagnostics { width:100%; }
+.ic-message { border:0; border-radius:0; background:transparent!important; padding:3px 0; margin:0; }

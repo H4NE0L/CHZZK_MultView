@@ -131,7 +131,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await page.locator('#settingsManager #importantChatEnabled').count(),1);
  assert.equal(await settings.locator('#importantChatEnabled').count(),0);
  assert.equal(await panel.locator('.ic-message').count(),2,'nested containers must not duplicate messages');
- assert((await panel.locator('.ic-list').textContent()).includes('방송인 · 스트리머'),'streamer badge outside username is recognized');
+ assert.equal(await panel.locator('.ic-message[data-role=streamer] .ic-author').textContent(),'방송인','streamer badge is recognized without adding a role label');
  assert(!(await panel.locator('.ic-list').textContent()).includes('일반 사용자'),'message-body badge must not grant a role');
  const stableIds=await frame.evaluate(async()=>{
    const row=document.querySelector('[data-message-id="owner-1"]');row.removeAttribute('data-message-id');
@@ -151,13 +151,15 @@ module.exports=async function checkImportantChat(page){
 
 
  await page.locator('#settingsManager > summary').click();await page.locator('#importantChatSettings').click();assert(await settings.isVisible());
+ assert.equal(await settings.locator('.ic-diagnostics').isVisible(),false,'detailed diagnostics is collapsed by default');
+ await settings.locator('.ic-debug summary').click();
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent.includes('스트리머 확인: 테스트 방송'));
  await page.waitForFunction(()=>{const text=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent;return /읽은 항목 [1-9]/.test(text)&&/수신 [1-9]/.test(text)&&/표시 2/.test(text);});
  const originalClipboard=await page.evaluateHandle(()=>Object.getOwnPropertyDescriptor(navigator,'clipboard'));
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261029-1');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-2');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
@@ -191,7 +193,10 @@ module.exports=async function checkImportantChat(page){
  await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
  const emote=panel.locator('.ic-emote[alt="테스트 웃음"]');await emote.waitFor();
  await page.waitForFunction(()=>{const image=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-emote[alt="테스트 웃음"]');return image?.complete && image.naturalWidth>0;});
- assert.equal(await panel.locator('.ic-badge[alt="구독 배지"]').count(),1);
+ assert.equal(await panel.locator('.ic-badge').count(),0,'compact messages omit sender badges');
+ const compact=panel.locator('.ic-message').filter({hasText:'이모티콘 이미지 표시'});
+ assert.deepEqual(await compact.evaluate(el=>[...el.children].map(child=>child.tagName)),['TIME','STRONG','SPAN']);
+ assert.equal(await compact.locator('.ic-author').textContent(),'지정 사용자');
  assert.equal(await emote.getAttribute('referrerpolicy'),'no-referrer');
  const retainedEmote=await emote.elementHandle();
  await add('지정 사용자','새 채팅에도 기존 이미지 유지','','retain-rich');

@@ -10,7 +10,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-1',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-2',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
     return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
@@ -108,17 +108,18 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     structure={row:String(row.className||row.tagName).slice(0,180),nickname:nickname?String(nickname.className||nickname.tagName).slice(0,180):'찾지 못함',text:parts[0]?String(parts[0].className||parts[0].tagName).slice(0,180):'찾지 못함'};report();
     if(!nickname)return;
     const topParts=parts.filter(part=>!parts.some(other=>other!==part && other.contains(part)));
+    let fallbackFragment=null;
     let body=topParts.map(content).join(' ').trim();
     if(!body){
       // Preserve inline text/emotes when CHZZK changes the body CSS module name.
-      body=textAfter(row,nickname);
+      fallbackFragment=afterName(row,nickname);body=content(fallbackFragment).trim();
       if(body)structure.text='이름 뒤 DOM (대체 경로)';
     }
     const name=nickname.textContent.trim().slice(0,80),text=body.slice(0,1000);
     if(!name || !text)return;
     const fingerprint=JSON.stringify([name,text]),previous=identities.get(row);
     const id=String(row.getAttribute('data-message-id') || row.getAttribute('data-chat-id') || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
-    const segments=[];if(topParts.length){for(const part of topParts)richParts(part,segments);}else richParts(afterName(row,nickname),segments);
+    const segments=[];if(topParts.length){for(const part of topParts)richParts(part,segments);}else richParts(fallbackFragment||afterName(row,nickname),segments);
     const badges=[...row.querySelectorAll('img')].filter(img=>!!(img.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING) && !topParts.some(part=>part.contains(img))).slice(0,4).map(img=>({src:img.currentSrc||img.src||'',alt:img.getAttribute('alt')||''}));
     const item=CZImportantChat.message({id,name,text,segments,badges,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()});
     if(!item)return;
@@ -133,11 +134,11 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   }
   function scan(node) {
     const el=node.nodeType===1?node:node.parentElement;if(!el)return;
-    const closest=el.closest(rows);if(closest)read(closest);
+    const closest=el.closest(rows);if(closest){read(closest);return;}
     else Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
     // CSS module changes can remove every known row marker. Seed discovery
     // from nicknames instead, including mutations to an unknown message body.
-    const candidates=new Set([...el.querySelectorAll(names)].slice(-200));
+    const candidates=new Set([...el.querySelectorAll(names)].slice(-200).filter(nickname=>!nickname.closest(rows)));
     const own=el.closest(names);if(own)candidates.add(own);
     let ancestor=el;
     for(let depth=0;ancestor && ancestor!==document.body && depth<5;depth++,ancestor=ancestor.parentElement){
@@ -151,7 +152,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     stop();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
       const candidates=new Set();
-      for(const record of records){if(record.type==='attributes' && ['class','style'].includes(record.attributeName) && !record.target.closest(rows))continue;if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
+      for(const record of records){if(record.type==='childList' && !record.addedNodes.length && !record.target.closest(rows))continue;if(record.type==='attributes' && ['class','style'].includes(record.attributeName) && !record.target.closest(rows))continue;if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
       for(const node of candidates)scan(node);
     });
     observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','class','style']});

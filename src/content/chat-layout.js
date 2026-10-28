@@ -189,7 +189,7 @@ globalThis.CZChatLayout = (() => {
       box.classList.toggle('cz-chat-input-idle',empty && !box.contains(doc.activeElement));
     });
   }
-  let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
+  let presentation={name:'',height:0},onSettings=()=>{},onHeader=null,nativeMenuOpen=false;
   const boundRoots=new WeakSet();
   function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
   const managedHeaders=new WeakSet();
@@ -235,7 +235,7 @@ globalThis.CZChatLayout = (() => {
     }).slice(0,16).map(el=>{const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};});
   }
   function overlayOpen(){return overlayRects().length>0;}
-  function reportHeader(header){const rects=overlayRects();onHeader(Math.round(header.getBoundingClientRect().bottom),nativeMenuOpen||rects.length>0,rects);}
+  function reportHeader(header){if(!onHeader)return;const rects=overlayRects();onHeader(Math.round(header.getBoundingClientRect().bottom),nativeMenuOpen||rects.length>0,rects);}
   function nativeHeader(root){
     const header=findHeader(root);
     if(!header)return;
@@ -329,10 +329,10 @@ globalThis.CZChatLayout = (() => {
     let scheduled=false;
     const report=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;const header=document.querySelector('.cz-native-chat-header');if(header)reportHeader(header);});};
     window.addEventListener('resize',report);document.addEventListener('scroll',report,true);
-    const overlays=new MutationObserver(report);overlays.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','open','aria-hidden','aria-expanded']});
+    const overlays=onHeader?new MutationObserver(report):null;overlays?.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','open','aria-hidden','aria-expanded']});
     document.addEventListener('click',event=>{const header=document.querySelector('.cz-native-chat-header');if(header && !header.contains(event.target))nativeMenuOpen=false;report();},true);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;report();}},true);
-    window.addEventListener('pagehide',()=>overlays.disconnect(),{once:true});
+    window.addEventListener('pagehide',()=>overlays?.disconnect(),{once:true});
     document.addEventListener('focusin',apply);document.addEventListener('focusout',()=>queueMicrotask(apply));document.addEventListener('input',apply);
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);
