@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-function setup(){const ctx=vm.createContext({Date});vm.runInContext(fs.readFileSync('src/shared/important-chat.js','utf8'),ctx);return ctx.CZImportantChat;}
+function setup(){const ctx=vm.createContext({Date,URL});vm.runInContext(fs.readFileSync('src/shared/important-chat.js','utf8'),ctx);return ctx.CZImportantChat;}
 test('important chat filters match exact normalized names and independently selected roles',()=>{
  const api=setup(),settings=api.settings({names:[' Alice ','alice','가나다']});assert.equal(settings.names.length,2);
  assert(api.matches({name:'ALICE',role:''},settings));assert(!api.matches({name:'Alice2',role:''},settings));
@@ -26,4 +26,14 @@ test('important chat messages still require exact frame source and CHZZK origin'
  assert(ctx.CZMessages.isPlayerMessage({origin:'https://chzzk.naver.com',source,data},frame));
  assert(!ctx.CZMessages.isPlayerMessage({origin:'https://foreign.invalid',source,data},frame));
  assert(!ctx.CZMessages.isPlayerMessage({origin:'https://chzzk.naver.com',source:{},data},frame));
+});
+
+test('collected chat limits image segments and accepts only HTTPS Naver image CDN URLs',()=>{
+ const api=setup(),base={id:'rich',name:'user',text:'hello',role:'streamer'};
+ const valid='https://ssl.pstatic.net/emote.png';
+ const item=api.message({...base,segments:[{type:'text',text:'<script>hello</script>'},...Array.from({length:12},()=>({type:'image',src:valid,alt:'웃음'})),{type:'image',src:'javascript:alert(1)',alt:'unsafe'}],badges:[{src:valid,alt:'스트리머'},{src:'https://pstatic.net.evil.invalid/a',alt:'bad'}]});
+ assert.equal(item.segments.filter(part=>part.type==='image').length,8);assert.equal(item.badges.length,1);
+ assert(item.segments.some(part=>part.type==='text' && part.text==='unsafe'));
+ for(const url of ['data:image/svg+xml,bad','http://ssl.pstatic.net/a','https://user:pass@ssl.pstatic.net/a','https://evil.invalid/a'])assert.equal(api.imageUrl(url),'');
+ assert.equal(api.imageUrl(valid),valid);
 });

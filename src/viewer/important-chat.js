@@ -1,6 +1,6 @@
 globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
-  const owners=new Map();let stats=null,received=0;
+  const rendered=new Map(),owners=new Map();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');
   panel.innerHTML='<header class="ic-header"><strong>주요 채팅 <span class="ic-count">(0)</span></strong></header><div class="ic-body"><div class="ic-list"></div><div class="ic-bottom"><small class="ic-status"></small></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><p class="ic-diagnostics" aria-live="polite"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button><button class="ic-clear" type="button">수집된 내용 초기화</button></div></dialog>';
@@ -52,15 +52,24 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     present();
     $('.ic-count').textContent=`(${model.items.length})`;
     $('.ic-status').textContent=!ready?'설정 불러오는 중':!filter.enabled?'수집 꺼짐':getState().chatOpen===false?'채팅 닫힘 · 수집 중지':'최근 100개 · 현재 방송';
-    const list=$('.ic-list');const scrollTop=list.scrollTop,atBottom=list.scrollHeight-scrollTop-list.clientHeight<16;list.replaceChildren();
-    for(const item of model.items){
-      const row=document.createElement('div');row.className='ic-message';
-      const author=document.createElement('strong');author.textContent=`${item.name}${item.role==='streamer'?' · 스트리머':item.role==='manager'?' · 관리자':''}`;
-      const text=document.createElement('span');text.textContent=item.text;
-      const time=document.createElement('time');time.textContent=new Date(item.time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-      row.append(time,author,text);list.appendChild(row);
-    }
-    if(!model.items.length){const empty=document.createElement('p');empty.className='ic-empty';empty.textContent='대상 사용자의 채팅이 이곳에 표시됩니다.';list.appendChild(empty);}
+    const list=$('.ic-list');const scrollTop=list.scrollTop,atBottom=list.scrollHeight-scrollTop-list.clientHeight<16;
+    const items=model.items,ids=new Set(items.map(item=>item.id));
+    for(const [id,entry] of rendered)if(!ids.has(id)){entry.node.remove();rendered.delete(id);}
+    list.querySelector('.ic-empty')?.remove();
+    const image=(src,alt,className)=>{const img=document.createElement('img');img.src=src;img.alt=alt;img.title=alt;img.className=className;img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';img.draggable=false;img.onerror=()=>{const label=document.createElement('span');label.textContent=alt;img.replaceWith(label);};return img;};
+    items.forEach((item,index)=>{
+      const signature=JSON.stringify(item);let entry=rendered.get(item.id);
+      if(!entry || entry.signature!==signature){
+        const row=document.createElement('div');row.className='ic-message';row.dataset.role=item.role;
+        const time=document.createElement('time');time.dateTime=new Date(item.time).toISOString();time.textContent=new Date(item.time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+        const badges=document.createElement('span');badges.className='ic-badges';for(const badge of item.badges)badges.appendChild(image(badge.src,badge.alt,'ic-badge'));
+        const author=document.createElement('strong');author.className='ic-author';author.textContent=`${item.name}${item.role==='streamer'?' · 스트리머':item.role==='manager'?' · 관리자':''}`;
+        const text=document.createElement('span');text.className='ic-message-text';for(const part of item.segments)text.appendChild(part.type==='image'?image(part.src,part.alt,'ic-emote'):document.createTextNode(part.text));
+        row.append(time,badges,author,document.createTextNode(' '),text);entry?.node.replaceWith(row);entry={node:row,signature};rendered.set(item.id,entry);
+      }
+      if(list.children[index]!==entry.node)list.insertBefore(entry.node,list.children[index]||null);
+    });
+    if(!items.length){const empty=document.createElement('p');empty.className='ic-empty';empty.textContent='대상 사용자의 채팅이 이곳에 표시됩니다.';list.appendChild(empty);}
     list.scrollTop=atBottom?list.scrollHeight:scrollTop;diagnostics();
   }
   function controls(){

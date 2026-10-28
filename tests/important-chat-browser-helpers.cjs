@@ -131,13 +131,26 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261028-4');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261028-5');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
  await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
+ const imageUrl='https://ssl.pstatic.net/__cz_collected_chat_test.png';
+ await page.route(imageUrl,route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKf8AAAAASUVORK5CYII=','base64')}));
+ await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
+ const emote=panel.locator('.ic-emote[alt="테스트 웃음"]');await emote.waitFor();
+ await page.waitForFunction(()=>{const image=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-emote[alt="테스트 웃음"]');return image?.complete && image.naturalWidth>0;});
+ assert.equal(await panel.locator('.ic-badge[alt="구독 배지"]').count(),1);
+ assert.equal(await emote.getAttribute('referrerpolicy'),'no-referrer');
+ const retainedEmote=await emote.elementHandle();
+ await add('지정 사용자','새 채팅에도 기존 이미지 유지','','retain-rich');
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 채팅에도 기존 이미지 유지'));
+ assert(await retainedEmote.evaluate(image=>image.isConnected),'new messages retain existing image DOM');await retainedEmote.dispose();
+ if(process.env.CZ_CHAT_PREVIEW){await closeSettings();await panel.screenshot({path:process.env.CZ_CHAT_PREVIEW});await openSettings();}
+
  await frame.evaluate(()=>{const row=document.createElement('div');row.className='other-class _chatting_message_abcde_99';row.innerHTML='<span class="_nickname_z9x8y_33"><span class="additional _nickname_xyz12_80">지정 사용자</span></span><span class="_body_unknown_10">새 CSS 모듈의 지정 시청자 채팅</span>';document.querySelector('aside.live_chat').appendChild(row);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 지정 시청자 채팅'));
 
@@ -145,7 +158,7 @@ module.exports=async function checkImportantChat(page){
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('본문 CSS가 달라진 채팅 웃음'));
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('onerror'));
- assert.equal(await panel.locator('.ic-message img').count(),0,'message markup must be rendered as text');
+ assert.equal(await panel.locator('.ic-message').filter({hasText:'onerror'}).locator('img').count(),0,'message markup must be rendered as text');
  assert(!(await panel.locator('.ic-list').textContent()).includes('접두어는 불일치'));
  await closeSettings();
  assert(await panel.locator('.ic-message').first().isVisible());

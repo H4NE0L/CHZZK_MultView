@@ -10,14 +10,23 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-4',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-5',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
     return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
-  function textAfter(row,nickname){
+  function afterName(row,nickname){
     const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(nickname);
-    const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());
-    return content(fragment).trim();
+    const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());return fragment;
+  }
+  function textAfter(row,nickname){return content(afterName(row,nickname)).trim();}
+  function richParts(node,parts=[]){
+    if(parts.length>=64)return parts;
+    if(node.nodeType===3){parts.push({type:'text',text:node.textContent});return parts;}
+    if(node.nodeType!==1 && node.nodeType!==11)return parts;
+    if(node.tagName==='IMG'){parts.push({type:'image',src:node.currentSrc||node.src||'',alt:node.getAttribute('alt')||'[이모티콘]'});return parts;}
+    if(node.tagName==='BR'){parts.push({type:'text',text:'\n'});return parts;}
+    if(node.matches?.('script,style,button'))return parts;
+    for(const child of node.childNodes)richParts(child,parts);return parts;
   }
   function rowForName(nickname){
     if(nickname.closest('.cz-native-chat-header,[role="menu"],#cz-chat-settings'))return null;
@@ -79,7 +88,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     if(!name || !text)return;
     const fingerprint=JSON.stringify([name,text]),previous=identities.get(row);
     const id=String(row.getAttribute('data-message-id') || row.getAttribute('data-chat-id') || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
-    const item={id,name,text,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()};
+    const segments=[];if(topParts.length){for(const part of topParts)richParts(part,segments);}else richParts(afterName(row,nickname),segments);
+    const badges=[...row.querySelectorAll('img')].filter(img=>!!(img.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING) && !topParts.some(part=>part.contains(img))).slice(0,4).map(img=>({src:img.currentSrc||img.src||'',alt:img.getAttribute('alt')||''}));
+    const item=CZImportantChat.message({id,name,text,segments,badges,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()});
+    if(!item)return;
     const signature=JSON.stringify(item);
     if(seen.get(row)?.signature===signature)return;
     counts.parsed++;report();
@@ -112,7 +124,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
       for(const record of records){if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
       for(const node of candidates)scan(node);
     });
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role']});
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','src','srcset']});
     scan(document.body);
   }
   window.addEventListener('pagehide',stop);
