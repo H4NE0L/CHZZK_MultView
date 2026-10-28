@@ -5,18 +5,19 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 function fixture(){
-  let handler;const calls=[],records=[];
-  const context=vm.createContext({URL,Blob,Uint8Array,atob,chrome:{runtime:{id:'extension-id',getURL:p=>'chrome-extension://extension-id/'+p,onMessage:{addListener:h=>handler=h}},scripting:{executeScript:async options=>calls.push(options)},tabs:{onRemoved:{addListener(){}},create:async options=>{calls.push(options);return {id:9};},update:async()=>{}},windows:{create:async options=>calls.push(options)}},CZRecordings:{put:async record=>records.push(record)}});
+  let handler;const calls=[],records=[],remembered=[];
+  const context=vm.createContext({CZViewerTabs:{remember:async id=>remembered.push(id)},URL,Blob,Uint8Array,atob,chrome:{runtime:{id:'extension-id',getURL:p=>'chrome-extension://extension-id/'+p,onMessage:{addListener:h=>handler=h}},scripting:{executeScript:async options=>calls.push(options)},tabs:{onRemoved:{addListener(){}},create:async options=>{calls.push(options);return {id:9};},update:async()=>{}},windows:{create:async options=>calls.push(options)}},CZRecordings:{put:async record=>records.push(record)}});
   vm.runInContext(fs.readFileSync(path.join(root,'src/shared/session-store.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(root,'src/background/site-viewer.js'),'utf8'),context);
   const sender={id:'extension-id',frameId:0,url:'https://chzzk.naver.com/',tab:{id:5}};
-  return {calls,records,send:(message,who=sender)=>new Promise(resolve=>{if(handler(message,who,resolve)!==true)resolve(undefined);}),sender};
+  return {calls,records,remembered,send:(message,who=sender)=>new Promise(resolve=>{if(handler(message,who,resolve)!==true)resolve(undefined);}),sender};
 }
 test('site launch requires our top-level CHZZK sender and injects only that frame',async()=>{
   const f=fixture();
   assert.equal(await f.send({type:'OPEN_MULTIVIEW_ON_SITE'},{...f.sender,frameId:2}),undefined);
   assert.equal(await f.send({type:'OPEN_MULTIVIEW_ON_SITE'},{...f.sender,url:'https://foreign.invalid'}),undefined);
   assert.equal((await f.send({type:'OPEN_MULTIVIEW_ON_SITE'})).ok,true);
+  assert.deepEqual(f.remembered,[5]);
   assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0].target)),{tabId:5,frameIds:[0]});
   for(const file of f.calls[0].files)assert(fs.existsSync(path.join(root,file)),file);
 });

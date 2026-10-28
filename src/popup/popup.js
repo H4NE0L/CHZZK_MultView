@@ -155,14 +155,14 @@ async function openMultiView() {
   const current = uidFromInput(uidInput.value);
   if (uidInput.value.trim() && !current) { setStatus("올바른 방송 URL 또는 UID를 입력해주세요.", true); return; }
   if (current) addToList(uidInput.value);
-  setStatus("멀티뷰를 여는 중...");
+  setStatus("새 멀티뷰 창을 여는 중...");
   try {
     const result = await chrome.runtime.sendMessage({
       type: "OPEN_MULTIVIEW_FROM_POPUP",
       initialInputs: multiList.map(x => x.uid.startsWith('video:') ? `video/${x.uid.slice(6)}` : x.uid)
     });
     if (!result?.ok) { setStatus("멀티뷰 페이지를 열지 못했습니다.", true); return; }
-    setStatus("멀티뷰를 열었습니다.");
+    setStatus("새 멀티뷰 창을 열었습니다.");
     window.close();
   } catch (err) { setStatus("멀티뷰를 열지 못했습니다.", true); }
 }

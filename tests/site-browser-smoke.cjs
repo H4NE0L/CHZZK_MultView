@@ -17,7 +17,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
    window.MediaRecorder=class extends NativeRecorder{constructor(...args){super(...args);this.addEventListener('dataavailable',event=>{window.__recordedBytes=(window.__recordedBytes || 0)+event.data.size;});}};
    const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{chatOpen:!new URL(location.href).searchParams.has('chatClosed'),channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
    window.__messages=[];
-   window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
+   window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='VIEWER_SAVE_STATE')data.chzzkMultiviewV09=m.state;if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
  });
  await page.route('https://chzzk.naver.com/**',route=>{
    const frame=new URL(route.request().url()).pathname.startsWith('/live/');

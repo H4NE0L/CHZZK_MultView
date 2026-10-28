@@ -123,7 +123,7 @@ async function run() {
       window.chrome = {
         windows: {create:args=>window.__createResultWindow(args.url)},
         tabs: {getCurrent: async () => ({id: 1}),create:props=>window.__openOriginalTab(props),update:(id,props)=>window.__updateOriginalTab(id,props)},
-        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true}), onMessage: {addListener: f => window.__messageListeners.push(f)}},
+        runtime: {id: 'mock-extension', getURL: file => 'https://viewer.invalid/' + file, getManifest: () => ({version}), sendMessage: async message => {if(message.type==='VIEWER_SAVE_STATE')await window.__storageSet({chzzkMultiviewV09:message.state});return message.type==='REGISTER_RECORDING_RESULT'?window.__registerResult(message):({ok:true});}, onMessage: {addListener: f => window.__messageListeners.push(f)}},
         storage: {
           local: {
             get: keys => {

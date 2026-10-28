@@ -9,6 +9,7 @@
     (async()=>{
       switch(message.type){
         case 'OPEN_MULTIVIEW_ON_SITE':
+          await CZViewerTabs.remember(tabId);
           await chrome.scripting.executeScript({target:{tabId,frameIds:[0]},files});return {ok:true};
         case 'SITE_VIEWER_TAB':return {ok:true,tabId};
         case 'SITE_RECORDING_BEGIN':{

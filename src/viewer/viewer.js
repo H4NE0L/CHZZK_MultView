@@ -62,7 +62,7 @@ function saveState() {
     // 확장 프로그램 컨텍스트가 유효하지 않으면 저장을 시도하지 않는다.
     if (!chrome?.runtime?.id || !chrome?.storage?.local) return;
 
-    CZSessionStore.write(state).catch(error => console.warn("멀티뷰 상태 저장 실패:", error));
+    chrome.runtime.sendMessage({type:'VIEWER_SAVE_STATE',tabId:viewerTabId,state:CZSessionStore.normalize(state)}).then(result=>{if(!result?.ok)throw Error(result?.error||'상태 저장 응답 없음');}).catch(error => console.warn("멀티뷰 상태 저장 실패:", error));
 
   } catch (error) {
     const message = String(error?.message || error);
@@ -1152,6 +1152,7 @@ function saveState() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message) return;
 
+    if(message.type==='VIEWER_GET_STATE' && sender.id===chrome.runtime.id && message.tabId===viewerTabId){sendResponse(initialized?{ok:true,state:CZSessionStore.normalize(state)}:{ok:false});return;}
     if (message.type !== 'VIEWER_SET_INPUTS' || sender.id !== chrome.runtime.id || message.tabId !== viewerTabId) return;
     if (!initialized) { sendResponse({ok: false}); return; }
     openMultiView('', message.initialInputs || []).then(() => sendResponse({ok: true})).catch(error => sendResponse({ok: false, error: String(error)}));
@@ -1161,6 +1162,8 @@ function saveState() {
 
   const boot = async () => {
     viewerTabId = globalThis.CZ_SITE_VIEWER ? (await chrome.runtime.sendMessage({type:'SITE_VIEWER_TAB'}))?.tabId : (await chrome.tabs.getCurrent())?.id;
+    const registered=await chrome.runtime.sendMessage({type:'VIEWER_REGISTER_SESSION',tabId:viewerTabId});
+    if(!registered?.ok)throw Error(registered?.error||'멀티뷰 저장 세션 등록 실패');
     const query = new URL(location.href).searchParams;
     let inputs = [];
     if (!globalThis.CZ_SITE_VIEWER && query.has('inputs')) inputs = JSON.parse(query.get('inputs'));
