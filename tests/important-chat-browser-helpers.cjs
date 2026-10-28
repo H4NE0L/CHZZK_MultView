@@ -62,7 +62,7 @@ module.exports=async function checkImportantChat(page){
    const row=document.createElement('div');row.className='live_chatting_list_item__test';if(id)row.dataset.messageId=id;
    const nested=document.createElement('div');nested.className='live_chatting_message_container__test';row.appendChild(nested);
    const author=document.createElement('span');author.className='live_chatting_username_container';
-   if(role){const badge=document.createElement('img');badge.alt=role;author.appendChild(badge);}
+   if(role){const badge=document.createElement('img');badge.alt=role==='스트리머'?'스트리머 아이콘':role;if(role==='스트리머')nested.appendChild(badge);else author.appendChild(badge);}
    const nick=document.createElement('span');nick.className='name_text__test';nick.textContent=name;author.appendChild(nick);
    const body=document.createElement('span');body.className='live_chatting_message_text__test';body.textContent=text;
    nested.append(author,body);host.appendChild(row);
@@ -77,6 +77,8 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await page.locator('#settingsManager #importantChatEnabled').count(),1);
  assert.equal(await settings.locator('#importantChatEnabled').count(),0);
  assert.equal(await panel.locator('.ic-message').count(),2,'nested containers must not duplicate messages');
+ assert((await panel.locator('.ic-list').textContent()).includes('방송인 · 스트리머'),'streamer badge outside username is recognized');
+ assert(!(await panel.locator('.ic-list').textContent()).includes('일반 사용자'),'message-body badge must not grant a role');
  await openSettings();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();

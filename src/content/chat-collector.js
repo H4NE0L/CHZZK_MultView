@@ -5,14 +5,20 @@ globalThis.CZChatCollector = {create({send}) {
   const texts='[class*="live_chatting_message_text"],[data-chat-text]';
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
   let seen=new WeakMap();const pending=new Map();
-  function role(row,textElements) {
-    const author=row.querySelector('[class*="live_chatting_username"],[data-chat-author]');
-    if(!author)return '';
+  function role(row,textElements,nickname) {
+    // Role badges can be siblings of the username rather than its children.
+    // Only inspect author markup before the nickname, never message content.
+    const author=nickname.closest('[class*="live_chatting_username"],[data-chat-author]');
     let manager=false;
-    for(const badge of author.querySelectorAll('img,[data-role],[aria-label],[title]')){
-      if(textElements.some(el=>el.contains(badge)))continue;
-      const values=['alt','title','aria-label','data-role'].map(key=>String(badge.getAttribute(key)||'').trim().toLowerCase().replace(/(?:\s*배지|\s+badge)$/,''));
-      if(values.some(v=>['스트리머','방송자','streamer','owner','streaming_channel_owner'].includes(v)))return 'streamer';
+    const badges=[...row.querySelectorAll('img,svg title,[data-role],[aria-label],[title]')];
+    for(const badge of badges){
+      if(textElements.some(el=>el===badge || el.contains(badge)) || badge.contains(nickname))continue;
+      const beforeName=!!(badge.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING);
+      if(!beforeName && !(author && author!==nickname && author.contains(badge)))continue;
+      const raw=['alt','title','aria-label','data-role'].map(key=>badge.getAttribute(key));
+      if(badge.matches('svg title'))raw.push(badge.textContent);
+      const values=raw.map(value=>String(value||'').normalize('NFC').trim().toLowerCase().replace(/(?:\s*(?:배지|아이콘)|\s+(?:badge|icon))$/,'').trim());
+      if(values.some(v=>['스트리머','방송자','방송인','streamer','owner','streaming_channel_owner'].includes(v)))return 'streamer';
       if(values.some(v=>['채널 관리자','채널관리자','채널 매니저','매니저','방송 관리자','manager','channel manager','channel_manager','streaming_channel_manager'].includes(v)))manager=true;
     }
     return manager?'manager':'';
@@ -34,7 +40,7 @@ globalThis.CZChatCollector = {create({send}) {
     if(!name || !text)return;
     const fingerprint=JSON.stringify([name,text]),previous=seen.get(row);
     const id=String(row.getAttribute('data-message-id') || row.getAttribute('data-chat-id') || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
-    const item={id,name,text,role:role(row,topParts),time:previous?.fingerprint===fingerprint?previous.time:Date.now()};
+    const item={id,name,text,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()};
     const signature=JSON.stringify(item);
     if(previous?.signature===signature)return;
     seen.set(row,{fingerprint,id,time:item.time,signature});
