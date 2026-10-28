@@ -83,6 +83,13 @@ module.exports=async function checkImportantChat(page){
    const body=document.createElement('span');body.className='live_chatting_message_text__test';body.textContent=text;
    nested.append(author,body);host.appendChild(row);
  },{name,text,role,id});
+ await frame.evaluate(()=>{
+   const row=document.createElement('div');row.className='_chatting_message_w9pvh_21';row.innerHTML='<span class="_nickname_w9pvh_33"><button class="_nickname_1mc5x_80">테스트 방송</button></span>새 CSS 모듈의 스트리머 채팅 <img alt="웃음"> @<span class="_nickname_mention_80">다른 사용자</span>';document.querySelector('aside.live_chat').appendChild(row);
+ });
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 스트리머 채팅 웃음'));
+ assert.equal(await panel.locator('.ic-message').count(),1,'nested nickname CSS modules must not duplicate the message');
+ await frame.evaluate(()=>document.querySelector('._chatting_message_w9pvh_21').remove());
+ await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
  await add('테스트 방송','배지 없는 실제 스트리머','','api-owner');
  await add('테스트 방송2','다른 닉네임은 제외','','not-owner');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('배지 없는 실제 스트리머'));
@@ -124,13 +131,16 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261028-3');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261028-4');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.includes('live_chatting_list_item'));
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
  await page.evaluate(descriptor=>{delete navigator.clipboard;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);delete window.__chatDiagnosticCopy;},originalClipboard);await originalClipboard.dispose();
  assert.equal(await settings.locator('.ic-chat-side,.ic-chat-open').count(),0);
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
+ await frame.evaluate(()=>{const row=document.createElement('div');row.className='other-class _chatting_message_abcde_99';row.innerHTML='<span class="_nickname_z9x8y_33"><span class="additional _nickname_xyz12_80">지정 사용자</span></span><span class="_body_unknown_10">새 CSS 모듈의 지정 시청자 채팅</span>';document.querySelector('aside.live_chat').appendChild(row);});
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 지정 시청자 채팅'));
+
  await frame.evaluate(()=>{const row=document.createElement('div');row.className='unknown_virtual_row';row.innerHTML='<span class="new_username"><span class="new_nickname">지정 사용자</span></span><span class="changed_message_body">본문 CSS가 달라진 채팅 <img alt="웃음"></span>';document.querySelector('aside.live_chat').appendChild(row);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('본문 CSS가 달라진 채팅 웃음'));
  await add('지정 사용자','<img src=x onerror=alert(1)>','','manual-1');await add('지정 사용자2','접두어는 불일치','','manual-2');

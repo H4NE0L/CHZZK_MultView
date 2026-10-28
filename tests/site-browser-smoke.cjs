@@ -57,6 +57,7 @@ const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(roo
 
  await require('./audio-isolation-browser-helpers.cjs')(page);
  await require('./important-chat-browser-helpers.cjs')(page);
+ if(process.argv.includes('--chat-only')){console.log('PASS: focused chat DOM smoke (mock CHZZK/Chrome APIs).');return;}
  // Closing destroys chat; a main change while closed must not reconnect it.
  await page.evaluate(()=>{const root=document.getElementById('__chzzk_multiview_v09__').shadowRoot;window.__oldChat=root.querySelector('.chat-frame');window.__player=root.querySelector('#videoGrid iframe');});
  await page.locator('#chatToggleBtn').click();assert.equal(await page.locator('.chat-frame').count(),0);

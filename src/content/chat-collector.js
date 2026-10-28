@@ -1,7 +1,7 @@
 // Read only visible chat markup. No socket interception or extra connection.
 globalThis.CZChatCollector = {create({send,status=()=>{}}) {
-  const rows='[class*="live_chatting_list_item"],[class*="live_chatting_message_container"],[data-chat-message],[class*="live_chatting_message_item"],[role="listitem"],[class*="live_chatting_message_wrapper"],[class*="live_chatting_chat_item"]';
-  const names='[class*="live_chatting_username_nickname"],[class*="name_text"],[data-chat-nickname],[class*="username"] [class*="nickname"]';
+  const rows='[class*="live_chatting_list_item"],[class*="live_chatting_message_container"],[data-chat-message],[class*="live_chatting_message_item"],[role="listitem"],[class*="live_chatting_message_wrapper"],[class*="live_chatting_chat_item"],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+  const names='[class*="live_chatting_username_nickname"],[class*="name_text"],[data-chat-nickname],[class*="username"] [class*="nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
   const texts='[class*="live_chatting_message_text"],[data-chat-text]';
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
   const identities=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0};let structure=null;const pending=new Map();
@@ -10,8 +10,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-3',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
-  const leafNames=node=>[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261028-4',ownerKnown:!!ownerName,enabled:filter.enabled,structure,dom:domSummary()});},500);}
+  const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
+    // A scoped message has one author; later nickname components may be mentions.
+    return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
   function textAfter(row,nickname){
     const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(nickname);
     const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());
