@@ -104,3 +104,5 @@ python3 scripts/package.py
 팝업 열기 버튼의 DOM·요청 분기는 `node tests/browser-smoke.cjs --popup-only`로 검사합니다. 생성 실패 시 새 탭 모드는 임시 탭만 닫고, 새 창 모드는 임시 창만 닫아 기존 창을 유지합니다.
 
 테스트 브랜치의 수집기 revision 20261029-1은 streamer/manager/partner를 지원합니다. 저장된 partners 값이 없으면 true이며 각 필터는 독립적으로 끌 수 있습니다. 역할은 API 채널명·배지 메타데이터/SVG 표식으로 판별하고, 표식이 없으면 본문 텍스트 노드의 computed color를 HSV 범위로 구분합니다. 닉네임 색은 제외합니다. CSS 색상 추론은 역할의 확정적 서버 정보가 아니며 명시적 배지 판정을 우선합니다. class/style 변경은 메시지 행 내부에 한해서만 다시 검사해 헤더 레이아웃 변경에 따른 반복 스캔을 피합니다.
+
+원본 채팅 상호작용: /live/{id}/chat에서는 원본 DOM을 재배치하거나 바깥 포털 호스트를 숨기지 않습니다. 스트리머 라벨은 별도 strong으로 추가하고 원본 제목/텍스트 노드를 React가 계속 관리하도록 보존합니다. nativeHeader는 폰트 버튼 외의 원본 버튼을 숨기지 않고 부모의 display:contents 변환도 하지 않습니다. MutationObserver와 RAF로 원본 메뉴·레이어 표시를 감지해 CHAT_HEADER.menuOpen을 알리며, 부모 수집 패널의 가시성만 바꿔 클릭 전달과 원래 포털 좌표를 유지합니다. 검사에서는 빈 포털 호스트·제목 텍스트 노드·버튼 위치 컨테이너 보존과 모의 차단·승부예측 핸들러 실행을 확인합니다. 실제 인증 API 호출이나 승부예측 참여는 모의 검사 범위 밖입니다.
