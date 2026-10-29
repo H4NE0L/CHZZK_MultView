@@ -1,3 +1,4 @@
+import {readJson} from './backup-file';
 import type {SettingsDocument} from './settings-backup';
 import type {BackupDocument} from './favorites-backup';
 export function attach(host: HTMLElement,onRestored: () => Promise<void>,options: {settings?: boolean}={}) {
@@ -37,7 +38,7 @@ export function attach(host: HTMLElement,onRestored: () => Promise<void>,options
     setBusy(true);
     try{
       if(file.size>api.MAX_BYTES)throw Error('백업 파일은 5MB 이하만 불러올 수 있습니다.');
-      show(api.parse(JSON.parse(await file.text())));
+      show(api.parse(await readJson(file)));
     }catch(error){message(error instanceof SyntaxError?'JSON 파일을 확인해주세요.':error instanceof Error?error.message:String(error));}finally{setBusy(false);}
   };
   $('.cg-backup-undo').onclick=async()=>{
