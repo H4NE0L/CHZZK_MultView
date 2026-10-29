@@ -287,6 +287,25 @@ globalThis.CZChatLayout = (() => {
     root.querySelector('#cz-important-chat-space')?.remove();
     const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)reportHeader(header);
   }
+  const timestampRows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+  let timestampRoot=null,timestampObserver=null;
+  function stampMessages(root){
+    if(timestampRoot===root)return;
+    timestampObserver?.disconnect();timestampRoot=root;
+    const stamp=row=>{
+      if(row.querySelector('time') || row.querySelector(timestampRows))return;
+      const raw=row.getAttribute('data-timestamp')||row.getAttribute('data-created-at'),number=raw?Number(raw):NaN;
+      const parsed=raw?(Number.isFinite(number)?number*(number<1e12?1000:1):Date.parse(raw)):NaN;
+      const nativeTime=Number.isFinite(parsed)&&parsed>=946684800000&&parsed<=Date.now()+60000;
+      const time=document.createElement('time'),now=new Date(nativeTime?parsed:Date.now());time.className='cz-native-chat-time';time.dateTime=now.toISOString();time.textContent=now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});time.title=nativeTime?'원본 메시지 시각':'이 화면에서 처음 확인한 시각';
+      // Add our own node; never replace React-owned author/message nodes.
+      row.prepend(time);
+    };
+    const scan=node=>{if(node.nodeType!==1 || node.matches('.cz-native-chat-time'))return;if(node.matches(timestampRows))stamp(node);node.querySelectorAll(timestampRows).forEach(stamp);};
+    root.querySelectorAll(timestampRows).forEach(stamp);
+    timestampObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)scan(node);});
+    timestampObserver.observe(root,{childList:true,subtree:true});
+  }
   let preparedRoot = null,preparedRootStyle='';
   function prepare() {
     cleanClonedControls();
@@ -311,10 +330,10 @@ globalThis.CZChatLayout = (() => {
       const style=document.createElement('style');style.id='cz-chat-chrome';
       style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
       style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:18px!important;height:18px!important;margin:0!important;transform:none!important}';
-      style.textContent+='.cz-native-chat-header{height:40px!important;min-height:40px!important;padding:0 8px!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;flex:0 0 32px!important;box-sizing:border-box!important}.cz-native-chat-header #cz-chat-channel:before,.cz-native-chat-header #cz-chat-channel:after,.cz-native-chat-header #cz-chat-settings:before,.cz-native-chat-header #cz-chat-settings:after,.cz-native-settings:before,.cz-native-settings:after{content:none!important}.cz-native-settings{font-size:20px!important;line-height:1!important}.cz-native-settings svg{width:20px!important;height:20px!important}.cz-native-action-wrapper{position:relative!important;inset:auto!important;transform:none!important;align-self:center!important;align-items:center!important;min-height:32px!important;margin-top:0!important;margin-bottom:0!important}';
+      style.textContent+='.cz-native-chat-time{display:inline!important;margin-right:6px!important;color:#89929f!important;font-size:10px!important;font-weight:400!important;line-height:inherit!important;white-space:nowrap!important}.cz-native-chat-header{height:40px!important;min-height:40px!important;padding:0 8px!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;flex:0 0 32px!important;box-sizing:border-box!important}.cz-native-chat-header #cz-chat-channel:before,.cz-native-chat-header #cz-chat-channel:after,.cz-native-chat-header #cz-chat-settings:before,.cz-native-chat-header #cz-chat-settings:after,.cz-native-settings:before,.cz-native-settings:after{content:none!important}.cz-native-settings{font-size:20px!important;line-height:1!important}.cz-native-settings svg{width:20px!important;height:20px!important}.cz-native-action-wrapper{position:relative!important;inset:auto!important;transform:none!important;align-self:center!important;align-items:center!important;min-height:32px!important;margin-top:0!important;margin-bottom:0!important}';
       (document.head||document.documentElement).appendChild(style);
     }
-    nativeHeader(root);
+    nativeHeader(root);stampMessages(root);
     if(overlayOpen())root.querySelectorAll('.cz-chat-input-idle').forEach(el=>el.classList.remove('cz-chat-input-idle'));else stabilizeInput(document,root);
     return true;
   }
@@ -331,7 +350,7 @@ globalThis.CZChatLayout = (() => {
     const overlays=onHeader?new MutationObserver(report):null;overlays?.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','open','aria-hidden','aria-expanded']});
     document.addEventListener('click',event=>{const header=document.querySelector('.cz-native-chat-header');if(header && !header.contains(event.target))nativeMenuOpen=false;report();},true);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;report();}},true);
-    window.addEventListener('pagehide',()=>overlays?.disconnect(),{once:true});
+    window.addEventListener('pagehide',()=>{overlays?.disconnect();timestampObserver?.disconnect();},{once:true});
     document.addEventListener('focusin',apply);document.addEventListener('focusout',()=>queueMicrotask(apply));document.addEventListener('input',apply);
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);

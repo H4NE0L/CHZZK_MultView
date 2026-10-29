@@ -116,12 +116,15 @@ module.exports=async function checkImportantChat(page){
    nested.append(author,body);host.appendChild(row);
  },{name,text,role,id});
  await frame.evaluate(()=>{
-   const row=document.createElement('div');row.className='_chatting_message_w9pvh_21';row.innerHTML='<span class="_nickname_w9pvh_33"><button class="_nickname_1mc5x_80">테스트 방송<svg><title>인증 배지</title></svg></button><span class="_trailing_decoration_1"><img alt="파트너 배지"></span></span>새 CSS 모듈의 스트리머 채팅 <img alt="웃음"> @<span class="_nickname_mention_80">다른 사용자</span>';document.querySelector('aside.live_chat').appendChild(row);
+   const row=document.createElement('div');row.className='_chatting_message_w9pvh_21';row.innerHTML='<span class="_nickname_w9pvh_33"><button class="_nickname_1mc5x_80">테스트 방송<svg><title>인증 배지</title></svg><span class="_blind_abcdef_1">마크</span><span style="display:none">인증마크</span></button><span class="_trailing_decoration_1"><img alt="파트너 배지"></span></span><span class="_unknown_icon_wrap"><img alt="인증마크" src="https://ssl.pstatic.net/unknown-mark.png"></span>새 CSS 모듈의 스트리머 채팅 <img alt="웃음"> @<span class="_nickname_mention_80">다른 사용자</span>';document.querySelector('aside.live_chat').appendChild(row);
  });
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 스트리머 채팅 웃음'));
  assert.equal(await panel.locator('.ic-message').count(),1,'nested nickname CSS modules must not duplicate the message');
- assert.equal(await panel.locator('.ic-author').textContent(),'테스트 방송','author excludes SVG badge titles');
+ assert.equal(await panel.locator('.ic-author').textContent(),'테스트 방송','author excludes SVG titles and hidden accessibility mark captions');
+ await frame.waitForFunction(()=>!!document.querySelector('._chatting_message_w9pvh_21 .cz-native-chat-time'));
+ assert.match(await frame.locator('._chatting_message_w9pvh_21 .cz-native-chat-time').textContent(),/^\d{2}:\d{2}$/);
  assert(!(await panel.locator('.ic-message-text').textContent()).includes('파트너 배지'),'badges after the inner nickname are outside the body');
+ assert(!(await panel.locator('.ic-message-text').textContent()).includes('인증마크'),'unclassified certification image after the author is not message text');
  const expandedFrameHeight=(await page.locator('.chat-frame').boundingBox()).height;
  await panel.locator('.ic-toggle').click();
  await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='collapsed-collection-test';row.innerHTML='<span data-chat-nickname>테스트 방송</span><span data-chat-text>접힌 동안 수집 유지</span>';document.querySelector('aside.live_chat').append(row);});
@@ -132,6 +135,12 @@ module.exports=async function checkImportantChat(page){
 
  await frame.evaluate(()=>document.querySelector('._chatting_message_w9pvh_21').remove());
  await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
+ await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='visible-body-regression';row.innerHTML='<span data-chat-nickname><button>테스트 방송</button><span class="_sr_only_123">인증마크</span></span><span data-chat-text><img alt="웃음" src="https://ssl.pstatic.net/emote.png"> 일반 본문 <img alt="인증마크" src="https://ssl.pstatic.net/emote-other.png"></span>';document.querySelector('aside.live_chat').append(row);});
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('일반 본문'));
+ const visibleBody=panel.locator('.ic-message').filter({hasText:'일반 본문'});
+ assert.equal(await visibleBody.locator('.ic-author').textContent(),'테스트 방송');
+ assert.equal(await visibleBody.locator('.ic-emote').count(),2,'ordinary leading emote stops prefix stripping; body images stay intact');
+ await frame.locator('#visible-body-regression').evaluate(el=>el.remove());await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
  await add('테스트 방송','배지 없는 실제 스트리머','','api-owner');
  await add('테스트 방송2','다른 닉네임은 제외','','not-owner');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('배지 없는 실제 스트리머'));
@@ -157,6 +166,20 @@ module.exports=async function checkImportantChat(page){
    return batches.map(batch=>batch.find(item=>item.name==='방송인')?.id);
  });
  assert.equal(stableIds.length,2);assert.equal(stableIds[0],stableIds[1],'API identity refresh must not duplicate existing chat rows');
+ const replacementResult=await frame.evaluate(async()=>{
+   const captured=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch)}),host=document.querySelector('aside.live_chat');
+   collector.configure({enabled:true,streamers:false,managers:false,partners:false,names:['중복 검사']});
+   const first=document.createElement('div');first.dataset.chatMessage='';first.dataset.timestamp='2026-10-28T12:34:00Z';first.innerHTML='<span data-chat-nickname>중복 검사</span><span data-chat-text>똑같은 내용</span>';host.append(first);await new Promise(resolve=>setTimeout(resolve,300));
+   const replacement=first.cloneNode(true);first.replaceWith(replacement);await new Promise(resolve=>setTimeout(resolve,300));const afterReplacement=captured.length;
+   const reinserted=replacement.cloneNode(true),next=replacement.nextSibling;replacement.remove();host.insertBefore(reinserted,next);await new Promise(resolve=>setTimeout(resolve,300));const afterReinsert=captured.length;
+   const genuinelyNew=reinserted.cloneNode(true);host.append(genuinelyNew);await new Promise(resolve=>setTimeout(resolve,300));collector.stop();reinserted.remove();genuinelyNew.remove();
+   return {originalTime:reinserted.querySelector('time')?.dateTime,afterReplacement,afterReinsert,total:captured.length,ids:captured.map(item=>item.id)};
+ });
+ assert.equal(replacementResult.originalTime,'2026-10-28T12:34:00.000Z','native message timestamp takes priority over first-seen time');
+ assert.equal(replacementResult.afterReplacement,1,'replacing a message DOM node is not a new chat');
+ assert.equal(replacementResult.afterReinsert,1,'separate removal and insertion at the same DOM position is a replacement');
+ assert.equal(replacementResult.total,2,'a separately posted identical message remains a separate chat');
+ assert.notEqual(replacementResult.ids[0],replacementResult.ids[1]);
  const reorderedCaptured=await frame.evaluate(async()=>{
    const row=document.createElement('div');row.dataset.chatMessage='';row.style.cssText='position:fixed;top:500px;height:24px';row.innerHTML='<span data-chat-nickname>범위 점검 사용자</span><span data-chat-text>DOM 순서와 화면 순서가 다른 채팅</span>';
    document.querySelector('.cz-native-chat-header').before(row);
@@ -178,7 +201,7 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261029-3');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-5');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
@@ -239,6 +262,7 @@ module.exports=async function checkImportantChat(page){
  await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
  await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
+ await frame.waitForFunction(()=>!!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
  assert.equal(await panel.locator('.ic-message').count(),0);
  await setEnabled(true);assert(await panel.isVisible());await page.waitForTimeout(350);await openSettings();
  await page.locator('.ic-clear').click();
