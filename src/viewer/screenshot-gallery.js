@@ -1,7 +1,9 @@
+import {screenshotCrop} from './screenshot-crop.js';
+import {ResourceScope} from '../shared/runtime/scope';
 import {MAX_SCREENSHOTS,MAX_SCREENSHOT_BYTES} from '../shared/media/limits';
 import {ObjectURLs} from '../shared/media/object-urls';
-globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
-  const scope=new CZRuntime.ResourceScope();
+export const screenshotGallery = {create({host,download,onClose}) {
+  const scope=new ResourceScope();
   const urls=new ObjectURLs();scope.add(()=>urls.dispose());
   const saving=new WeakSet();
   const items=[];let index=-1,crop=null,url=null,drag=null,closed=false;
@@ -24,7 +26,7 @@ globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
     release();index=next;crop=null;body.replaceChildren();status.textContent='';
     const img=document.createElement('img');img.draggable=false;img.alt=`스크린샷 ${index+1}`;
     const area=document.createElement('div');area.className='screenshot-crop-host';area.appendChild(img);body.appendChild(area);
-    crop=CZScreenshotCrop.attach(img,area,update,items[index].cropState);
+    crop=screenshotCrop.attach(img,area,update,items[index].cropState);
     url=urls.create(items[index].blob);img.src=url.url;update();
   }
   function close() {if(closed)return;closed=true;release();items.length=0;crop=null;drag=null;panel.remove();scope.dispose();onClose();}

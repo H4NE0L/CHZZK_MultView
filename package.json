@@ -13,7 +13,7 @@
     "test:backup": "npm run build && node scripts/test.mjs backup",
     "test:media": "npm run build && node scripts/test.mjs media",
     "package": "npm run build && node scripts/package.mjs",
-    "verify": "npm run typecheck && npm test && npm run test:browser"
+    "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
     "@types/chrome": "0.3.7",

@@ -1,3 +1,4 @@
+import {bind as bindSettings} from '../settings';
 export function bind(context) {
   const {ui,mediaTools,addFromInput,clearAll,favoriteController,toggleToolbar,toggleChat,toggleChatSide,toggleScreenLock,scope,saveState,syncShortcutSettings,
     importantChat,powerDiagnostics,volumePanel,renderSyncUI,resetAllSync,adjustSync,resetSync,moveSelectedToFront,applyLayout,
@@ -10,7 +11,7 @@ export function bind(context) {
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-    CZViewerSettings.bind({root:ui,get state(){return context.state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,
+    bindSettings({root:ui,get state(){return context.state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,
       openChatSettings:()=>importantChat.openSettings(),openPowerDiagnostics:()=>powerDiagnostics.open()});
     volumePanel.bind();
 

@@ -1,5 +1,7 @@
-globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
-  const scope=new CZRuntime.ResourceScope();
+import {create as createRenderer} from './chat-renderer';
+import {ResourceScope} from '../shared/runtime/scope';
+export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
+  const scope=new ResourceScope();
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
   const owners=new Map(),presented=new WeakMap();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null,expanded=false;
@@ -8,7 +10,7 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
-  const renderer=CZChatRenderer.create($('.ic-list'));
+  const renderer=createRenderer($('.ic-list'));
   $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
   for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함']]){
     const label=document.createElement('label');label.className='ic-option';label.dataset.role=key;

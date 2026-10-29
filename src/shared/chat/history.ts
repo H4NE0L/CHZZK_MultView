@@ -11,5 +11,3 @@ export function create(limit=2048) {
       if(entries.size>limit)entries.delete(entries.keys().next().value!);
     }};
 }
-export const history=Object.freeze({create,hash});
-globalThis.CZChatHistory=history;

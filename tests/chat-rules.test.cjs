@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const root=process.env.CZ_TEST_ROOT||path.resolve(__dirname,'../dist'),context=vm.createContext({});
-for(const file of ['roles','history'])vm.runInContext(fs.readFileSync(path.join(root,`src/shared/chat/${file}.js`),'utf8'),context);
+for(const file of ['roles','history'])vm.runInContext(require('./support/modules.cjs').read(path.join(root,`src/shared/chat/${file}.js`),'utf8'),context);
 const roles=context.CZChatRoles,history=context.CZChatHistory;
 test('role labels, semantic markers and color fallback preserve independent roles',()=>{
  for(const [label,role] of [['스트리머 배지','streamer'],['CHANNEL MANAGER icon','manager'],['파트너 스트리머','partner']])assert.equal(roles.evidence([label],[]).role,role);

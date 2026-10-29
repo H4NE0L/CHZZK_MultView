@@ -1,4 +1,4 @@
-globalThis.CZScreenshotCrop = {attach(img, host, onChange=()=>{},initial={}) {
+export const screenshotCrop = {attach(img, host, onChange=()=>{},initial={}) {
   const box=document.createElement('div');box.className='screenshot-crop';box.setAttribute('aria-label','저장할 이미지 영역');
   for(const corner of ['nw','n','ne','w','e','sw','s','se']){const handle=document.createElement('span');handle.className='crop-handle '+corner;handle.dataset.corner=corner;box.appendChild(handle);}
   const size=document.createElement('span');size.className='crop-size';box.appendChild(size);

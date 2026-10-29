@@ -1,0 +1,44 @@
+
+
+/* =========================================================
+   상태 메시지
+   ========================================================= */
+
+.status {
+    min-height: 16px;
+    height: 16px;
+
+    margin: 7px 0 0;
+
+    flex: 0 0 16px;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #999;
+    font-size: 12px;
+}
+
+
+/* =========================================================
+   새로고침 버튼
+   ========================================================= */
+
+.refresh-btn {
+    flex: 0 0 36px;
+
+    height: 36px;
+
+    border: 1px solid #363638;
+
+    background: #222224;
+    color: #aaa;
+
+    font-size: 18px;
+}
+
+.refresh-btn:hover {
+    border-color: #00d26a;
+    color: #00d26a;
+}

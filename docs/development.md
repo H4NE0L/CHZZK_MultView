@@ -4,10 +4,7 @@ Node.js 24 권장(최소 22). 저장소 루트에서 실행합니다.
 
 ```sh
 npm ci
-npm run typecheck
-npm test
-npm run test:browser
-npm run test:media
+npm run verify       # 타입·빌드·단위·브라우저·백업·미디어·채팅 검사
 npm run package
 ```
 
@@ -16,17 +13,21 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 - `config/runtime.json`: 콘텐츠 프레임·멀티뷰·팝업의 스크립트 순서. 홈페이지 실행과 별도 페이지 실행에 같은 목록을 사용합니다.
 - `src/viewer/template.ts`: 화면 마크업. 화면 상태와 이벤트는 viewer.js와 기능별 컨트롤러에서 관리합니다.
 - `src/shared/runtime/scope.ts`: UI 수명에 속한 이벤트·감시자 해제. 스크린샷 갤러리·메인 화면·주요 채팅 패널에 적용합니다.
-- `scripts/build.mjs`: Chrome 119 대상으로 컴파일하고 HTML·manifest를 생성합니다. vendor 파일은 그대로 복사합니다.
+- `config/entries.json`: HTML·manifest 밖에서 동적으로 실행하는 스크립트와 Worker 진입점.
+- `config/styles.json`: 기능별 CSS 조각을 합치는 순서. 출력 경로와 cascade를 유지합니다.
+- `scripts/build.mjs`: Chrome 119 대상으로 진입점과 정적 importScripts 의존성만 배포합니다. ES import는 묶고 HTML·manifest를 생성하며 vendor 파일은 그대로 복사합니다.
+- `config/testing.json` / `.test-build/`: 단위 검사에 필요한 모듈 export와 테스트 전용 별칭. dist와 ZIP에는 포함하지 않습니다.
+- `scripts/verify.mjs`: 한 번 빌드한 산출물로 전체 검사를 순서대로 실행합니다. 녹화 인코더 검사를 병렬 실행하지 않습니다.
 - `scripts/test.mjs`: 소스 대신 실제 dist 산출물을 검사합니다. `CHROMIUM_PATH`로 Chromium 실행 파일을 지정할 수 있습니다.
 - `scripts/package.mjs`: dist만 ZIP으로 묶습니다. TS 원문·개발 의존성·소스맵은 포함하지 않습니다.
 
-기존 JS 전역 API는 호환성을 위해 유지합니다. 1단계 빌드 기반에 이어 2단계 공통 계약·수명 관리를 진행했습니다. 채팅 수집·음량·녹화 알고리즘이나 저장 키를 변경하지 않습니다. 세션·채팅 모델·메시지 및 레이아웃·설정·채팅 렌더러에 TypeScript를 적용했습니다. 나머지 컨트롤러 전환은 후속 단계입니다. 성능 개선 수치는 아직 측정하지 않았습니다.
+계획한 1~6단계의 코드 정리를 구현했습니다. 멀티뷰 내부 모듈은 ES import로 연결합니다. 콘텐츠 스크립트·팝업·저장소처럼 독립 실행 경계에서 필요한 기존 전역 API는 유지합니다. 공통 계약·세션·채팅 규칙·레이아웃 등에 TypeScript를 적용했으며 전체 JS 전환은 하지 않았습니다. 저장 키와 기존 기능을 유지하며, 전체 메모리 감소율은 측정하지 않았습니다.
 
 브라우저 자동 검사는 모의 CHZZK 응답으로 수행합니다. 로그인·실방송·다른 확장과의 호환은 사용자 Chrome에서 확인해야 합니다.
 
 ## 실행 구조
 
-`viewer.js`는 공통 상태·시작 흐름과 기능 조립을 담당합니다. `viewer/controllers`가 화면·즐겨찾기·방송 목록·음량 UI·세션을 맡으며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `viewer.css`는 기존 Shadow DOM 스타일을 보존하는 별도 파일입니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
+`viewer.js`는 공통 상태·시작 흐름과 기능 조립을 담당합니다. `viewer/controllers`가 화면·즐겨찾기·방송 목록·음량 UI·세션을 맡으며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `src/viewer/styles`와 `src/popup/styles`의 CSS를 설정 순서대로 합쳐 기존 `viewer.css`·`popup.css` 경로에 출력합니다. 뒤쪽 덮어쓰기 규칙의 순서도 유지합니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
 
 확장 페이지에서 치지직 iframe을 열기 위해 `viewer-tabs.js`는 현재 전용 탭 ID, 확장 initiator, CHZZK 도메인, `sub_frame` 조건을 모두 충족하는 요청에만 CSP·X-Frame-Options 응답 헤더 예외를 적용합니다. 확장 페이지 자체 CSP는 로컬 스크립트와 CHZZK iframe만 허용합니다. 프레임 메시지는 origin과 실제 iframe 창을 함께 검증합니다. 채팅 DOM 정리는 부모에서 접근하지 않고 프레임 내부에서 수행합니다.
 
@@ -51,3 +52,5 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 메인 화면의 기능별 책임과 보존 규칙은 [리팩토링 4단계](refactor-stage4.md)를 참고하세요.
 
 미디어 자원의 소유·해제, 보관 한도와 직접 테스트 항목은 [리팩토링 5단계](refactor-stage5.md)를 참고하세요.
+
+최종 모듈·스타일·배포 구조와 검증 범위는 [리팩토링 6단계](refactor-stage6.md)를 참고하세요.

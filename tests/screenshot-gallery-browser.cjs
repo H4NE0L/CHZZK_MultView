@@ -4,8 +4,8 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
  try{
   const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.route('https://viewer.invalid/**',route=>route.fulfill({body:'<!doctype html><body><div id="host" class="mv-root"></div>'}));await page.goto('https://viewer.invalid/');
-  await page.addStyleTag({content:fs.readFileSync('src/viewer/viewer.css','utf8')});
-  for(const file of ['src/viewer/screenshot-crop.js','src/shared/runtime/scope.js','src/viewer/screenshot-gallery.js'])await page.addScriptTag({content:fs.readFileSync(file,'utf8')});
+  await page.addStyleTag({content:require('./support/modules.cjs').read('src/viewer/viewer.css','utf8')});
+  for(const file of ['src/viewer/screenshot-crop.js','src/viewer/screenshot-gallery.js'])await page.addScriptTag({content:require('./support/modules.cjs').read(file,'utf8')});
   await page.evaluate(()=>{
    window.__downloads=[];window.__closed=0;window.__copied=0;
    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async()=>{__copied++;}}});window.ClipboardItem=class{constructor(value){this.value=value;}};

@@ -157,4 +157,3 @@ export function create({getOwnerName}) {
   return {rows,names,texts,leafNames,rowForName,normalizeRow,aboveHeader,read,readingHistory,summary:domSummary,
     resetScroll(){scrollModes=new WeakMap();},get roleSample(){return roleSample;}};
 }
-globalThis.CZChatDOM={create};

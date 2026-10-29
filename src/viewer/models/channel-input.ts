@@ -13,5 +13,3 @@ export function requestedChannels(inputs: readonly unknown[],current: readonly S
   }
   return result;
 }
-export const channelInputs=Object.freeze({requestedChannels});
-globalThis.CZChannelInputs=channelInputs;

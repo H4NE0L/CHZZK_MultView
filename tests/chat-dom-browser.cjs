@@ -3,8 +3,8 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
  const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.setContent('<body>');await page.addScriptTag({content:fs.readFileSync('src/content/chat/dom-adapter.js','utf8')});
-  const fixtures=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/chat/markup.json'),'utf8'));
+  await page.setContent('<body>');await page.addScriptTag({content:require('./support/modules.cjs').read('src/content/chat/dom-adapter.js','utf8')});
+  const fixtures=JSON.parse(require('./support/modules.cjs').read(path.join(__dirname,'fixtures/chat/markup.json'),'utf8'));
   for(const fixture of fixtures){
    const actual=await page.evaluate(fixture=>{
     document.body.innerHTML=fixture.html;const before=document.body.innerHTML;

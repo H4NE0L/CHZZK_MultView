@@ -1,3 +1,4 @@
+import {html} from '../template';
 export function mount({rootId:ROOT_ID,siteMode}) {
     if (document.getElementById(ROOT_ID)) {
       const existing = document.getElementById(ROOT_ID);
@@ -25,7 +26,7 @@ export function mount({rootId:ROOT_ID,siteMode}) {
 
     const ui = document.createElement("div");
     ui.className = "mv-root";
-    ui.innerHTML = CZViewerTemplate.html;
+    ui.innerHTML = html;
 
     shadowRoot.appendChild(ui);
     if(siteMode){

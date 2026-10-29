@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-function fixture(){let handler;const calls=[];vm.runInNewContext(fs.readFileSync('src/background/power-diagnostics.js','utf8'),{URL,Number,chrome:{runtime:{id:'own',onMessage:{addListener:fn=>handler=fn}},scripting:{executeScript:async value=>{calls.push(value);return [{result:{video:{paused:false}}}];}}}});return {handler,calls};}
+function fixture(){let handler;const calls=[];vm.runInNewContext(require('./support/modules.cjs').read('src/background/power-diagnostics.js','utf8'),{URL,Number,chrome:{runtime:{id:'own',onMessage:{addListener:fn=>handler=fn}},scripting:{executeScript:async value=>{calls.push(value);return [{result:{video:{paused:false}}}];}}}});return {handler,calls};}
 test('power diagnostics reads only the requesting authorized live player subframe',async()=>{
  const f=fixture(),sender={id:'own',url:'https://chzzk.naver.com/live/abcd',frameId:7,tab:{id:3}};let reply;
  assert.equal(f.handler({type:'POWER_DIAGNOSTICS'},sender,value=>reply=value),true);await new Promise(resolve=>setImmediate(resolve));assert(reply.ok);assert.equal(f.calls[0].world,'MAIN');assert.deepEqual(JSON.parse(JSON.stringify(f.calls[0].target)),{tabId:3,frameIds:[7]});

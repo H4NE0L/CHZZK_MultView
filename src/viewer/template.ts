@@ -108,6 +108,3 @@ export const html = `
         </aside>
       </section>
 `;
-
-export const template = Object.freeze({html});
-globalThis.CZViewerTemplate = template;

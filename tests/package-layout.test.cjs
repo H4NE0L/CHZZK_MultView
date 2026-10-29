@@ -41,3 +41,21 @@ test('compiled package contains runtime scripts without development TypeScript o
   assert.deepEqual(actual,config[kind]);
  }
 });
+test('only runtime entries ship; test exports and bundled implementation modules stay outside dist',()=>{
+ for(const file of ['src/viewer/controllers/session.js','src/viewer/models/channel-input.js','src/shared/chat/roles.js','src/shared/media/object-urls.js','src/viewer/audio.js'])assert(!fs.existsSync(path.join(root,file)),file+' should be bundled, not separately shipped');
+ const scripts=fs.readdirSync(path.join(root,'src'),{recursive:true}).filter(file=>file.endsWith('.js'));
+ for(const file of scripts){
+  const text=fs.readFileSync(path.join(root,'src',file),'utf8');assert(!text.includes('__CZTestModule'),file+' contains test exports');
+  for(const [,args] of text.matchAll(/\bimportScripts\(([^)]*)\)/g))for(const [,dependency] of args.matchAll(/["']([^"']+)["']/g))exists(path.posix.normalize(path.posix.join('src',path.posix.dirname(file),dependency)));
+ }
+ const viewer=fs.readFileSync(path.join(root,'src/viewer/viewer.js'),'utf8');
+ for(const name of ['CZAudio','CZPlayers','CZMediaTools','CZRuntime','CZViewerSession','CZChannelInputs','CZObjectURLs','CZExportJobs'])assert(!viewer.includes('globalThis.'+name),'temporary global '+name);
+ assert(!viewer.includes('mediabunny.min.mjs'),'vendor must remain lazy in export worker');
+});
+test('stylesheet fragments preserve cascade order and are emitted as the same local stylesheet paths',()=>{
+ const repository=path.resolve(__dirname,'..'),styles=require('../config/styles.json');
+ for(const [output,inputs] of Object.entries(styles)){
+  const expected=inputs.map(file=>fs.readFileSync(path.join(repository,file),'utf8')).join('');assert.equal(fs.readFileSync(path.join(root,output),'utf8'),expected);
+  for(const input of inputs)assert(!fs.existsSync(path.join(root,input)),'source CSS fragment shipped separately');
+ }
+});

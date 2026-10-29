@@ -1,4 +1,4 @@
-globalThis.CZAudio = {create(context) {
+export const audio = {create(context) {
   const {tileMap, syncVolumeUI, saveStateSoon, saveState} = context;
   /* ------------------------------------------------------------------
      Volume model

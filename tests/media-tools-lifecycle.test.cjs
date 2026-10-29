@@ -3,7 +3,7 @@ const root=process.env.CZ_TEST_ROOT||path.resolve(__dirname,'../dist');
 function setup(){
  const timers=new Map(),intervals=new Map(),listeners=new Map(),requests=[],notices=[],signals=[];let id=0;
  const context=vm.createContext({console,Blob,Date,URL,AbortController,fetch:async(_url,options)=>{signals.push(options.signal);return {ok:false};},setTimeout:fn=>{timers.set(++id,fn);return id;},clearTimeout:id=>timers.delete(id),setInterval:fn=>{intervals.set(++id,fn);return id;},clearInterval:id=>intervals.delete(id),window:{addEventListener:(type,fn)=>listeners.set(type,fn),removeEventListener:(type,fn)=>{if(listeners.get(type)===fn)listeners.delete(type);}},chrome:{storage:{local:{get:async()=>({})}}},MediaRecorder:{isTypeSupported:mime=>mime.startsWith('video/webm')},CZMessages:{postToPlayer:(frame,message)=>{requests.push(message);return true;}}});
- vm.runInContext(fs.readFileSync(path.join(root,'src/viewer/media-tools.js'),'utf8'),context);
+ vm.runInContext(require('./support/modules.cjs').read(path.join(root,'src/viewer/media-tools.js'),'utf8'),context);
  const media=context.CZMediaTools.create({state:{channels:[{uid:'aaaaaa',name:'A'}],selectedUid:'aaaaaa'},ui:null,tileMap:new Map([['aaaaaa',{querySelector:()=>null}]]),showNotice:value=>notices.push(value)});
  return {media,timers,intervals,listeners,requests,notices,signals};
 }

@@ -30,5 +30,3 @@ export function bind(context: SettingsContext) {
   scope.listen(settings,'toggle',()=>{if(settings.open)for(const panel of others)panel.open=false;});
   for(const panel of others)scope.listen(panel,'toggle',()=>{if(panel.open)settings.open=false;});
 }
-export const settings=Object.freeze({bind});
-globalThis.CZViewerSettings=settings;

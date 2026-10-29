@@ -1,4 +1,4 @@
-globalThis.CZPlayers = {create(context) {
+export const players = {create(context) {
   const {tileMap, escapeHtml, displayChannelName, removeChannel, showNotice, applyLayout, updateChat, refreshChannelManager, saveState, applyTileLock, syncVolumeUI, clearSyncState, sendTileVolume, makeMainAudible} = context;
   function isChannelVisibleInLayout(uid) {
     const index = context.state.channels.findIndex(c => c.uid === uid);

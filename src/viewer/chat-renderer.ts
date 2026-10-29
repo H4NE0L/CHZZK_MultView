@@ -35,5 +35,3 @@ export function create(list: HTMLElement) {
   function clear(){for(const entry of rendered.values())entry.node.remove();rendered.clear();}
   return {render,clear};
 }
-export const chatRenderer=Object.freeze({create});
-globalThis.CZChatRenderer=chatRenderer;

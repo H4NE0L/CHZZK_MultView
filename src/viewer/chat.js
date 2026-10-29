@@ -1,4 +1,4 @@
-globalThis.CZChat = {create(context) {
+export const chat = {create(context) {
   function releaseChat() {
     const frame = context.chatFrame;
     context.chatFrame = null;

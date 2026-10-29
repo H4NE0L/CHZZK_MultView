@@ -1,0 +1,5 @@
+[
+  "src/content/site-context.js",
+  "src/content/chat-metadata-main.js",
+  "src/viewer/recording-export-worker.js"
+]

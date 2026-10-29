@@ -14,5 +14,3 @@ export class ObjectURLs {
   }
   dispose(){this.scope.dispose();}
 }
-export const objectURLs=Object.freeze({ObjectURLs});
-globalThis.CZObjectURLs=objectURLs;

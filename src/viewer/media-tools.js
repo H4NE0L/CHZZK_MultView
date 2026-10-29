@@ -1,7 +1,8 @@
+import {screenshotGallery} from './screenshot-gallery.js';
 import {MAX_SCREENSHOTS,MAX_PENDING_SCREENSHOTS,MAX_SCREENSHOT_BYTES,DOWNLOAD_URL_MS} from '../shared/media/limits';
 import {ResourceScope} from '../shared/runtime/scope';
 import {ObjectURLs} from '../shared/media/object-urls';
-globalThis.CZMediaTools = {create(context) {
+export const mediaTools = {create(context) {
   const scope=new ResourceScope(),urls=new ObjectURLs(),transferAbort=new AbortController();scope.add(()=>urls.dispose());scope.add(()=>transferAbort.abort());
   const recordings=new Map(), pending=new Map(), positions=new Map(), results=[];
   let openingResult=false,activeResult=null;
@@ -85,7 +86,7 @@ globalThis.CZMediaTools = {create(context) {
       return;
     }
     if(scope.isDisposed)return;
-    if(!gallery)gallery=CZScreenshotGallery.create({host:context.ui,download,onClose:()=>{gallery=null;}});
+    if(!gallery)gallery=screenshotGallery.create({host:context.ui,download,onClose:()=>{gallery=null;}});
     gallery.add({blob:data.blob,name});
   }
 

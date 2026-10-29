@@ -4,7 +4,7 @@ const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
 const context=vm.createContext({console});
-vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'../dist'),'src/shared/runtime/scope.js'),'utf8'),context);
+vm.runInContext(require('./support/modules.cjs').read(path.join(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'../dist'),'src/shared/runtime/scope.js'),'utf8'),context);
 const {ResourceScope}=context.CZRuntime;
 test('resource scope releases in reverse order once and continues after cleanup errors',()=>{
  const order=[],errors=[],scope=new ResourceScope(error=>errors.push(error));
@@ -24,7 +24,7 @@ test('scope releases completed timer/frame registrations and cancels outstanding
   setTimeout:fn=>{timers.set(++id,fn);return id;},clearTimeout:id=>timers.delete(id),
   setInterval:fn=>{timers.set(++id,fn);return id;},clearInterval:id=>timers.delete(id),
   requestAnimationFrame:fn=>{frames.set(++id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id)});
- vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'../dist'),'src/shared/runtime/scope.js'),'utf8'),fake);
+ vm.runInContext(require('./support/modules.cjs').read(path.join(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'../dist'),'src/shared/runtime/scope.js'),'utf8'),fake);
  const scope=new fake.CZRuntime.ResourceScope();
  scope.timeout(()=>hits++,1);scope.frame(()=>hits++);assert.equal(scope.size,2);
  [...timers.values()][0]();[...frames.values()][0](0);assert.equal(scope.size,0);assert.equal(hits,2);

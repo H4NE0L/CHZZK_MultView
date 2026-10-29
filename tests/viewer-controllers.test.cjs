@@ -3,7 +3,7 @@ const root=process.env.CZ_TEST_ROOT||path.resolve(__dirname,'../dist'),plain=val
 function fixture(){
  const timers=new Map(),listeners=new Set(),sent=[],opened=[];let next=0;
  const context=vm.createContext({console,URL,setTimeout:fn=>{timers.set(++next,fn);return next;},clearTimeout:id=>timers.delete(id),chrome:{storage:{local:{}},tabs:{getCurrent:async()=>({id:11})},runtime:{id:'own',sendMessage:async message=>{sent.push(plain(message));return message.type==='SITE_VIEWER_TAB'?{ok:true,tabId:22}:{ok:true};},onMessage:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}}}});
- for(const file of ['shared/runtime/scope','shared/session-store','viewer/controllers/session','viewer/models/channel-input'])vm.runInContext(fs.readFileSync(path.join(root,'src/'+file+'.js'),'utf8'),context);
+ for(const file of ['shared/runtime/scope','shared/session-store','viewer/controllers/session','viewer/models/channel-input'])vm.runInContext(require('./support/modules.cjs').read(path.join(root,'src/'+file+'.js'),'utf8'),context);
  const state=context.CZSessionStore.normalize({channels:[{uid:'aaaaaa',volume:.3,muted:false}],masterVolume:.8}),scope=new context.CZRuntime.ResourceScope();
  const session=context.CZViewerSession.create({state,scope,open:async inputs=>opened.push(plain(inputs))});
  return {context,state,scope,session,timers,listeners,sent,opened};

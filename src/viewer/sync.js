@@ -1,4 +1,4 @@
-globalThis.CZSync = {create(context) {
+export const sync = {create(context) {
   const {tileMap, showNotice, escapeHtml, displayChannelName} = context;
   const syncOffsets = new Map();   // uid -> applied adjustment (ms)
   const syncDelays = new Map();    // uid -> { delay, canSeek, t }

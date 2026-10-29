@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 function fixture(){
  const state={masterVolume:.5,mainOnly:false,selectedUid:'A',channels:[{uid:'A',volume:.6,muted:false},{uid:'B',volume:.2,muted:false}]},sent=[];let audible=0;
  const ctx=vm.createContext({CZMessages:{postToPlayer:(frame,message)=>sent.push(message)}});
- vm.runInContext(fs.readFileSync('src/viewer/audio.js','utf8'),ctx);
+ vm.runInContext(require('./support/modules.cjs').read('src/viewer/audio.js','utf8'),ctx);
  const tileMap=new Map(state.channels.map(c=>[c.uid,{querySelector:()=>({})}]));
  const audio=ctx.CZAudio.create({state,tileMap,syncVolumeUI(){},saveState(){},saveStateSoon(){},ensureAudible(){audible++;}});
  return {state,sent,audio,audible:()=>audible};

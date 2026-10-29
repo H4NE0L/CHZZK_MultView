@@ -23,5 +23,3 @@ export function evidence(raw: readonly unknown[],semantic: readonly unknown[]) {
 export function strongest(current: ChatRole,next: ChatRole): ChatRole {
   const priority={'':0,streamer:3,manager:2,partner:1};return priority[next]>priority[current]?next:current;
 }
-export const roles=Object.freeze({nameKey,colorRole,evidence,strongest});
-globalThis.CZChatRoles=roles;

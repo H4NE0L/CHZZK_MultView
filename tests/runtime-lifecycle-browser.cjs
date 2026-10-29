@@ -10,7 +10,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    window.ResizeObserver=class extends Observer{observe(target){super.observe(target);window.__observed++;}disconnect(){super.disconnect();window.__observed--;}};
    window.chrome={storage:{local:{get:()=>new Promise(resolve=>__pending.push(resolve)),set:async()=>{}},onChanged:{addListener:fn=>__listeners.add(fn),removeListener:fn=>__listeners.delete(fn)}}};
   });
-  for(const file of ['src/shared/runtime/scope.js','src/shared/important-chat.js','src/viewer/chat-renderer.js','src/viewer/important-chat.js'])await page.addScriptTag({content:fs.readFileSync(file,'utf8')});
+  for(const file of ['src/shared/important-chat.js','src/viewer/important-chat.js'])await page.addScriptTag({content:require('./support/modules.cjs').read(file,'utf8')});
   const resources=await page.evaluate(async()=>{
    const host=document.getElementById('chat'),enabledControl=document.getElementById('enabled');
    const state={channels:[],selectedUid:null,chatOpen:false};
@@ -25,7 +25,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    return {listeners:__listeners.size,observers:__observed,panels:host.querySelectorAll('.important-chat-panel,.ic-dialog').length,enabledHandler:enabledControl.onchange};
   });
   assert.deepEqual(resources,{listeners:0,observers:0,panels:0,enabledHandler:null});
-  await page.addScriptTag({content:fs.readFileSync('src/content/chat-collector.js','utf8')});
+  await page.addScriptTag({content:require('./support/modules.cjs').read('src/content/chat-collector.js','utf8')});
   const collectorResources=await page.evaluate(()=>{
    let active=0;const timers=new Set(),listeners=new Set(),Native=MutationObserver;
    const set=window.setTimeout.bind(window),clear=window.clearTimeout.bind(window),add=window.addEventListener.bind(window),remove=window.removeEventListener.bind(window);

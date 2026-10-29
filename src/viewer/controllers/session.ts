@@ -32,5 +32,3 @@ export function create(context: Context) {
   context.scope.add(()=>chrome.runtime.onMessage.removeListener?.(receive));
   return {get tabId(){return tabId;},get ready(){return ready;},markReady(){ready=true;},register,save,saveSoon};
 }
-export const viewerSession=Object.freeze({create});
-globalThis.CZViewerSession=viewerSession;

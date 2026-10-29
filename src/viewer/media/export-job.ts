@@ -22,5 +22,3 @@ export function create(blob: Blob,options: ExportOptions,onProgress: (percent: n
   try{worker.postMessage({blob,...options});}catch(error){finish(null,error instanceof Error?error:Error(String(error)));}
   return {result,cancel(){finish(null);}};
 }
-export const exportJobs=Object.freeze({create});
-globalThis.CZExportJobs=exportJobs;

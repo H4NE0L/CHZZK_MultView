@@ -172,5 +172,3 @@ export function create(context: LayoutContext) {
 
   return {updateLayoutToggle,applyLayout,resizeFixedAspectGrid};
 }
-export const layout=Object.freeze({create});
-globalThis.CZLayout=layout;

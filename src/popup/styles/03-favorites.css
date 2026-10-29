@@ -1,0 +1,349 @@
+
+
+/* =========================================================
+   즐겨찾기 관련
+   ========================================================= */
+
+.favorite-filter-row {
+    display: none;
+}
+
+.favorite-list {
+    margin-top: 6px;
+
+    width: 100%;
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
+
+    flex: 0 0 220px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding: 5px;
+
+    border: 1px solid #2d2d30;
+    border-radius: 8px;
+
+    background: #181819;
+
+    scrollbar-gutter: stable;
+}
+
+
+/*
+ * 즐겨찾기 그룹은 목록 높이에 맞춰 강제로
+ * 찌그러지지 않도록 설정
+ */
+.favorite-list > .favorite-group {
+    flex-shrink: 0;
+}
+
+.favorite-group {
+    margin: 0;
+}
+
+.favorite-group + .favorite-group {
+    margin-top: 4px;
+}
+
+.favorite-group > summary {
+    list-style: none;
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 7px 8px;
+
+    border-radius: 6px;
+
+    background: #202023;
+    color: #ddd;
+
+    font-size: 11px;
+    font-weight: 700;
+
+    cursor: grab;
+    user-select: none;
+}
+
+.favorite-group > summary:active {
+    cursor: grabbing;
+}
+
+.favorite-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.favorite-group > summary::before {
+    content: "▸";
+    color: #777;
+}
+
+.favorite-group[open] > summary::before {
+    content: "▾";
+}
+
+.favorite-group-summary {
+    cursor: pointer !important;
+}
+
+.group-drag-handle,
+.favorite-drag-handle {
+    color: #666;
+    font-size: 13px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.group-name {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.favorite-group-count {
+    margin-left: auto;
+    color: #777;
+    font-weight: 400;
+}
+
+.group-online-count {
+    margin-left: 4px;
+
+    color: #00d26a;
+
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.group-delete {
+    flex: 0 0 24px;
+
+    width: 24px;
+    height: 24px;
+    padding: 0;
+
+    background: transparent;
+    color: #777;
+}
+
+.group-delete:hover:not(:disabled) {
+    color: #ff6473;
+}
+
+.group-delete:disabled {
+    opacity: .25;
+    cursor: not-allowed;
+}
+
+.group-open-online {
+    margin-left: auto;
+
+    height: 24px;
+    padding: 0 7px;
+
+    border: 1px solid #315f47;
+    border-radius: 5px;
+
+    background: #193224;
+    color: #62e59a;
+
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.group-open-online:hover {
+    background: #21412f;
+}
+
+.favorite-group-summary .favorite-group-count {
+    margin-left: auto;
+}
+
+.favorite-group-items {
+    padding-top: 3px;
+}
+
+
+/* =========================================================
+   즐겨찾기 항목
+   ========================================================= */
+
+.favorite-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    min-width: 0;
+
+    padding: 4px 5px;
+
+    border: 1px solid transparent;
+    border-radius: 6px;
+
+    flex-shrink: 0;
+}
+
+.favorite-row:hover {
+    background: #242427;
+}
+
+.favorite-row.online {
+    background: rgba(0, 210, 106, .06);
+}
+
+.favorite-row.drag-over {
+    border-color: #00d26a;
+    background: rgba(0, 210, 106, .10);
+}
+
+.favorite-drag-handle {
+    padding: 0 2px;
+    cursor: grab;
+}
+
+.favorite-drag-handle:active {
+    cursor: grabbing;
+}
+
+.favorite-main {
+    min-width: 0;
+    flex: 1;
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    min-height: 32px;
+    padding: 3px 5px;
+
+    border: 0;
+
+    background: transparent;
+    color: #eee;
+
+    text-align: left;
+}
+
+.favorite-status {
+    flex: 0 0 auto;
+
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: #555;
+}
+
+.favorite-status.online {
+    background: #00d26a;
+    box-shadow: 0 0 6px rgba(0, 210, 106, .55);
+}
+
+.favorite-text {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.favorite-name {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 12px;
+}
+
+/* 방송 카테고리 · 방송 시간 (온라인 방송만 표시) */
+.favorite-meta {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #d4d4dc;
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.online-badge {
+    flex: 0 0 auto;
+
+    padding: 2px 5px;
+
+    border-radius: 5px;
+
+    background: #00d26a;
+    color: #07140c;
+
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.offline-badge {
+    flex: 0 0 auto;
+
+    color: #666;
+    font-size: 9px;
+}
+
+.favorite-group-select {
+    flex: 0 0 78px;
+
+    width: 78px;
+    height: 27px;
+    padding: 0 4px;
+
+    border-radius: 6px;
+
+    font-size: 9px;
+    color: #aaa;
+}
+
+.favorite-delete {
+    flex: 0 0 26px;
+
+    width: 26px;
+    height: 27px;
+    padding: 0;
+
+    background: transparent;
+    color: #777;
+}
+
+.favorite-delete:hover {
+    color: #ff6473;
+}
+
+.favorite-empty,
+.favorite-group-empty {
+    padding: 14px 8px;
+
+    color: #666;
+
+    text-align: center;
+    font-size: 11px;
+}
+
+.favorite-group-empty {
+    display: flex;
+    justify-content: space-between;
+
+    padding: 7px 8px;
+}
+
+.favorite-group-empty span {
+    color: #444;
+}

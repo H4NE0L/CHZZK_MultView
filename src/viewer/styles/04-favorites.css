@@ -1,0 +1,647 @@
+
+
+/* =========================================================
+   13. Favorite Manager
+   ========================================================= */
+
+.favorite-manager {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.favorite-manager > summary {
+    list-style: none;
+
+    height: 34px;
+    padding: 0 10px;
+
+    display: flex;
+    align-items: center;
+
+    border: 1px solid #363638;
+    border-radius: 7px;
+
+    background: #222224;
+    color: #eee;
+
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.favorite-manager > summary::-webkit-details-marker {
+    display: none;
+}
+
+.favorite-manager > summary::after {
+    content: "▾";
+    margin-left: 7px;
+    color: #999;
+}
+
+.favorite-manager[open] > summary {
+    background: #2b2b2e;
+}
+
+.favorite-manager-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 50;
+
+    width: 380px;
+    max-height: 430px;
+
+    padding: 8px;
+
+    overflow: hidden;
+
+    background: #171719;
+    border: 1px solid #343438;
+    border-radius: 8px;
+
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+}
+
+.favorite-manager-tools {
+    display: flex;
+    gap: 5px;
+
+    margin-bottom: 6px;
+}
+
+.favorite-manager-tools button {
+    height: 28px;
+    padding: 0 8px;
+
+    font-size: 10px;
+}
+
+.favorite-manager-tools button:last-child {
+    width: 30px;
+    margin-left: auto;
+    padding: 0;
+}
+
+.favorite-filter-row {
+    margin-bottom: 6px;
+}
+
+#favoriteGroupFilter {
+    width: 100%;
+    height: 30px;
+
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   14. Favorite List
+   ========================================================= */
+
+.favorite-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    width: 100%;
+    height: 250px;
+    min-height: 0;
+    max-height: 250px;
+
+    padding: 5px 3px 5px 5px;
+
+    overflow-y: scroll;
+    overflow-x: hidden;
+
+    border: 1px solid #2d2d31;
+    border-radius: 8px;
+
+    background: #181819;
+
+    scrollbar-gutter: stable;
+}
+
+.favorite-list > .favorite-list-group {
+    flex-shrink: 0;
+}
+
+.favorite-list-group {
+    overflow: hidden;
+
+    border: 1px solid #2d2d31;
+    border-radius: 7px;
+}
+
+.favorite-list-group-summary {
+    list-style: none;
+
+    min-height: 30px;
+    padding: 0 7px;
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    background: #202023;
+
+    cursor: grab;
+    user-select: none;
+}
+
+.favorite-list-group-summary::-webkit-details-marker {
+    display: none;
+}
+
+.favorite-list-group-name {
+    min-width: 0;
+    flex: 1;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.favorite-list-group-count {
+    color: #777;
+    font-size: 9px;
+}
+
+.favorite-group-drag-handle {
+    color: #666;
+}
+
+.favorite-list-group-items {
+    padding: 3px;
+}
+
+/* =========================================================
+   15. Favorite Rows
+   ========================================================= */
+
+.favorite-list-row {
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    min-width: 0;
+
+    padding: 4px 5px;
+
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+
+.favorite-list-row:has(.favorite-status-dot.online) {
+    background: rgba(0, 210, 106, .06);
+}
+
+.favorite-list-row.dragging {
+    opacity: .45;
+    cursor: grabbing;
+}
+
+.favorite-list-row.drop-before::before,
+.favorite-list-row.drop-after::after {
+    content: "";
+
+    position: absolute;
+    left: 4px;
+    right: 4px;
+
+    height: 2px;
+
+    border-radius: 2px;
+
+    background: #4d9cff;
+    box-shadow: 0 0 6px rgba(77, 156, 255, .6);
+
+    pointer-events: none;
+}
+
+.favorite-list-row.drop-before::before {
+    top: -3px;
+}
+
+.favorite-list-row.drop-after::after {
+    bottom: -3px;
+}
+
+
+/* 온라인 상태 DOT */
+
+.favorite-status-dot {
+    flex: 0 0 auto;
+
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: #555;
+}
+
+.favorite-status-dot.online {
+    background: #00d26a;
+    box-shadow: 0 0 6px rgba(0, 210, 106, .55);
+}
+
+
+/* 방송 추가 버튼 */
+
+.favorite-list-add {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    height: 32px;
+    padding: 0 5px;
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    border: 0;
+
+    background: transparent;
+    color: #eee;
+
+    text-align: left;
+}
+
+.favorite-list-name {
+    min-width: 0;
+    flex: 1;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 12px;
+}
+
+
+/* 온라인 / 오프라인 표시 */
+
+.favorite-online-badge {
+    flex: 0 0 auto;
+
+    padding: 2px 5px;
+
+    border-radius: 5px;
+
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.favorite-online-badge.online {
+    background: #00d26a;
+    color: #07140c;
+}
+
+.favorite-online-badge.offline {
+    color: #666;
+}
+
+.favorite-list-row.dragging {
+    opacity: .45;
+    cursor: grabbing;
+}
+
+.favorite-list-row.drop-before::before,
+.favorite-list-row.drop-after::after {
+    content: "";
+
+    position: absolute;
+    left: 4px;
+    right: 4px;
+
+    height: 2px;
+
+    border-radius: 2px;
+
+    background: #4d9cff;
+    box-shadow: 0 0 6px rgba(77, 156, 255, .6);
+
+    pointer-events: none;
+}
+
+.favorite-list-row.drop-before::before {
+    top: -3px;
+}
+
+.favorite-list-row.drop-after::after {
+    bottom: -3px;
+}
+
+.favorite-drag-handle {
+    flex: 0 0 14px;
+
+    color: #777;
+
+    font-size: 15px;
+    line-height: 1;
+    text-align: center;
+
+    user-select: none;
+}
+
+.favorite-list-add {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    min-height: 34px;
+    padding: 3px 7px;
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    border: 0;
+    background: transparent;
+    color: #eee;
+
+    text-align: left;
+}
+
+.favorite-list-text {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* 방송 카테고리 · 방송 시간 (온라인 방송만 표시) */
+.favorite-list-meta {
+    min-width: 0;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #d4d4dc;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.25;
+}
+
+.favorite-list-name {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.favorite-row-group {
+    flex: 0 0 72px;
+
+    width: 72px;
+    height: 27px;
+    padding: 0 3px;
+
+    font-size: 9px;
+}
+
+.favorite-list-uid {
+    flex: 0 1 38%;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #777;
+    font-size: 10px;
+}
+
+.favorite-list-toggle {
+    flex: 0 0 30px;
+
+    width: 30px;
+    height: 30px;
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+    color: #f0c75e;
+
+    font-size: 16px;
+}
+
+.favorite-list-toggle:hover {
+    background: #303034;
+}
+
+.favorite-list-empty {
+    padding: 12px 5px;
+
+    color: #777;
+
+    text-align: center;
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   16. Favorite Group Online Button
+   ========================================================= */
+
+.favorite-group-open-online {
+    margin-left: auto;
+
+    height: 24px;
+    padding: 0 7px;
+
+    border: 1px solid #315f47;
+    border-radius: 6px;
+
+    background: #193224;
+    color: #62e59a;
+
+    font-size: 9px;
+
+    cursor: pointer;
+}
+
+.favorite-group-open-online:hover {
+    background: #21412f;
+}
+
+
+/* =========================================================
+   17. Favorite Modal
+   ========================================================= */
+
+.favorite-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    padding: 12px;
+
+    background: rgba(0, 0, 0, .62);
+}
+
+.favorite-modal.open {
+    display: flex;
+}
+
+.favorite-dialog {
+    width: 360px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+
+    padding: 10px;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+
+    border: 1px solid #3b3b40;
+    border-radius: 9px;
+
+    background: #171719;
+
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .55);
+}
+
+.favorite-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 2px 2px 8px;
+
+    color: #eee;
+    font-size: 12px;
+}
+
+.favorite-dialog-head button {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+    color: #888;
+}
+
+.favorite-dialog-head button:hover {
+    color: #ff6473;
+}
+
+.favorite-modal-add {
+    height: 29px;
+    margin-bottom: 7px;
+
+    border: 1px solid #38383d;
+    border-radius: 6px;
+
+    background: #252529;
+    color: #ddd;
+}
+
+.favorite-modal-help {
+    margin: 0 0 7px;
+
+    color: #888;
+    font-size: 9px;
+    line-height: 1.4;
+}
+
+.favorite-manage-list {
+    min-height: 0;
+
+    overflow: auto;
+
+    border: 1px solid #2d2d31;
+    border-radius: 7px;
+}
+
+.favorite-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    min-height: 34px;
+    padding: 4px 6px;
+
+    border-bottom: 1px solid #29292d;
+}
+
+.favorite-manage-row:last-child {
+    border-bottom: 0;
+}
+
+.favorite-manage-row[draggable="true"] {
+    cursor: grab;
+}
+
+.favorite-manage-drag {
+    color: #666;
+}
+
+.favorite-manage-index {
+    width: 22px;
+
+    color: #777;
+
+    text-align: center;
+    font-size: 9px;
+}
+
+.favorite-manage-name {
+    min-width: 0;
+    flex: 1;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 10px;
+}
+
+.favorite-manage-row button {
+    height: 25px;
+    padding: 0 6px;
+
+    border-radius: 5px;
+
+    background: #252529;
+    color: #aaa;
+
+    font-size: 9px;
+}
+
+.favorite-manage-row button:hover {
+    color: #ff6473;
+}
+
+.favorite-manage-row button:disabled {
+    opacity: .3;
+    cursor: not-allowed;
+}
+
+.favorite-manage-group {
+    width: 78px;
+    height: 25px;
+
+    font-size: 9px;
+}

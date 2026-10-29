@@ -1,3 +1,12 @@
+import {audio as CZAudio} from './audio.js';
+import {chat as CZChat} from './chat.js';
+import {players as CZPlayers} from './players.js';
+import {sync as CZSync} from './sync.js';
+import {mediaTools as CZMediaTools} from './media-tools.js';
+import {powerDiagnostics as CZPowerDiagnostics} from './power-diagnostics.js';
+import {importantChatPanel as CZImportantChatPanel} from './important-chat.js';
+import {create as createLayout} from './layout';
+import {ResourceScope} from '../shared/runtime/scope';
 import {mount as mountView} from './controllers/view.js';
 import {bind as bindControls} from './controllers/controls.js';
 import {bind as bindMessages} from './controllers/messages.js';
@@ -12,7 +21,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
   if (window.__CHZZK_MULTIVIEW_PAGE_LOADED__) return;
   window.__CHZZK_MULTIVIEW_PAGE_LOADED__ = true;
 
-  const scope=new CZRuntime.ResourceScope();
+  const scope=new ResourceScope();
 
   const ROOT_ID = "__chzzk_multiview_v09__";
 
@@ -104,7 +113,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
   bindMessages({scope,tileMap,powerDiagnostics,clearSyncState,sendTileVolume,mediaTools,receiveVideoState,handleSyncState,handleSyncResult,
     get state(){return state;},get chatFrame(){return chatFrame;},get importantChat(){return importantChat;}});
 
-  const {updateLayoutToggle,applyLayout,resizeFixedAspectGrid}=CZLayout.create({
+  const {updateLayoutToggle,applyLayout,resizeFixedAspectGrid}=createLayout({
     get state(){return state;},get ui(){return ui;},get videoGrid(){return videoGrid;},
     tileMap,scope,onRemove:uid=>mediaTools.detach(uid),createTile,sendTileVolume,applyTileLock,refreshChannelManager,refreshVolumeManager
   });

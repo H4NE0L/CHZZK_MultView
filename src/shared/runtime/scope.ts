@@ -45,5 +45,3 @@ export class ResourceScope {
     for (const release of [...this.cleanups].reverse()) release();
   }
 }
-export const runtime = Object.freeze({ResourceScope});
-globalThis.CZRuntime = runtime;

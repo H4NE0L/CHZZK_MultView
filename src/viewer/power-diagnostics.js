@@ -1,4 +1,4 @@
-globalThis.CZPowerDiagnostics={create(context){
+export const powerDiagnostics = {create(context){
   let dialog=null,sequence=0,requestId=null;const results=new Map();let timeout=null;
   function render(){if(!dialog)return;const rows=dialog.querySelector('.power-diagnostic-rows');rows.replaceChildren();for(const [uid,value]of results){const row=document.createElement('p'),name=context.state.channels.find(channel=>channel.uid===uid)?.name||uid;row.textContent=name+' — '+(value.pending?'조회 중':value.error?'확인 실패':value.video&&!value.video.paused&&value.video.readyState>=2?'재생 중 · 점검 수집됨':'재생 상태 확인 필요');rows.append(row);}}
   function open(){

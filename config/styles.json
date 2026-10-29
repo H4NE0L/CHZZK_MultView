@@ -1,0 +1,19 @@
+{
+  "src/viewer/viewer.css": [
+    "src/viewer/styles/01-base-toolbar.css",
+    "src/viewer/styles/02-volume.css",
+    "src/viewer/styles/03-channel-list.css",
+    "src/viewer/styles/04-favorites.css",
+    "src/viewer/styles/05-layout-tiles.css",
+    "src/viewer/styles/06-chat.css",
+    "src/viewer/styles/07-sync-responsive.css",
+    "src/viewer/styles/08-feature-overrides.css"
+  ],
+  "src/popup/popup.css": [
+    "src/popup/styles/01-base-form.css",
+    "src/popup/styles/02-broadcast-list.css",
+    "src/popup/styles/03-favorites.css",
+    "src/popup/styles/04-actions.css",
+    "src/popup/styles/05-layout-overrides.css"
+  ]
+}

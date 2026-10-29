@@ -6,3 +6,5 @@ artifacts/
 *.tsbuildinfo
 .backup/*
 !.backup/.gitkeep
+
+.test-build/
