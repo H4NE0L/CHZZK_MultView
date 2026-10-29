@@ -3,7 +3,7 @@ const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const root = path.resolve(__dirname, '..');
+const root = (process.env.CZ_TEST_ROOT || path.resolve(__dirname, '..'));
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json')));
 
 async function checkCompactFavorites(page, prefix) {
@@ -67,7 +67,7 @@ async function checkCompactFavorites(page, prefix) {
 }
 
 async function run() {
-  const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || '/usr/lib/chromium/chromium', headless: true, args: ['--no-sandbox']});
+  const browser = await chromium.launch({executablePath: require('./support/browser.cjs').executablePath(), headless: true, args: ['--no-sandbox']});
   try {
     const context = await browser.newContext();
     context.setDefaultTimeout(10000);

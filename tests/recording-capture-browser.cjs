@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
+ const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
  try{
   const page=await browser.newPage();await page.setContent('<video id="source" muted autoplay></video>');
   await page.addScriptTag({content:fs.readFileSync('src/shared/messages.js','utf8')});await page.addScriptTag({content:fs.readFileSync('src/content/media-frame.js','utf8')});

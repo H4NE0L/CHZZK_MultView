@@ -1,7 +1,7 @@
 // Real isolated-world DOM bridge; React message objects are synthetic fixtures.
 const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage();await page.route('https://chzzk.naver.com/**',route=>route.fulfill({body:'<!doctype html><body style="margin:0"><aside class="live_chat" style="height:600px"><div data-chat-toolbar><h2>채팅</h2><button>-</button><span>100%</span><button>+</button><button>⋮</button></div><div id="messages"></div></aside>'}));await page.goto('https://chzzk.naver.com/live/test/chat');
   await page.evaluate(()=>{const row=document.createElement('div');row.id='message';row.className='_chatting_message_test_1';row.innerHTML='<span class="_nickname_test_1">작성자<span class="_blind_hidden">마크</span></span><span>원본 본문</span>';row.__reactProps$fixture={chattingMessage:{messageTime:Date.parse('2026-10-28T12:34:56Z'),profile:JSON.stringify({nickname:'작성자'}),content:'원본 본문'}};document.querySelector('#messages').append(row);});

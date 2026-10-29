@@ -6,7 +6,7 @@ const path = require('node:path');
 function fixture() {
   const data = {};
   const context = vm.createContext({URL, chrome: {storage: {local: {get: async () => data, set: async value => Object.assign(data,value)}}}});
-  for (const name of ['session-store','messages']) vm.runInContext(fs.readFileSync(path.join(__dirname, `../src/shared/${name}.js`),'utf8'),context);
+  for (const name of ['session-store','messages']) vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'), `src/shared/${name}.js`),'utf8'),context);
   return {store:context.CZSessionStore, messages:context.CZMessages, data};
 }
 test('legacy session migration retains mute, per-tile/master volume, layout and selected main', async () => {

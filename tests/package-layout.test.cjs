@@ -2,7 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const root = path.resolve(__dirname,'..');
+const root = (process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..'));
 const manifest = JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
 const exists = name => assert(fs.existsSync(path.join(root,name)), `missing extension resource ${name}`);
 test('manifest and HTML references point to packaged local resources', () => {
@@ -28,4 +28,16 @@ test('CHZZK has an explicit top-level launcher while frame controls remain isola
   assert.equal(manifest.version,'2.0.3');
   assert(manifest.content_security_policy.extension_pages.includes("script-src 'self'"));
   assert(manifest.content_security_policy.extension_pages.includes('frame-src https://chzzk.naver.com'));
+});
+test('compiled package contains runtime scripts without development TypeScript or source maps',()=>{
+ const files=fs.readdirSync(root,{recursive:true}).filter(name=>fs.statSync(path.join(root,name)).isFile());
+ assert(!files.some(name=>/\.(ts|map)$/.test(name)));
+ assert(!files.some(name=>name.includes('node_modules')));
+ const config=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../config/runtime.json'),'utf8'));
+ assert.deepEqual(manifest.content_scripts[0].js,config.frame);
+ for(const kind of ['viewer','popup']){
+  const html=fs.readFileSync(path.join(root,`src/${kind}/${kind}.html`),'utf8');
+  const actual=[...html.matchAll(/<script src="([^"]+)"/g)].map(([,file])=>path.posix.normalize(`src/${kind}/${file}`));
+  assert.deepEqual(actual,config[kind]);
+ }
 });

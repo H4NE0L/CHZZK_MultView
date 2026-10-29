@@ -1,9 +1,9 @@
 // Chromium same-origin DOM/media test. CHZZK HTTP and Chrome APIs are mocked.
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),read=file=>fs.readFileSync(path.join(root,file),'utf8');
+const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=>fs.readFileSync(path.join(root,file),'utf8');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox']});
  try{
  const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];
  page.on('pageerror',e=>errors.push(e.message));

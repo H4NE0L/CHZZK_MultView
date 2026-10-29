@@ -1,0 +1,41 @@
+{
+  "frame": [
+    "src/shared/messages.js",
+    "src/shared/important-chat.js",
+    "src/content/chat-layout.js",
+    "src/content/media-frame.js",
+    "src/content/chat-collector.js",
+    "src/content/player-audio.js",
+    "src/content/chzzk-frame.js"
+  ],
+  "viewer": [
+    "src/shared/chzzk-api.js",
+    "src/shared/favorites-store.js",
+    "src/shared/session-store.js",
+    "src/shared/messages.js",
+    "src/shared/followings-store.js",
+    "src/shared/group-manager.js",
+    "src/viewer/audio.js",
+    "src/shared/important-chat.js",
+    "src/shared/runtime/scope.js",
+    "src/viewer/important-chat.js",
+    "src/viewer/chat.js",
+    "src/viewer/players.js",
+    "src/viewer/sync.js",
+    "src/shared/recordings-store.js",
+    "src/viewer/screenshot-crop.js",
+    "src/viewer/screenshot-gallery.js",
+    "src/viewer/media-tools.js",
+    "src/viewer/power-diagnostics.js",
+    "src/viewer/template.js",
+    "src/viewer/viewer.js"
+  ],
+  "popup": [
+    "src/shared/chzzk-api.js",
+    "src/shared/favorites-store.js",
+    "src/shared/session-store.js",
+    "src/shared/followings-store.js",
+    "src/shared/group-manager.js",
+    "src/popup/popup.js"
+  ]
+}

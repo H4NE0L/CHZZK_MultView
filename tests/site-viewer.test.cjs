@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
-const root=path.resolve(__dirname,'..');
+const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..'));
 function fixture(){
   let handler;const calls=[],records=[],remembered=[];
   const context=vm.createContext({CZViewerTabs:{remember:async id=>remembered.push(id)},URL,Blob,Uint8Array,atob,chrome:{runtime:{id:'extension-id',getURL:p=>'chrome-extension://extension-id/'+p,onMessage:{addListener:h=>handler=h}},scripting:{executeScript:async options=>calls.push(options)},tabs:{onRemoved:{addListener(){}},create:async options=>{calls.push(options);return {id:9};},update:async()=>{}},windows:{create:async options=>calls.push(options)}},CZRecordings:{put:async record=>records.push(record)}});

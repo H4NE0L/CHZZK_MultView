@@ -1,10 +1,10 @@
 // Real Chromium encoded audio/video -> worker stream-copy -> decoded output.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
+ const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
  try{
   const page=await browser.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.route('https://viewer.invalid/**',route=>{const file=new URL(route.request().url()).pathname.slice(1);return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'text/javascript',body:fs.readFileSync(path.join(__dirname,'..',file))});});
+  await page.route('https://viewer.invalid/**',route=>{const file=new URL(route.request().url()).pathname.slice(1);return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'text/javascript',body:fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'),file))});});
   await page.goto('https://viewer.invalid/src/viewer/recording.html?id=test');
   // The page has no real Chrome registration; install the fixture then reload UI script.
   await page.evaluate(async()=>{

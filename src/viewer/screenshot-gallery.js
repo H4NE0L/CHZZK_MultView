@@ -1,4 +1,5 @@
 globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
+  const scope=new CZRuntime.ResourceScope();
   const saving=new WeakSet();
   const items=[];let index=-1,crop=null,url=null,drag=null,closed=false;
   const panel=document.createElement('section');panel.className='media-dialog screenshot-dialog screenshot-gallery';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','스크린샷 목록');
@@ -23,7 +24,7 @@ globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
     crop=CZScreenshotCrop.attach(img,area,update,items[index].cropState);
     url=URL.createObjectURL(items[index].blob);img.src=url;update();
   }
-  function close() {if(closed)return;closed=true;release();items.length=0;panel.remove();window.removeEventListener('resize',clamp);sizeObserver.disconnect();onClose();}
+  function close() {if(closed)return;closed=true;release();items.length=0;panel.remove();scope.dispose();onClose();}
   function clamp() {
     // Reserve handle space before sizing the image, including short viewports.
     const img=body.querySelector('img'),area=body.firstElementChild;
@@ -35,13 +36,13 @@ globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
       area.style.width=Math.max(1,Math.min(body.clientWidth-paddingX,availableHeight*img.naturalWidth/img.naturalHeight))+'px';
     }
     const r=panel.getBoundingClientRect();panel.style.right='auto';panel.style.left=`${Math.max(0,Math.min(r.left,innerWidth-r.width))}px`;panel.style.top=`${Math.max(0,Math.min(r.top,innerHeight-Math.min(r.height,innerHeight)))}px`;}
-  const sizeObserver=new ResizeObserver(clamp);sizeObserver.observe(panel);
+  const sizeObserver=new ResizeObserver(clamp);sizeObserver.observe(panel);scope.observe(sizeObserver);
   const header=$('header');header.onpointerdown=event=>{
     if(event.button!==0 || event.target.closest('button,input,label'))return;
     event.preventDefault();const r=panel.getBoundingClientRect();drag={x:event.clientX,y:event.clientY,left:r.left,top:r.top};header.setPointerCapture(event.pointerId);
   };
   header.onpointermove=event=>{if(!drag)return;panel.style.right='auto';panel.style.left=drag.left+event.clientX-drag.x+'px';panel.style.top=drag.top+event.clientY-drag.y+'px';clamp();};
-  header.onpointerup=header.onpointercancel=()=>{drag=null;};window.addEventListener('resize',clamp);
+  header.onpointerup=header.onpointercancel=()=>{drag=null;};scope.listen(window,'resize',clamp);scope.listen(window,'pagehide',close);
   $('.gallery-close').onclick=close;$('.gallery-prev').onclick=()=>show(index-1);$('.gallery-next').onclick=()=>show(index+1);
   $('.gallery-crop-toggle').onclick=()=>{crop.setEnabled(!crop.isEnabled());update();};$('.gallery-reset').onclick=()=>crop.reset();
   $('.media-save').onclick=async()=>{

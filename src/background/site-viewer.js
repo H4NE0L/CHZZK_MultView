@@ -1,5 +1,6 @@
+import runtime from '../../config/runtime.json';
 (() => {
-  const files=['src/content/site-context.js','src/shared/chzzk-api.js','src/shared/favorites-store.js','src/shared/session-store.js','src/shared/messages.js','src/shared/followings-store.js','src/shared/group-manager.js','src/viewer/audio.js','src/shared/important-chat.js','src/viewer/important-chat.js','src/viewer/chat.js','src/viewer/players.js','src/viewer/sync.js','src/shared/recordings-store.js','src/viewer/screenshot-crop.js','src/viewer/screenshot-gallery.js','src/viewer/media-tools.js','src/viewer/power-diagnostics.js','src/viewer/viewer.js'];
+  const files=['src/content/site-context.js',...runtime.viewer];
   const transfers=new Map();
   function siteSender(sender){try{return sender.id===chrome.runtime.id && sender.frameId===0 && Number.isInteger(sender.tab?.id) && new URL(sender.url).origin==='https://chzzk.naver.com';}catch(_){return false;}}
   chrome.runtime.onMessage.addListener((message,sender,reply)=>{

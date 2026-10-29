@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:require('./support/browser.cjs').executablePath(),headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage();await page.route('https://viewer.invalid/**',route=>route.fulfill({body:'<!doctype html><div id="host"></div>'}));
   await page.route('https://chzzk.naver.com/**',route=>route.fulfill({contentType:'text/html',body:`<script>addEventListener('message',event=>{const data=event.data;if(data.type==='POWER_DIAGNOSTICS')parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:location.pathname.split('/').pop(),requestId:data.requestId,diagnostics:{video:{paused:false,readyState:4},routes:[],buttons:[]}},'https://viewer.invalid');});</script>`}));

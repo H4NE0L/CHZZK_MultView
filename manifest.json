@@ -28,15 +28,7 @@
       "matches": [
         "https://chzzk.naver.com/*"
       ],
-      "js": [
-        "src/shared/messages.js",
-        "src/shared/important-chat.js",
-        "src/content/chat-layout.js",
-        "src/content/media-frame.js",
-        "src/content/chat-collector.js",
-        "src/content/player-audio.js",
-        "src/content/chzzk-frame.js"
-      ],
+      "js": [],
       "all_frames": true,
       "run_at": "document_idle"
     },
