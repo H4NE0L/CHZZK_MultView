@@ -10,7 +10,7 @@ const baseline=process.argv[2]||'f2afbf3';
    const page=await browser.newPage();await page.route('https://chzzk.naver.com/**',route=>route.fulfill({body:'<!doctype html><body style="margin:0"><aside class="live_chat" style="height:600px"><div data-chat-toolbar><h2>채팅</h2><button>-</button><span>100%</span><button>+</button><button>⋮</button></div><div id="messages"></div></aside>'}));
    await page.goto('https://chzzk.naver.com/live/test/chat');
    for(const path of ['src/shared/important-chat.js','src/content/chat-layout.js','src/content/chat-collector.js']){
-    let source=variant==='baseline'?execFileSync('git',['show',`${baseline}:${path}`],{encoding:'utf8'}):fs.readFileSync(path,'utf8');
+    let source=variant==='baseline'?execFileSync('git',['show',`${baseline}:${path}`],{encoding:'utf8'}):fs.readFileSync('dist/'+path,'utf8');
     if(path.endsWith('chat-collector.js'))source=source.replace('function read(row) {','function read(row) { globalThis.__reads++;');
     await page.addScriptTag({content:source});
    }

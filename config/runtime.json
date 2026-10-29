@@ -18,6 +18,7 @@
     "src/viewer/audio.js",
     "src/shared/important-chat.js",
     "src/shared/runtime/scope.js",
+    "src/viewer/chat-renderer.js",
     "src/viewer/important-chat.js",
     "src/viewer/chat.js",
     "src/viewer/players.js",
@@ -28,6 +29,8 @@
     "src/viewer/media-tools.js",
     "src/viewer/power-diagnostics.js",
     "src/viewer/template.js",
+    "src/viewer/layout.js",
+    "src/viewer/settings.js",
     "src/viewer/viewer.js"
   ],
   "popup": [

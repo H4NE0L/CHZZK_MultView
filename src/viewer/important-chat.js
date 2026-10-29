@@ -1,12 +1,14 @@
 globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
+  const scope=new CZRuntime.ResourceScope();
   const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
-  const rendered=new Map(),owners=new Map(),presented=new WeakMap();let stats=null,received=0;
+  const owners=new Map(),presented=new WeakMap();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null,expanded=false;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');panel.dataset.collapsed='true';
   panel.innerHTML='<header class="ic-heading"><button type="button" class="ic-toggle" aria-expanded="false" aria-controls="cz-collected-chat-body">주요 채팅</button><button type="button" class="ic-header-settings" title="수집 설정·점검" aria-label="수집 설정·점검"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button></header><div id="cz-collected-chat-body" class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><form class="ic-exclude-form"><input class="ic-exclude-name" maxlength="40" placeholder="제외할 닉네임" aria-label="수집에서 제외할 닉네임"><button type="submit">제외</button></form><div class="ic-excluded-names ic-names"></div><p class="ic-exclude-help">제외 목록은 자동 포함·추가 목록보다 우선합니다.</p><footer class="ic-settings-footer"><button class="ic-clear" type="button">수집된 내용 초기화</button><details class="ic-debug"><summary>수집 점검</summary><p class="ic-diagnostics"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button></details></footer></div></dialog>';
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
+  const renderer=CZChatRenderer.create($('.ic-list'));
   $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
   for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함']]){
     const label=document.createElement('label');label.className='ic-option';label.dataset.role=key;
@@ -22,6 +24,7 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom)dialog.close();});
   function bounds(){const max=Math.max(64,chatPanel.clientHeight-160);return {min:Math.min(100,max),max};}
   function resize(){
+    if(scope.isDisposed)return;
     if(!chatPanel.clientHeight)return;
     const {min,max}=bounds(),height=Math.round(Math.max(min,Math.min(max,desiredHeight)));
     panel.style.setProperty('--ic-height',height+'px');
@@ -34,9 +37,9 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   function endResize(){if(!drag)return;drag=null;chatPanel.classList.remove('ic-resizing');storeHeight();}
   handle.onpointerup=handle.onpointercancel=handle.onlostpointercapture=endResize;
   handle.onkeydown=event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const {min,max}=bounds(),step=event.shiftKey?50:10;desiredHeight=Math.max(min,Math.min(max,event.key==='Home'?min:event.key==='End'?max:Number(handle.getAttribute('aria-valuenow'))+(event.key==='ArrowDown'?step:-step)));resize();storeHeight();};
-  const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(chatPanel);resize();
-  window.addEventListener('pagehide',()=>{sizeObserver.disconnect();chatPanel.classList.remove('ic-resizing');});
-  function present(){const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);const name=channel?.name||channel?.uid||'';if(presented.get(frame)===name)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name,height:0}))presented.set(frame,name);}
+  const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(chatPanel);scope.observe(sizeObserver);resize();
+  scope.listen(window,'pagehide',event=>{if(!event.persisted)dispose();});
+  function present(){if(scope.isDisposed)return;const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);const name=channel?.name||channel?.uid||'';if(presented.get(frame)===name)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name,height:0}))presented.set(frame,name);}
   function diagnostics(){
     if(!dialog.open || !$('.ic-debug').open)return;
     const owner=owners.get(getState().selectedUid);
@@ -48,29 +51,14 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     const channel=getState().channels.find(c=>c.uid===uid);if(!channel)return;
     owners.set(uid,{pending:true,name:''});
     const request=channel.type==='video'?CZChzzkApi.fetchVideoChannelName(channel.sourceId||uid.replace(/^video:/,'')):CZChzzkApi.fetchChannelName(channel.sourceId||uid);
-    Promise.resolve(request).then(name=>{owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{owners.set(uid,{pending:false,name:''});diagnostics();});
+    Promise.resolve(request).then(name=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:''});diagnostics();});
   }
-  function configure(){present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
+  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
   function render(){
+    if(scope.isDisposed)return;
     panel.hidden=ready && !filter.enabled;
     present();
-    const list=$('.ic-list');const scrollTop=list.scrollTop,atBottom=list.scrollHeight-scrollTop-list.clientHeight<16;
-    const items=model.items,ids=new Set(items.map(item=>item.id));
-    for(const [id,entry] of rendered)if(!ids.has(id)){entry.node.remove();rendered.delete(id);}
-    list.querySelector('.ic-empty')?.remove();
-    const image=(src,alt,className)=>{const img=document.createElement('img');img.src=src;img.alt=alt;img.title=alt;img.className=className;img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';img.draggable=false;img.onerror=()=>{const label=document.createElement('span');label.textContent=alt;img.replaceWith(label);};return img;};
-    items.forEach((item,index)=>{
-      const signature=JSON.stringify(item);let entry=rendered.get(item.id);
-      if(!entry || entry.signature!==signature){
-        const row=document.createElement('div');row.className='ic-message';row.dataset.role=item.role;
-        const time=document.createElement('time');if(Number.isFinite(item.time)){time.dateTime=new Date(item.time).toISOString();time.textContent=new Date(item.time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});}else{time.hidden=true;time.title='원본 작성 시각 확인 불가';}
-        const author=document.createElement('strong');author.className='ic-author';author.textContent=item.name;
-        const text=document.createElement('span');text.className='ic-message-text';for(const part of item.segments)text.appendChild(part.type==='image'?image(part.src,part.alt,'ic-emote'):document.createTextNode(part.text));
-        row.append(time,author,document.createTextNode(' '),text);entry?.node.replaceWith(row);entry={node:row,signature};rendered.set(item.id,entry);
-      }
-      if(list.children[index]!==entry.node)list.insertBefore(entry.node,list.children[index]||null);
-    });
-    list.scrollTop=atBottom?list.scrollHeight:scrollTop;diagnostics();
+    renderer.render(model.items);diagnostics();
   }
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);
@@ -99,8 +87,19 @@ globalThis.CZImportantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));notify('채팅 내용 없이 점검 정보를 복사했습니다.');}catch(_){notify('점검 정보 복사 실패: 아래 수치를 직접 복사해주세요.');}
   };
   $('.ic-clear').onclick=()=>{model.clear();render();};
-  chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.applySettings(filter);controls();configure();render();});
+  chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{if(scope.isDisposed)return;const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{if(scope.isDisposed)return;ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
+  const onStorageChanged=(changes,area)=>{if(scope.isDisposed)return;if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.applySettings(filter);controls();configure();render();};
+  chrome.storage.onChanged.addListener(onStorageChanged);
+  scope.add(()=>chrome.storage.onChanged.removeListener?.(onStorageChanged));
+  function dispose(){
+    if(scope.isDisposed)return;
+    scope.dispose();
+    chatPanel.classList.remove('ic-resizing');drag=null;
+    enabledControl.onchange=null;
+    if(dialog.open)dialog.close();
+    model.clear();renderer.clear();owners.clear();
+    panel.remove();dialog.remove();
+  }
   controls();render();
-  return {openSettings,sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame()){configured.delete(getFrame());presented.delete(getFrame());}const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
+  return {dispose,openSettings,sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame()){configured.delete(getFrame());presented.delete(getFrame());}const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
 }};

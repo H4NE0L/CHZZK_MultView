@@ -4,7 +4,7 @@ const {chromium}=require('playwright'),fs=require('node:fs');
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage();await page.setContent('<div id="list"></div>');
-  await page.addScriptTag({content:fs.readFileSync('src/shared/important-chat.js','utf8')});
+  await page.addScriptTag({content:fs.readFileSync('dist/src/shared/important-chat.js','utf8')});
   const source=fs.readFileSync('src/content/chat-collector.js','utf8').replace('return {configure,stop};','return {configure,stop,debugHistory:()=>history.size,debugClear:()=>history.clear()};');
   await page.addScriptTag({content:source});
   await page.evaluate(async()=>{

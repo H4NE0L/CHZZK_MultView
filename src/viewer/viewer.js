@@ -3,6 +3,8 @@
   if (window.__CHZZK_MULTIVIEW_PAGE_LOADED__) return;
   window.__CHZZK_MULTIVIEW_PAGE_LOADED__ = true;
 
+  const scope=new CZRuntime.ResourceScope();
+
   const ROOT_ID = "__chzzk_multiview_v09__";
   const DEFAULT_FAVORITE_GROUP = CZFavoritesStore.DEFAULT_GROUP;
 
@@ -54,7 +56,7 @@
 
 function saveState() {
   if (saveTimer) {
-    clearTimeout(saveTimer);
+    saveTimer();
     saveTimer = null;
   }
 
@@ -75,8 +77,8 @@ function saveState() {
 
   // Slider drags fire many events; write to storage once the drag settles.
   function saveStateSoon() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveState, 300);
+    if (saveTimer) saveTimer();
+    saveTimer = scope.timeout(saveState, 300);
   }
 
 
@@ -141,7 +143,8 @@ function saveState() {
     chatPanel = ui.querySelector("#chatPanel");
     mediaTools.bindSettings();
     importantChat = CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
-    requestAnimationFrame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
+    scope.add(()=>importantChat.dispose());
+    scope.frame(() => { mvResizeObserver.observe(videoGrid); mvResizeObserver.observe(ui); });
 
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
     ui.querySelector("#clearBtn").addEventListener("click", clearAll);
@@ -156,18 +159,19 @@ function saveState() {
 
     // Storage is shared across popup and multiview; never write on change notification.
     let syncPending = false;
-    CZFavoritesStore.subscribe(() => {
+    scope.add(CZFavoritesStore.subscribe(() => {
       if (syncPending) return;
       syncPending = true;
       queueMicrotask(async () => {
         syncPending = false;
+        if(scope.isDisposed)return;
         try {
           await loadFavorites();
           refreshFavoriteList();
-          groupManager.sync();
+          if(!scope.isDisposed)groupManager.sync();
         } catch (err) { console.warn("즐겨찾기 동기화 실패:", err); }
       });
-    });
+    }));
 
     ui.querySelector("#favoriteRefresh").addEventListener("click", async () => {
       const btn = ui.querySelector("#favoriteRefresh");
@@ -205,12 +209,8 @@ function saveState() {
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-    ui.querySelector('#powerDiagnosticsBtn').onclick=()=>{ui.querySelector('#settingsManager').open=false;powerDiagnostics.open();};
-    ui.querySelector('#importantChatSettings').onclick=()=>{ui.querySelector('#settingsManager').open=false;importantChat.openSettings();};
-    const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
-    shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
-    ui.querySelector('#settingsManager').addEventListener('toggle',event=>{if(event.target.open)for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id)?.removeAttribute('open');});
-    for(const id of ['favoriteManager','followingManager','syncManager','volumeManager','channelManager'])ui.querySelector('#'+id).addEventListener('toggle',event=>{if(event.target.open)ui.querySelector('#settingsManager').removeAttribute('open');});
+    CZViewerSettings.bind({root:ui,get state(){return state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,
+      openChatSettings:()=>importantChat.openSettings(),openPowerDiagnostics:()=>powerDiagnostics.open()});
     const masterInput = ui.querySelector("#masterVolume");
     masterInput.addEventListener("input", e => setMasterVolume(Number(e.target.value) / 100));
     bindRangeDrag(masterInput);
@@ -263,8 +263,8 @@ function saveState() {
     updateToolbarToggleUI();
     syncVolumeUI();
     renderSyncUI();
-    setInterval(updateFavoriteMeta, 1000);
-    setInterval(() => {
+    scope.interval(updateFavoriteMeta, 1000);
+    scope.interval(() => {
       if (favoriteRefreshInFlight || ui.querySelector('[data-dragging="true"]')) return;
       refreshFavoriteOnlineStatus(false).catch(error => console.warn("즐겨찾기 자동 상태 조회 실패:", error));
     }, 30000);
@@ -525,7 +525,7 @@ function saveState() {
   const powerDiagnostics=CZPowerDiagnostics.create({get state(){return state;},get ui(){return ui;},tileMap});
   const mediaTools = CZMediaTools.create({get shortcutsEnabled(){return state.shortcutsEnabled!==false;},onShortcut:handleShortcut,get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
 
-  window.addEventListener("message", event => {
+  scope.listen(window,"message", event => {
     const data = event.data;
     const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
@@ -554,153 +554,10 @@ function saveState() {
     else if (data.type === 'SYNC_RESULT') handleSyncResult(data);
   });
 
-  function updateLayoutToggle() {
-    if (!ui) return;
-    ui.querySelectorAll(".layout-toggle-btn").forEach(button => {
-      const active = button.dataset.layout === state.layout;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-  }
-
-  function applyLayout() {
-    if (!videoGrid) return;
-
-    videoGrid.classList.remove("layout-grid", "layout-2x2", "layout-3x3", "layout-main-sub");
-    if (state.layout === "2x2" || state.layout === "3x3") state.layout = "grid";
-    if (!["grid", "main-sub"].includes(state.layout)) state.layout = "grid";
-    videoGrid.classList.add(`layout-${state.layout}`);
-
-    // Keep the complete broadcast list in state, but only create player tiles
-    // for broadcasts that are actually visible in the current layout. This
-    // prevents hidden broadcasts from continuing to play audio.
-    const displayMax = state.layout === "main-sub" ? 4 : 9;
-    const visibleChannels = state.channels.slice(0, displayMax);
-    const visibleUids = new Set(visibleChannels.map(c => c.uid));
-
-    if (visibleChannels.length && !visibleUids.has(state.selectedUid)) {
-      state.selectedUid = visibleChannels[0].uid;
-    }
-
-    // Remove tiles that are outside the visible range. Their iframe is
-    // detached so it cannot continue playing audio in the background.
-    for (const [uid, tile] of Array.from(tileMap.entries())) {
-      if (visibleUids.has(uid)) continue;
-      const iframe = tile.querySelector("iframe");
-      if (iframe) iframe.src = "about:blank";
-      const hiddenChannel = state.channels.find(c => c.uid === uid);
-      if (hiddenChannel) hiddenChannel.muted = true;
-      tile.remove();
-      tileMap.delete(uid);
-    }
-
-    // Create tiles for the visible broadcasts only.
-    for (const channel of visibleChannels) {
-      createTile(channel);
-    }
-
-    // Update only CSS placement. Never append/move existing iframe nodes here:
-    // DOM reparenting can cause CHZZK's player to reinitialize.
-    visibleChannels.forEach((channel, index) => {
-      const tile = tileMap.get(channel.uid);
-      if (!tile) return;
-      tile.style.display = "flex";
-      tile.style.order = String(index);
-      tile.style.gridColumn = "";
-      tile.style.gridRow = "";
-      tile.classList.toggle("main-tile", state.layout === "main-sub" && index === 0);
-      tile.classList.remove("extra-main-sub");
-
-      if (state.layout === "main-sub") {
-        const mainOnLeft = state.chatSide === "left";
-        if (index === 0) {
-          tile.style.gridColumn = mainOnLeft ? "1" : "2";
-          tile.style.gridRow = "1 / 4";
-        } else {
-          tile.style.gridColumn = mainOnLeft ? "2" : "1";
-          tile.style.gridRow = String(index);
-        }
-      }
-
-      sendTileVolume(channel.uid);
-      applyTileLock(tile, state.screenLocked === true);
-    });
-
-    if (state.layout === "main-sub") {
-      videoGrid.style.setProperty("--sub-count", String(Math.min(3, Math.max(1, visibleChannels.length - 1))));
-    } else {
-      videoGrid.style.removeProperty("--sub-count");
-    }
-
-    updateLayoutToggle();
-    resizeFixedAspectGrid();
-    refreshChannelManager();
-    refreshVolumeManager();
-  }
-
-  function resizeFixedAspectGrid() {
-    if (!videoGrid) return;
-    const layout = state.layout;
-    if (!["grid", "main-sub"].includes(layout)) return;
-
-    requestAnimationFrame(() => {
-      const rect = videoGrid.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const gap = 8;
-
-      if (layout === "main-sub") {
-        // Main is on the RIGHT; up to three 16:9 sub tiles are stacked on
-        // the LEFT. The main tile uses the remaining horizontal space.
-        const subH = Math.max(1, (rect.height - gap * 2) / 3);
-        const subW = subH * 16 / 9;
-        const mainW = Math.max(1, rect.width - gap - subW);
-
-        if (state.chatSide === "left") {
-          videoGrid.style.gridTemplateColumns = `${mainW}px ${subW}px`;
-        } else {
-          videoGrid.style.gridTemplateColumns = `${subW}px ${mainW}px`;
-        }
-        videoGrid.style.gridTemplateRows = `repeat(3, ${subH}px)`;
-        videoGrid.style.justifyContent = "center";
-        videoGrid.style.alignContent = "center";
-        videoGrid.style.overflow = "hidden";
-        return;
-      }
-
-      // Basic layout scales by the number of visible broadcasts:
-      // 1 -> 1x1, 2 -> 2x1, 3~4 -> 2x2, 5~6 -> 3x2, 7~9 -> 3x3.
-      // Only the first 9 broadcasts are displayed; the full list is retained.
-      // Dimensions are recalculated from the CURRENT viewport/grid size so
-      // moving a maximized browser between different monitors automatically
-      // resizes the tiles to fit the new screen.
-      const count = Math.min(state.channels.length, 9);
-      let cols = 1;
-      let rows = 1;
-      if (count >= 7) {
-        cols = 3;
-        rows = 3;
-      } else if (count >= 5) {
-        cols = 3;
-        rows = 2;
-      } else if (count >= 3) {
-        cols = 2;
-        rows = 2;
-      } else if (count === 2) {
-        cols = 2;
-        rows = 1;
-      }
-      const cellW = Math.max(1, (rect.width - gap * (cols - 1)) / cols);
-      const cellH = Math.max(1, (rect.height - gap * (rows - 1)) / rows);
-      const tileW = Math.min(cellW, cellH * 16 / 9);
-      const tileH = tileW * 9 / 16;
-
-      videoGrid.style.gridTemplateColumns = `repeat(${cols}, ${tileW}px)`;
-      videoGrid.style.gridTemplateRows = `repeat(${rows}, ${tileH}px)`;
-      videoGrid.style.justifyContent = "center";
-      videoGrid.style.alignContent = "center";
-      videoGrid.style.overflow = "hidden";
-    });
-  }
+  const {updateLayoutToggle,applyLayout,resizeFixedAspectGrid}=CZLayout.create({
+    get state(){return state;},get ui(){return ui;},get videoGrid(){return videoGrid;},
+    tileMap,scope,createTile,sendTileVolume,applyTileLock,refreshChannelManager,refreshVolumeManager
+  });
 
   const {updateChat} = CZChat.create({onUpdated:()=>importantChat?.sync(),get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
 
@@ -740,7 +597,7 @@ function saveState() {
     toolbarCollapsed = !toolbarCollapsed;
     ui.classList.toggle("toolbar-collapsed", toolbarCollapsed);
     updateToolbarToggleUI();
-    requestAnimationFrame(() => resizeFixedAspectGrid());
+    resizeFixedAspectGrid();
   }
 
   function updateToolbarToggleUI() {
@@ -779,7 +636,7 @@ function saveState() {
     const btn = ui.querySelector("#chatToggleBtn");
     if (btn) btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
     updateChat();
-    requestAnimationFrame(() => resizeFixedAspectGrid());
+    resizeFixedAspectGrid();
     saveState();
   }
 
@@ -799,8 +656,8 @@ function saveState() {
     notice.classList.remove("show");
     void notice.offsetWidth;
     notice.classList.add("show");
-    clearTimeout(notice._hideTimer);
-    notice._hideTimer = setTimeout(() => notice.classList.remove("show"), 1400);
+    notice._hideTimer?.();
+    notice._hideTimer = scope.timeout(() => notice.classList.remove("show"), 1400);
   }
 
   function refreshChannelManager() {
@@ -1050,7 +907,7 @@ function saveState() {
 
   let viewerTabId = null;
   let initialized = false;
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const onRuntimeMessage=(message, sender, sendResponse) => {
     if (!message) return;
 
     if(message.type==='VIEWER_GET_STATE' && sender.id===chrome.runtime.id && message.tabId===viewerTabId){sendResponse(initialized?{ok:true,state:CZSessionStore.normalize(state)}:{ok:false});return;}
@@ -1059,7 +916,9 @@ function saveState() {
     openMultiView('', message.initialInputs || []).then(() => sendResponse({ok: true})).catch(error => sendResponse({ok: false, error: String(error)}));
     return true;
 
-  });
+  };
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
+  scope.add(()=>chrome.runtime.onMessage.removeListener?.(onRuntimeMessage));
 
   const boot = async () => {
     viewerTabId = globalThis.CZ_SITE_VIEWER ? (await chrome.runtime.sendMessage({type:'SITE_VIEWER_TAB'}))?.tabId : (await chrome.tabs.getCurrent())?.id;
@@ -1077,21 +936,23 @@ function saveState() {
   };
   boot().catch(error => {
     console.error(error);
+    scope.dispose();
     document.getElementById(ROOT_ID)?.remove();
     if(document.getElementById('startupStatus'))document.getElementById('startupStatus').textContent = '멀티뷰를 열지 못했습니다. 확장을 다시 로드한 뒤 페이지를 새로고침해주세요.';
   });
-  window.addEventListener('pagehide', saveState);
+  scope.listen(window,'pagehide', event => {saveState();if(!event.persisted)scope.dispose();});
 
   const scheduleGridResize = () => {
-    requestAnimationFrame(() => resizeFixedAspectGrid());
+    resizeFixedAspectGrid();
   };
 
   const mvResizeObserver = new ResizeObserver(scheduleGridResize);
+  scope.observe(mvResizeObserver);
   // A maximized browser can change its CSS viewport when moved between
   // monitors with different resolutions/scaling. Recalculate immediately.
-  window.addEventListener("resize", scheduleGridResize, { passive: true });
+  scope.listen(window,"resize", scheduleGridResize, { passive: true });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", scheduleGridResize, { passive: true });
+    scope.listen(window.visualViewport,"resize", scheduleGridResize, { passive: true });
   }
 
 
