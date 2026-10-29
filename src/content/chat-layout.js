@@ -293,18 +293,21 @@ globalThis.CZChatLayout = (() => {
     if(timestampRoot===root)return;
     timestampObserver?.disconnect();timestampRoot=root;
     const stamp=row=>{
-      if(row.querySelector('time') || row.querySelector(timestampRows))return;
-      const raw=row.getAttribute('data-timestamp')||row.getAttribute('data-created-at'),number=raw?Number(raw):NaN;
+      const own=row.querySelector('.cz-native-chat-time');
+      if(row.querySelector('time:not(.cz-native-chat-time)') || row.querySelector(timestampRows)){own?.remove();return;}
+      const raw=row.getAttribute('data-message-time')||row.getAttribute('data-timestamp')||row.getAttribute('data-created-at'),number=raw?Number(raw):NaN;
       const parsed=raw?(Number.isFinite(number)?number*(number<1e12?1000:1):Date.parse(raw)):NaN;
-      const nativeTime=Number.isFinite(parsed)&&parsed>=946684800000&&parsed<=Date.now()+60000;
-      const time=document.createElement('time'),now=new Date(nativeTime?parsed:Date.now());time.className='cz-native-chat-time';time.dateTime=now.toISOString();time.textContent=now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});time.title=nativeTime?'원본 메시지 시각':'이 화면에서 처음 확인한 시각';
-      // Add our own node; never replace React-owned author/message nodes.
-      row.prepend(time);
+      if(!Number.isFinite(parsed) || parsed<946684800000 || parsed>Date.now()+60000){own?.remove();return;}
+      const date=new Date(parsed),iso=date.toISOString();
+      if(own?.dateTime===iso)return;
+      const time=own||document.createElement('time');time.className='cz-native-chat-time';time.dateTime=iso;time.textContent=date.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});time.title='원본 메시지 작성 시각';
+      // Update only our node; never synthesize a send time from observation.
+      if(!own)row.prepend(time);
     };
     const scan=node=>{if(node.nodeType!==1 || node.matches('.cz-native-chat-time'))return;if(node.matches(timestampRows))stamp(node);node.querySelectorAll(timestampRows).forEach(stamp);};
     root.querySelectorAll(timestampRows).forEach(stamp);
-    timestampObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)scan(node);});
-    timestampObserver.observe(root,{childList:true,subtree:true});
+    timestampObserver=new MutationObserver(records=>{for(const record of records){if(record.type==='attributes'){if(record.target.matches(timestampRows))stamp(record.target);continue;}for(const node of record.addedNodes)scan(node);}});
+    timestampObserver.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['data-message-time','data-timestamp','data-created-at']});
   }
   let preparedRoot = null,preparedRootStyle='';
   function prepare() {

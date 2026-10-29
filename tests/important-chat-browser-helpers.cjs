@@ -121,8 +121,7 @@ module.exports=async function checkImportantChat(page){
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 스트리머 채팅 웃음'));
  assert.equal(await panel.locator('.ic-message').count(),1,'nested nickname CSS modules must not duplicate the message');
  assert.equal(await panel.locator('.ic-author').textContent(),'테스트 방송','author excludes SVG titles and hidden accessibility mark captions');
- await frame.waitForFunction(()=>!!document.querySelector('._chatting_message_w9pvh_21 .cz-native-chat-time'));
- assert.match(await frame.locator('._chatting_message_w9pvh_21 .cz-native-chat-time').textContent(),/^\d{2}:\d{2}$/);
+ assert.equal(await frame.locator('._chatting_message_w9pvh_21 .cz-native-chat-time').count(),0,'missing send time must not be replaced with observation time');
  assert(!(await panel.locator('.ic-message-text').textContent()).includes('파트너 배지'),'badges after the inner nickname are outside the body');
  assert(!(await panel.locator('.ic-message-text').textContent()).includes('인증마크'),'unclassified certification image after the author is not message text');
  const expandedFrameHeight=(await page.locator('.chat-frame').boundingBox()).height;
@@ -175,7 +174,7 @@ module.exports=async function checkImportantChat(page){
    const genuinelyNew=reinserted.cloneNode(true);host.append(genuinelyNew);await new Promise(resolve=>setTimeout(resolve,300));collector.stop();reinserted.remove();genuinelyNew.remove();
    return {originalTime:reinserted.querySelector('time')?.dateTime,afterReplacement,afterReinsert,total:captured.length,ids:captured.map(item=>item.id)};
  });
- assert.equal(replacementResult.originalTime,'2026-10-28T12:34:00.000Z','native message timestamp takes priority over first-seen time');
+ assert.equal(replacementResult.originalTime,'2026-10-28T12:34:00.000Z','original send timestamp survives DOM replacement');
  assert.equal(replacementResult.afterReplacement,1,'replacing a message DOM node is not a new chat');
  assert.equal(replacementResult.afterReinsert,1,'separate removal and insertion at the same DOM position is a replacement');
  assert.equal(replacementResult.total,2,'a separately posted identical message remains a separate chat');
@@ -290,7 +289,10 @@ module.exports=async function checkImportantChat(page){
  await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
  await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
- await frame.waitForFunction(()=>!!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
+ await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','2026-10-28T12:34:00Z'));
+ await frame.waitForFunction(()=>document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:00.000Z');
+ await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','invalid'));
+ await frame.waitForFunction(()=>!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
  assert.equal(await panel.locator('.ic-message').count(),0);
  await setEnabled(true);assert(await panel.isVisible());await page.waitForTimeout(350);await openSettings();
  await page.locator('.ic-clear').click();
