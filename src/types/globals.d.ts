@@ -27,3 +27,7 @@ declare global {
 declare global {
   var CZFavoritesBackupUI: typeof import('../shared/favorites-backup-ui').favoritesBackupUI;
 }
+declare global {
+  var CZSettingsBackup: typeof import('../shared/settings-backup').settingsBackup;
+  var CZSettingsBackupClient: typeof import('../shared/settings-backup-client').settingsBackupClient;
+}

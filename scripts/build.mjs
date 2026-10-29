@@ -7,6 +7,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const out=path.join(root,'dist');
 const runtime=JSON.parse(await readFile(path.join(root,'config/runtime.json'),'utf8'));
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
+const pages={'src/viewer/viewer.html':'viewer','src/popup/popup.html':'popup','src/settings/backup.html':'backup'};
 const written=new Set();
 async function compile(relative){
   if(relative.endsWith('.d.ts') || relative.includes('/contracts/'))return;
@@ -18,8 +19,8 @@ async function compile(relative){
       format:relative.endsWith('recording-export-worker.js')?'esm':'iife',
       external:relative.endsWith('recording-export-worker.js')?['../vendor/mediabunny/*']:[],
       target:'chrome119',platform:'browser',charset:'utf8',legalComments:'eof',sourcemap:false,logLevel:'warning'});
-  }else if(relative==='src/viewer/viewer.html'||relative==='src/popup/popup.html'){
-    const kind=relative.includes('/viewer/')?'viewer':'popup',marker=`<!-- ${kind}-scripts -->`;
+  }else if(relative in pages){
+    const kind=pages[relative],marker=`<!-- ${kind}-scripts -->`;
     let html=await readFile(path.join(root,relative),'utf8');if(!html.includes(marker))throw Error(`Missing runtime marker in ${relative}`);
     const scripts=runtime[kind].map(file=>`<script src="${path.posix.relative(path.posix.dirname(relative),file)}"></script>`).join('\n  ');
     await writeFile(path.join(out,relative),html.replace(marker,scripts));

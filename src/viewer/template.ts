@@ -84,6 +84,7 @@ export const html = `
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
+              <div class="settings-feature"><button id="settingsBackupBtn" type="button">설정 내보내기 / 불러오기</button><p>즐겨찾기와 멀티뷰 설정을 JSON 파일로 보관하거나 복원합니다.</p></div>
               <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
             </div>
           </details>

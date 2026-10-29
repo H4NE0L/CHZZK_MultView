@@ -27,7 +27,7 @@ globalThis.CZViewerTabs = (() => {
   }
   async function latest(){return (await chrome.storage.local.get(OWNER_KEY))[OWNER_KEY];}
   async function snapshotLatest(){
-    const owner=await latest();if(!Number.isInteger(owner?.tabId))return;
+    const owner=await latest();if(!Number.isInteger(owner?.tabId) || owner.restorePending)return;
     try{const tab=await chrome.tabs.get(owner.tabId),message={type:'VIEWER_GET_STATE',tabId:owner.tabId};const response=tab.url?.startsWith('https://chzzk.naver.com/')?await chrome.tabs.sendMessage(owner.tabId,message,{frameId:0}):await chrome.runtime.sendMessage(message);if(response?.ok && response.state && typeof response.state==='object')await CZSessionStore.write(response.state);}catch(_){/* Closed/unready viewers retain the last saved state. */}
   }
   function remember(tabId){return serialized(async()=>{await snapshotLatest();await chrome.storage.local.set({[OWNER_KEY]:{tabId}});});}
@@ -45,9 +45,11 @@ globalThis.CZViewerTabs = (() => {
     if(!Number.isInteger(tabId) || message.tabId!=null && message.tabId!==tabId)throw Error('멀티뷰 탭을 확인할 수 없습니다.');
     const owner=await latest();
     if(message.type==='VIEWER_REGISTER_SESSION'){
+      if(owner?.restorePending && owner.tabId===tabId)await chrome.storage.local.set({[OWNER_KEY]:{tabId}});
       if(!owner)await chrome.storage.local.set({[OWNER_KEY]:{tabId}});
       return {ok:true,latest:!owner || owner.tabId===tabId};
     }
+    if(owner?.restorePending)return {ok:true,saved:false,restorePending:true};
     if(owner && owner.tabId!==tabId)return {ok:true,saved:false};
     if(!owner)await chrome.storage.local.set({[OWNER_KEY]:{tabId}});
     await CZSessionStore.write(message.state);return {ok:true,saved:true};
@@ -75,5 +77,5 @@ globalThis.CZViewerTabs = (() => {
       return {ok:true,tabId:tab.id,windowId:win?.id??tab.windowId};
     });
   }
-  return Object.freeze({open,refreshRules,remember,session,OWNER_KEY});
+  return Object.freeze({open,refreshRules,remember,session,OWNER_KEY,transaction:serialized,snapshotLatest});
 })();

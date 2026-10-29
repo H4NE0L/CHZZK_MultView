@@ -1,0 +1,5 @@
+body { margin:0; padding:24px; color:#eee; background:#101112; font:14px Arial,"Noto Sans KR",sans-serif; }
+main.cg-dialog { width:min(680px,100%); margin:24px auto; max-height:none; }
+p { line-height:1.7; }
+.cg-help { font-size:12px; }
+.cg-backup-controls select[hidden] { display:none; }

@@ -138,3 +138,5 @@ importScripts("site-viewer.js");
 importScripts("chat-metadata.js");
 
 importScripts("power-diagnostics.js");
+
+importScripts('settings-backup.js');

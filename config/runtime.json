@@ -44,5 +44,16 @@
     "src/shared/favorites-backup-ui.js",
     "src/shared/group-manager.js",
     "src/popup/popup.js"
+  ],
+  "backup": [
+    "src/shared/chzzk-api.js",
+    "src/shared/favorites-store.js",
+    "src/shared/session-store.js",
+    "src/shared/important-chat.js",
+    "src/shared/favorites-backup.js",
+    "src/shared/settings-backup.js",
+    "src/shared/settings-backup-client.js",
+    "src/shared/favorites-backup-ui.js",
+    "src/settings/backup.js"
   ]
 }
