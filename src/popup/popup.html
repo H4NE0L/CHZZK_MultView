@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>치지직 통합관제실</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="../shared/group-manager.css">
+</head>
+<body>
+  <main class="popup">
+    <div class="title-row">
+      <div>
+        <h1>치지직 통합관제실</h1>
+        <p class="desc">방송 URL 또는 UID를 목록에 추가한 뒤 한 번에 멀티뷰를 열 수 있습니다.</p>
+      </div>
+      <span id="version" class="version-badge">v2.0.0</span>
+    </div>
+
+    <div class="input-row">
+      <input id="uidInput" placeholder="방송 URL 또는 UID" autocomplete="off">
+      <button id="addList" class="secondary">목록 추가</button>
+    </div>
+
+    <div class="section-head"><strong>멀티뷰 목록</strong><button id="clearList" class="text-btn">전체 삭제</button></div>
+    <div id="multiList" class="multi-list"></div>
+
+    <div class="favorites-head">
+      <strong>즐겨찾기</strong>
+      <div class="favorite-actions">
+        <button id="manageGroups" class="text-btn" type="button">그룹 관리</button>
+        <button id="refreshFavorites" class="refresh-btn" type="button" title="온라인 상태 새로고침">↻</button>
+      </div>
+    </div>
+    <div id="favorites" class="favorite-list"></div>
+    <details id="followingManager" class="popup-following"><summary>팔로잉 방송</summary><div id="followingList"></div></details>
+    <div class="open-multiview-actions"><button id="openTab" class="primary" type="button" title="새 탭에 멀티뷰 열기">새 탭으로 열기</button><button id="open" class="primary" type="button" title="새 창에 멀티뷰 열기">새 창으로 열기</button></div>
+    <button id="settingsBackupBtn" class="text-btn" type="button">설정 내보내기 / 불러오기</button>
+    <p id="status" class="status"></p>
+
+  </main>
+  <script src="../shared/chzzk-api.js"></script>
+  <script src="../shared/favorites-store.js"></script>
+  <script src="../shared/session-store.js"></script>
+  <script src="../shared/followings-store.js"></script>
+  <script src="../shared/favorites-backup.js"></script>
+  <script src="../shared/favorites-backup-ui.js"></script>
+  <script src="../shared/group-manager.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
