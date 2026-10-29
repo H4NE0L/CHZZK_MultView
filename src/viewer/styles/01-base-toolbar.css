@@ -1,0 +1,254 @@
+
+    /* =========================================================
+   CHZZK 멀티뷰
+   Main View CSS
+   ========================================================= */
+
+
+/* =========================================================
+   01. Base
+   ========================================================= */
+
+:host {
+    all: initial;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.mv-root {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483640;
+
+    display: flex;
+    flex-direction: column;
+
+    background: #0c0c0d;
+    color: #eee;
+
+    font-family: Arial, "Noto Sans KR", sans-serif;
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+
+/* =========================================================
+   02. Toolbar
+   ========================================================= */
+
+.mv-toolbar {
+    position: relative;
+
+    flex: 0 0 54px;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+
+    padding: 8px 12px;
+
+    background: #151516;
+    border-bottom: 1px solid #29292b;
+
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .35);
+}
+
+.toolbar-left,
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    min-width: 0;
+}
+
+.toolbar-left {
+    justify-content: flex-start;
+    overflow: visible;
+}
+
+.toolbar-right {
+    justify-content: flex-end;
+}
+
+.toolbar-center {
+    min-width: 0;
+}
+
+
+/* =========================================================
+   03. Toolbar Buttons
+   ========================================================= */
+
+.icon-btn {
+    width: 36px;
+    padding: 0;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    flex: 0 0 auto;
+}
+
+button,
+select,
+input {
+    font: inherit;
+}
+
+button,
+select {
+    height: 34px;
+    padding: 0 10px;
+
+    border: 1px solid #363638;
+    border-radius: 7px;
+
+    background: #222224;
+    color: #eee;
+
+    cursor: pointer;
+}
+
+button:hover,
+select:hover {
+    background: #2b2b2e;
+}
+
+.accent {
+    background: #00d26a;
+    border-color: #00d26a;
+    color: #06150d;
+    font-weight: 800;
+}
+
+.accent:hover {
+    background: #16df7b;
+}
+
+
+/* =========================================================
+   04. Layout Toggle
+   ========================================================= */
+
+.layout-toggle {
+    display: inline-flex;
+    align-items: center;
+
+    gap: 2px;
+    padding: 2px;
+
+    border: 1px solid #363638;
+    border-radius: 8px;
+
+    background: #1b1b1d;
+}
+
+.layout-toggle-btn {
+    height: 30px;
+    min-width: 62px;
+    padding: 0 10px;
+
+    border: 0;
+    border-radius: 6px;
+
+    background: transparent;
+    color: #999;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.layout-toggle-btn:hover {
+    background: #29292c;
+    color: #eee;
+}
+
+.layout-toggle-btn.active {
+    background: #00d26a;
+    color: #06150d;
+}
+
+.layout-toggle-btn.active:hover {
+    background: #16df7b;
+}
+
+
+/* =========================================================
+   05. Stream Add Area
+   ========================================================= */
+
+.add-area {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    flex: 1 1 260px;
+    max-width: 430px;
+    min-width: 170px;
+
+    height: 40px;
+    padding: 3px;
+
+    background: #222224;
+    border: 1px solid #363638;
+    border-radius: 9px;
+}
+
+#uidInput {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+
+    height: 32px;
+    padding: 0 10px;
+
+    color: #eee;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+
+    outline: none;
+}
+
+.add-area:focus-within {
+    border-color: #00d26a;
+    box-shadow: 0 0 0 1px rgba(0, 210, 106, .15);
+}
+
+#uidInput.invalid {
+    border-color: #ff4d5e;
+    animation: shake .18s linear 2;
+}
+
+.add-area .accent {
+    flex: 0 0 auto;
+
+    height: 32px;
+    padding: 0 12px;
+
+    border-radius: 6px;
+}
+
+
+/* =========================================================
+   06. Input Animation
+   ========================================================= */
+
+@keyframes shake {
+    0% {
+        transform: translateX(0);
+    }
+
+    50% {
+        transform: translateX(3px);
+    }
+
+    100% {
+        transform: translateX(0);
+    }
+}

@@ -1,3 +1,10 @@
 dist/
 __pycache__/
 node_modules/
+
+artifacts/
+*.tsbuildinfo
+.backup/*
+!.backup/.gitkeep
+
+.test-build/

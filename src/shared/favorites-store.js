@@ -12,14 +12,14 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   const GROUP_OPTIONS_KEY = 'chzzkFavoriteGroupOptionsV2';
   const cleanGroup = g => String(g || "").trim();
   function memberships(favorite) {
-    const groups = [...new Set((Array.isArray(favorite.groups) && favorite.groups.length ? favorite.groups : [favorite.group]).map(cleanGroup).filter(Boolean))];
-    return groups.length ? groups : [DEFAULT_GROUP];
+    const groups = [...new Set((Array.isArray(favorite.groups) ? favorite.groups : [favorite.group || DEFAULT_GROUP]).map(cleanGroup).filter(Boolean))];
+    return groups;
   }
   const normalizeFavorite = f => ({
     ...f, uid: String(f.uid).trim(),
     name: String(f.name || f.title || f.uid).replace(/\s*-\s*CHZZK\s*$/i, '').trim(),
     title: String(f.title || f.name || f.uid).replace(/\s*-\s*CHZZK\s*$/i, '').trim(),
-    group: memberships(f)[0],
+    group: memberships(f)[0] || '',
     groups: memberships(f),
     online: f.online === true,
     openAt: Number(f.openAt) > 0 ? Number(f.openAt) : null,
@@ -35,7 +35,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     const favorites = fs.filter(f => f && f.uid).map(normalizeFavorite);
     favorites.sort((a,b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
     favorites.forEach((f,i) => { f.order = i+1; });
-    const groups = [...new Set([...(gs || []).map(cleanGroup).filter(Boolean), DEFAULT_GROUP,
+    const groups = [...new Set([...(gs || []).map(cleanGroup).filter(Boolean),
       ...favorites.flatMap(f => f.groups)])];
     return {favorites, groups};
   };
@@ -59,10 +59,9 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   }
   function deleteGroup(favorites, groups, group) {
     const state = snapshot(favorites, groups);
-    if (group === DEFAULT_GROUP) return state;
     state.groups = state.groups.filter(g => g !== group);
-    state.favorites.forEach(f => { f.groups = f.groups.filter(g => g !== group); if (!f.groups.length) f.groups = [DEFAULT_GROUP]; f.group = f.groups[0]; });
-    return state;
+    state.favorites.forEach(f => { f.groups = f.groups.filter(g => g !== group); f.group = f.groups[0] || ''; });
+    return snapshot(state.favorites, state.groups);
   }
   function moveGroup(favorites, groups, group, target) {
     const state = snapshot(favorites, groups);
@@ -74,7 +73,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
   function setFavoriteGroup(favorites, groups, uid, group) {
     const state = snapshot(favorites, groups);
     const favorite = state.favorites.find(f => f.uid === uid);
-    if (favorite) { favorite.group = cleanGroup(group) || DEFAULT_GROUP; favorite.groups = [favorite.group]; }
+    if (favorite) { favorite.group = cleanGroup(group); favorite.groups = favorite.group ? [favorite.group] : []; }
     return snapshot(state.favorites, state.groups);
   }
   function setGroupMembers(favorites, groups, oldName, name, channels) {
@@ -86,8 +85,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     for (const favorite of state.favorites) {
       if (!selected.has(favorite.uid)) favorite.groups = favorite.groups.filter(g => g !== group);
       else if (!favorite.groups.includes(group)) favorite.groups.push(group);
-      if (!favorite.groups.length) favorite.groups = [DEFAULT_GROUP];
-      favorite.group = favorite.groups[0];
+      favorite.group = favorite.groups[0] || '';
       selected.delete(favorite.uid);
     }
     for (const channel of selected.values()) state.favorites.push({...channel, group, groups: [group], order: state.favorites.length + 1});
@@ -114,7 +112,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     return state;
   }
   function itemsForGroup(favorites, group) {
-    return favorites.filter(f => (f.groups || [f.group || DEFAULT_GROUP]).includes(group)).sort((a, b) =>
+    return favorites.filter(f => (group ? memberships(f).includes(group) : memberships(f).length === 0)).sort((a, b) =>
       Number(b.online === true) - Number(a.online === true) || (Number(a.order) || 0) - (Number(b.order) || 0));
   }
   // CHZZK openDate is a KST wall-clock value, independent of the browser timezone.

@@ -6,7 +6,7 @@ const path = require('node:path');
 function fixture(fetch) {
   const data = {};
   const ctx = vm.createContext({fetch, chrome:{storage:{local:{get:async key => typeof key === 'string' ? {[key]:data[key]} : data, set:async value => Object.assign(data,value)},onChanged:{addListener(){},removeListener(){}}}}});
-  for (const file of ['chzzk-api','favorites-store','followings-store']) vm.runInContext(fs.readFileSync(path.join(__dirname,`../src/shared/${file}.js`),'utf8'),ctx);
+  for (const file of ['chzzk-api','favorites-store','followings-store']) vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'), `src/shared/${file}.js`),'utf8'),ctx);
   return {api:ctx.CZChzzkApi,store:ctx.CZFavoritesStore,follow:ctx.CZFollowings,data};
 }
 const json = content => ({ok:true,status:200,json:async () => ({code:200,content})});
@@ -66,7 +66,7 @@ test('checklist groups add memberships and preserve existing global item order',
   assert(renamed.favorites[0].groups.includes('이름 변경'));
   const removed=store.deleteGroup(renamed.favorites,renamed.groups,'이름 변경');
   assert.deepEqual(Array.from(removed.favorites[0].groups),['원래 그룹']);
-  assert.deepEqual(Array.from(removed.favorites[1].groups),['기본 그룹']);
+  assert.deepEqual(Array.from(removed.favorites[1].groups),[]);
 });
 test('empty or duplicate group names are rejected; group shifting never reorders items', () => {
   const {store}=fixture(async()=>{throw Error('unused');});
@@ -90,7 +90,7 @@ test('group memberships and display options commit together and survive metadata
 test('API lookup passes a 15-second deadline to fetch', async () => {
   const signal = {};
   const ctx = vm.createContext({AbortSignal:{timeout: delay => {assert.equal(delay,15000);return signal;}},fetch:async (_url,options) => {assert.equal(options.signal,signal);return json({channelId:'aaaaaa',channelName:'공식 방송인'});}});
-  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/shared/chzzk-api.js'),'utf8'),ctx);
+  vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'), 'src/shared/chzzk-api.js'),'utf8'),ctx);
   assert.equal(await ctx.CZChzzkApi.fetchChannelName('aaaaaa'),'공식 방송인');
 });
 

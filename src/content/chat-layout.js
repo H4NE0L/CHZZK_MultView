@@ -86,6 +86,26 @@ globalThis.CZChatLayout = (() => {
   }
 
   function prepareChatOnlyFrame(doc, chatRoot) {
+    // The native pop-out chat already owns its viewport. Moving/hiding its
+    // surrounding DOM breaks React portals used by user menus and predictions.
+    if(location.pathname.endsWith('/chat')){
+      // Remove the site's minimum popup width without changing positioning,
+      // stacking, overflow or React portal hosts used by native actions.
+      let container=chatRoot;
+      while(container){
+        container.classList.add('cz-chat-width');
+        if(container===doc.documentElement)break;
+        container=container.parentElement;
+      }
+      if(!doc.getElementById('cz-chat-viewport-width')){
+        const style=doc.createElement('style');style.id='cz-chat-viewport-width';
+        style.textContent='.cz-chat-width{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}html.cz-chat-width,body.cz-chat-width,.cz-chat-only{width:100%!important}.cz-native-chat-header{min-width:0!important;max-width:100%!important}';
+        (doc.head||doc.documentElement).appendChild(style);
+      }
+      chatRoot.style.setProperty('width','100%','important');
+      doc.querySelectorAll('video').forEach(video=>video.style.setProperty('display','none','important'));
+      return;
+    }
     // Keep every ancestor of the chat root visible, but make the chat itself
     // fill the iframe. This avoids the clipped-right-column problem caused by
     // nested CHZZK layout containers.
@@ -98,7 +118,8 @@ globalThis.CZChatLayout = (() => {
 
     for (const el of Array.from(doc.body.querySelectorAll("*"))) {
       if (el === chatRoot || chatRoot.contains(el) || ancestors.has(el)) continue;
-      el.style.setProperty("display", "none", "important");
+      // Keep portal hosts and unknown UI intact; hide only known page chrome.
+      if(el.matches('video,nav,[class*="video_player"],[class*="VideoPlayer"],[class*="global_header"]'))el.style.setProperty("display", "none", "important");
     }
 
     doc.documentElement.style.cssText = "margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#111!important;";
@@ -137,7 +158,7 @@ globalThis.CZChatLayout = (() => {
     chatRoot.style.setProperty("min-width", "0", "important");
     chatRoot.style.setProperty("min-height", "0", "important");
     chatRoot.style.setProperty("box-sizing", "border-box", "important");
-    chatRoot.style.setProperty("z-index", "2147483647", "important");
+    chatRoot.style.setProperty("z-index", "1", "important");
 
     // The chat iframe must never be a second audio source. Pause/mute now and
     // repeatedly because the CHZZK player may recreate its <video> element.
@@ -168,9 +189,9 @@ globalThis.CZChatLayout = (() => {
       box.classList.toggle('cz-chat-input-idle',empty && !box.contains(doc.activeElement));
     });
   }
-  let presentation={name:'',height:0},onSettings=()=>{},onHeader=()=>{},nativeMenuOpen=false;
+  let presentation={name:'',height:0},onHeader=null,nativeMenuOpen=false;
   const boundRoots=new WeakSet();
-  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:Math.max(0,Math.min(1600,Number(value.height)||0))};prepare();}
+  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
   const managedHeaders=new WeakSet();
   function isNativeHeader(header){
     if(managedHeaders.has(header))return true;
@@ -204,8 +225,17 @@ globalThis.CZChatLayout = (() => {
     // Keep CHZZK's SVG/path rules outside extension-owned icons.
     const icon=document.createElement('span');icon.setAttribute('aria-hidden','true');host.appendChild(icon);
     const shadow=icon.attachShadow({mode:'open'});
-    shadow.innerHTML='<style>:host{display:block!important;width:16px!important;height:16px!important;flex:none!important;line-height:0!important}svg{display:block;width:16px;height:16px;min-width:16px;max-width:16px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
+    shadow.innerHTML='<style>:host{display:block!important;width:20px!important;height:20px!important;flex:none!important;line-height:0!important}svg{display:block;width:20px;height:20px;min-width:20px;max-width:20px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
   }
+  function overlayRects(){
+    return [...document.querySelectorAll('[role="dialog"],[role="menu"],[aria-modal="true"],[class^="_layer_"],[class*=" _layer_"],[class*="layer_popup"],.cz-native-chat-header div,.cz-native-chat-header ul')].filter(el=>{
+      if(el.matches('.cz-chat-only') || el.querySelector('.cz-chat-only'))return false;
+      if(!isVisible(el) || !el.children.length && !el.textContent.trim())return false;
+      const style=getComputedStyle(el),rect=el.getBoundingClientRect();if(el.closest('.cz-native-chat-header') && !el.matches('[role=dialog],[role=menu]') && (rect.width<80 || rect.height<40))return false;return el.matches('[role="dialog"],[role="menu"],[aria-modal="true"]') || ['fixed','absolute'].includes(style.position);
+    }).slice(0,16).map(el=>{const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};});
+  }
+  function overlayOpen(){return overlayRects().length>0;}
+  function reportHeader(header){if(!onHeader)return;const rects=overlayRects();onHeader(Math.round(header.getBoundingClientRect().bottom),nativeMenuOpen||rects.length>0,rects);}
   function nativeHeader(root){
     const header=findHeader(root);
     if(!header)return;
@@ -213,13 +243,19 @@ globalThis.CZChatLayout = (() => {
     header.classList.add('cz-native-chat-header');
     if(!boundRoots.has(root)){
       boundRoots.add(root);
-      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)onHeader(Math.round(current.getBoundingClientRect().bottom),nativeMenuOpen);});
-      root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)onHeader(Math.round(current.getBoundingClientRect().bottom),false);}});
+      root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)reportHeader(current);});
+      root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)reportHeader(current);}});
     }
-    if(nativeMenuOpen){onHeader(Math.round(header.getBoundingClientRect().bottom),true);return;}
-    let title=header.querySelector('.cz-channel-name,[class*="header_title"],[class*="header_name"],h1,h2,h3');
-    if(!title){title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);}
-    title.classList.add('cz-channel-name');if(title.textContent!==presentation.name)title.textContent=presentation.name;
+    if(nativeMenuOpen || overlayOpen()){reportHeader(header);return;}
+    let title=header.querySelector('.cz-channel-name');
+    if(!title){
+      // Keep React-owned title nodes alive; replacing textContent can detach
+      // nodes the native app still references when committing menu actions.
+      const original=header.querySelector('[class*="header_title"],[class*="header_name"],h1,h2,h3');
+      if(original && !original.querySelector('button,input,select'))original.style.setProperty('display','none','important');
+      title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);
+    }
+    if(title.textContent!==presentation.name)title.textContent=presentation.name;
     header.querySelectorAll('[class*="font_size"],[class*="fontSize"],[class*="font-size"],[class*="header_font"],[class*="zoom"],[aria-label*="글씨"],[aria-label*="글자"],[title*="글씨"],[title*="글자"]').forEach(el=>el.style.setProperty('display','none','important'));
     for(const el of header.querySelectorAll('*')){
       if(el===title || el.contains(title) || el.closest('#cz-chat-settings'))continue;
@@ -231,23 +267,47 @@ globalThis.CZChatLayout = (() => {
     }
     for(const node of [...header.childNodes])if(node.nodeType===3 && /채팅/.test(node.textContent))node.textContent='';
     const native=header.querySelector('.cz-native-settings')||[...header.querySelectorAll('button')].filter(el=>el.id!=='cz-chat-settings').at(-1);
-    // Font controls may be SVG-only buttons without labels or readable text.
-    // Preserve the original menu button and remove every other native header control.
-    for(const control of header.querySelectorAll('button'))if(control!==native && control.id!=='cz-chat-settings')control.style.setProperty('display','none','important');
-    for(const leaf of [title,native]){
-      let wrapper=leaf?.parentElement;
-      while(wrapper && wrapper!==header){wrapper.style.setProperty('display','contents','important');wrapper=wrapper.parentElement;}
+    // Only font controls are removed. User menus and prediction controls must
+    // remain owned by CHZZK, including buttons added after hydration.
+    for(const value of header.querySelectorAll('*')){
+      if(value.children.length || !/^\d+\s*%$/.test(value.textContent.trim()))continue;
+      for(const adjacent of [value.previousElementSibling,value.nextElementSibling])if(adjacent?.matches('button') && adjacent!==native)adjacent.style.setProperty('display','none','important');
     }
-    let button=header.querySelector('#cz-chat-settings');
-    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');mountHeaderIcon(button,'<path fill-rule="evenodd" d="M12.71 6.05 L14.88 6.69 L14.88 9.31 L12.71 9.95 L12.71 9.95 L13.79 11.93 L11.93 13.79 L9.95 12.71 L9.95 12.71 L9.31 14.88 L6.69 14.88 L6.05 12.71 L6.05 12.71 L4.07 13.79 L2.21 11.93 L3.29 9.95 L3.29 9.95 L1.12 9.31 L1.12 6.69 L3.29 6.05 L3.29 6.05 L2.21 4.07 L4.07 2.21 L6.05 3.29 L6.05 3.29 L6.69 1.12 L9.31 1.12 L9.95 3.29 L9.95 3.29 L11.93 2.21 L13.79 4.07 L12.71 6.05 Z M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5Z"/>');button.onclick=()=>onSettings();if(native)native.before(button);else header.appendChild(button);}
+    header.querySelector('#cz-chat-settings')?.remove();
     let channel=header.querySelector('#cz-chat-channel');
-    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M10 1h5v5h-1.5V3.56L7.53 9.53 6.47 8.47l5.97-5.97H10V1ZM2.5 3H7v1.5H2.5v9h9V9H13v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 1 13.5v-9A1.5 1.5 0 0 1 2.5 3Z"/>');button.before(channel);}
+    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M10 1h5v5h-1.5V3.56L7.53 9.53 6.47 8.47l5.97-5.97H10V1ZM2.5 3H7v1.5H2.5v9h9V9H13v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 1 13.5v-9A1.5 1.5 0 0 1 2.5 3Z"/>');if(native)native.before(channel);else header.appendChild(channel);}
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
-    if(native)native.classList.add('cz-native-settings');
-    let spacer=root.querySelector('#cz-important-chat-space');
-    if(!spacer){spacer=document.createElement('div');spacer.id='cz-important-chat-space';header.after(spacer);}
-    spacer.style.cssText='flex:0 0 '+presentation.height+'px;height:'+presentation.height+'px;pointer-events:none';
-    const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)onHeader(height,nativeMenuOpen);
+    if(native){
+      native.classList.add('cz-native-settings');
+      let wrapper=native.parentElement;
+      while(wrapper && wrapper!==header){
+        wrapper.classList.add('cz-native-action-wrapper');wrapper=wrapper.parentElement;
+      }
+    }
+    root.querySelector('#cz-important-chat-space')?.remove();
+    const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)reportHeader(header);
+  }
+  const timestampRows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+  let timestampRoot=null,timestampObserver=null;
+  function stampMessages(root){
+    if(timestampRoot===root)return;
+    timestampObserver?.disconnect();timestampRoot=root;
+    const stamp=row=>{
+      const own=row.querySelector('.cz-native-chat-time');
+      if(row.querySelector('time:not(.cz-native-chat-time)') || row.querySelector(timestampRows)){own?.remove();return;}
+      const raw=row.getAttribute('data-cz-message-time')||row.getAttribute('data-message-time')||row.getAttribute('data-timestamp')||row.getAttribute('data-created-at');
+      const parsed=CZImportantChat.timestamp(raw);
+      if(parsed===null){own?.remove();return;}
+      const date=new Date(parsed),iso=date.toISOString();
+      if(own?.dateTime===iso)return;
+      const time=own||document.createElement('time');time.className='cz-native-chat-time';time.dateTime=iso;time.textContent=date.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});time.title='원본 메시지 작성 시각';
+      // Update only our node; never synthesize a send time from observation.
+      if(!own)row.prepend(time);
+    };
+    const scan=node=>{if(node.nodeType!==1 || node.matches('.cz-native-chat-time'))return;if(node.matches(timestampRows))stamp(node);node.querySelectorAll(timestampRows).forEach(stamp);};
+    root.querySelectorAll(timestampRows).forEach(stamp);
+    timestampObserver=new MutationObserver(records=>{for(const record of records){if(record.type==='attributes'){if(record.target.matches(timestampRows))stamp(record.target);continue;}for(const node of record.addedNodes)scan(node);}});
+    timestampObserver.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
   }
   let preparedRoot = null,preparedRootStyle='';
   function prepare() {
@@ -272,19 +332,28 @@ globalThis.CZChatLayout = (() => {
     if(!document.getElementById('cz-chat-chrome')){
       const style=document.createElement('style');style.id='cz-chat-chrome';
       style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
+      style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:18px!important;height:18px!important;margin:0!important;transform:none!important}';
+      style.textContent+='.cz-native-chat-time{display:inline!important;margin-right:6px!important;color:#89929f!important;font-size:10px!important;font-weight:400!important;line-height:inherit!important;white-space:nowrap!important}.cz-native-chat-header{height:40px!important;min-height:40px!important;padding:0 8px!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;flex:0 0 32px!important;box-sizing:border-box!important}.cz-native-chat-header #cz-chat-channel:before,.cz-native-chat-header #cz-chat-channel:after,.cz-native-chat-header #cz-chat-settings:before,.cz-native-chat-header #cz-chat-settings:after,.cz-native-settings:before,.cz-native-settings:after{content:none!important}.cz-native-settings{font-size:20px!important;line-height:1!important}.cz-native-settings svg{width:20px!important;height:20px!important}.cz-native-action-wrapper{position:relative!important;inset:auto!important;transform:none!important;align-self:center!important;align-items:center!important;min-height:32px!important;margin-top:0!important;margin-bottom:0!important}';
       (document.head||document.documentElement).appendChild(style);
     }
-    nativeHeader(root);
-    stabilizeInput(document,root);
+    nativeHeader(root);stampMessages(root);
+    if(overlayOpen())root.querySelectorAll('.cz-chat-input-idle').forEach(el=>el.classList.remove('cz-chat-input-idle'));else stabilizeInput(document,root);
     return true;
   }
   function start(options={}) {
-    onSettings=options.onSettings||onSettings;onHeader=options.onHeader||onHeader;
+    onHeader=options.onHeader||onHeader;
     const apply = () => {
       document.querySelectorAll('video').forEach(v => { v.muted = true; v.volume = 0; try { v.pause(); } catch (_) {} });
       prepare();
     };
     apply();
+    let scheduled=false;
+    const report=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;const header=document.querySelector('.cz-native-chat-header');if(header)reportHeader(header);});};
+    window.addEventListener('resize',report);document.addEventListener('scroll',report,true);
+    const overlays=onHeader?new MutationObserver(report):null;overlays?.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','open','aria-hidden','aria-expanded']});
+    document.addEventListener('click',event=>{const header=document.querySelector('.cz-native-chat-header');if(header && !header.contains(event.target))nativeMenuOpen=false;report();},true);
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;report();}},true);
+    window.addEventListener('pagehide',()=>{overlays?.disconnect();timestampObserver?.disconnect();},{once:true});
     document.addEventListener('focusin',apply);document.addEventListener('focusout',()=>queueMicrotask(apply));document.addEventListener('input',apply);
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);

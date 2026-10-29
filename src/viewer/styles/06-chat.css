@@ -1,0 +1,116 @@
+
+
+/* =========================================================
+   28. Chat
+   ========================================================= */
+
+.chat-panel {
+    min-width: 0;
+    min-height: 0;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+
+    background: #121214;
+
+    border: 1px solid #2c2c30;
+    border-radius: 8px;
+}
+
+.chat-head {
+    flex: 0 0 36px;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 0 10px;
+
+    border-bottom: 1px solid #2c2c30;
+
+    background: #19191b;
+}
+
+.chat-close {
+    flex: 0 0 28px;
+
+    width: 28px;
+    height: 26px;
+
+    padding: 0;
+    margin-left: 4px;
+
+    border: 0;
+
+    background: transparent;
+}
+
+.chat-close:hover {
+    color: #ff6473;
+}
+
+.chat-head span {
+    margin-left: auto;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    color: #777;
+
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   29. Chat Frame
+   ========================================================= */
+
+.chat-frame-wrap {
+    position: relative;
+
+    width: 100%;
+    height: 0;
+
+    min-width: 0;
+    min-height: 0;
+
+    flex: 1 1 auto;
+
+    overflow: hidden;
+
+    background: #111;
+}
+
+.chat-frame {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    min-width: 0;
+    min-height: 0;
+
+    border: 0;
+
+    overflow: hidden;
+
+    background: #111;
+}
+
+.chat-empty {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+
+    display: grid;
+    place-items: center;
+
+    background: #111;
+    color: #777;
+
+    text-align: center;
+    line-height: 1.7;
+}

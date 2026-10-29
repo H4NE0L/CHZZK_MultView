@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
-const source = name => fs.readFileSync(path.join(__dirname, '../src', name), 'utf8');
+const source = name => fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'), 'src', name), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
 function fixture({existing = [], failRules = false, response = {ok: true}} = {}) {
   const operations = [];
@@ -130,7 +130,7 @@ test('service-worker entry imports local modules and routes an authorized popup 
   f.chrome.cookies = {get: async () => null, onChanged: {addListener}};
   Object.assign(f.chrome.runtime, {onMessage: {addListener: fn => listeners.push(fn)}, onInstalled: {addListener}, onStartup: {addListener}});
   Object.assign(f.chrome.tabs, {onUpdated: {addListener}, onRemoved: {addListener}});
-  f.context.importScripts = (...names) => names.forEach(name => vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/background',name),'utf8'),f.context));
+  f.context.importScripts = (...names) => names.forEach(name => vm.runInContext(fs.readFileSync(path.join(process.env.CZ_TEST_ROOT || path.join(__dirname,'..'), 'src/background',name),'utf8'),f.context));
   vm.runInContext(source('background/background.js'),f.context);
   const result = await new Promise(resolve => {
     assert.equal(listeners[0]({type:'OPEN_MULTIVIEW_FROM_POPUP',initialInputs:['aaaaaa']},{id:'test'},resolve),true);

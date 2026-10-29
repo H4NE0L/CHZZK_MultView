@@ -1,0 +1,75 @@
+
+
+/* =========================================================
+   멀티뷰 목록
+   ========================================================= */
+
+.multi-list {
+    margin-top: 6px;
+
+    width: 100%;
+    height: 84px;
+    flex: 0 0 84px;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: auto;
+
+    border: 1px solid #2d2d30;
+    border-radius: 8px;
+
+    background: #181819;
+}
+
+.multi-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 7px 9px;
+
+    border-bottom: 1px solid #29292b;
+}
+
+.multi-row:last-child {
+    border-bottom: 0;
+}
+
+.multi-row-text {
+    min-width: 0;
+    flex: 1;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    font-size: 12px;
+}
+
+.row-del {
+    padding: 2px 5px;
+
+    background: transparent;
+    color: #777;
+}
+
+.row-del:hover {
+    color: #ff6473;
+}
+
+
+/* 멀티뷰 목록이 비어 있을 때 */
+.list-empty {
+    flex: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 100%;
+    padding: 12px;
+
+    color: #666;
+    text-align: center;
+}

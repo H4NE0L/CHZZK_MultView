@@ -1,6 +1,6 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>녹화 결과 — 치지직 통합관제실</title><link rel="stylesheet" href="recording.css"></head><body>
 <header><h1>녹화 미리보기</h1></header>
 <main><video id="preview" controls preload="metadata"></video><p id="warning"></p>
-<p class="help">다른 형식으로 변환하거나 구간을 저장하면 선택 길이만큼 재생하며 처리합니다. 지원하지 않는 형식은 선택할 수 없습니다.</p><p id="status" role="status">녹화 결과를 불러오는 중…</p></main>
+<p class="help">같은 형식의 구간은 재생·재인코딩 없이 저장합니다. 키프레임 경계에 따라 요청 구간 앞뒤가 포함될 수 있습니다. 다른 형식은 Worker에서 필요시 변환하며 코덱 지원에 따라 시간이 걸리거나 지원되지 않을 수 있습니다.</p><p id="status" role="status">녹화 결과를 불러오는 중…</p></main>
 <footer class="recording-footer"><label>저장 형식 <select id="format" aria-label="저장 형식"></select></label><label>시작(초) <input id="start" type="number" min="0" step="0.1" value="0"></label><label>종료(초) <input id="end" type="number" min="0" step="0.1"></label><button id="trim" type="button" disabled>선택 구간 저장</button><button id="save" type="button" disabled>전체 저장</button><button id="cancel" type="button" hidden>처리 취소</button></footer>
 <script src="../shared/recordings-store.js"></script><script src="recording.js"></script></body></html>

@@ -1,0 +1,198 @@
+/* =========================================================
+   기본
+   ========================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    width: 420px;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+
+    font-family: Arial, "Noto Sans KR", sans-serif;
+    background: #111;
+    color: #eee;
+}
+
+body {
+    scrollbar-width: none;
+}
+
+.popup {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 14px;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: visible;
+}
+
+
+/* =========================================================
+   제목 / 설명
+   ========================================================= */
+
+.title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+h1 {
+    margin: 0 0 6px;
+    font-size: 18px;
+}
+
+.desc {
+    margin: 0 0 10px;
+    color: #aaa;
+    font-size: 10px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.version-badge {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    padding: 4px 7px;
+
+    border: 1px solid #343438;
+    border-radius: 6px;
+
+    background: #1c1c1f;
+    color: #aaa;
+
+    font-size: 10px;
+    font-weight: 700;
+}
+
+
+/* =========================================================
+   입력 / 버튼
+   ========================================================= */
+
+.input-row {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+input,
+select,
+button {
+    font: inherit;
+}
+
+input,
+select {
+    height: 36px;
+
+    border: 1px solid #363638;
+    border-radius: 8px;
+
+    background: #222224;
+    color: #eee;
+
+    outline: none;
+}
+
+input {
+    flex: 1;
+    min-width: 0;
+    padding: 0 10px;
+}
+
+input:focus,
+select:focus {
+    border-color: #00d26a;
+}
+
+button {
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.secondary {
+    padding: 0 10px;
+    background: #29292b;
+    color: #eee;
+}
+
+.primary {
+    width: 100%;
+    margin-top: 10px;
+    padding: 11px 12px;
+
+    background: #00d26a;
+    color: #07140c;
+
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+
+
+/* =========================================================
+   섹션 헤더
+   ========================================================= */
+
+.section-head,
+.favorites-head {
+    display: flex;
+    align-items: center;
+
+    margin-top: 12px;
+
+    font-size: 12px;
+    flex: 0 0 auto;
+}
+
+.favorites-head {
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.favorite-actions {
+    margin-left: auto;
+
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+.favorite-actions .text-btn {
+    height: 28px;
+    padding: 0 7px;
+    white-space: nowrap;
+}
+
+.favorite-actions .refresh-btn {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+}
+
+.text-btn {
+    padding: 3px 6px;
+    background: transparent;
+    color: #888;
+}
+
+.text-btn:hover {
+    color: #00d26a;
+}

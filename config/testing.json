@@ -1,0 +1,78 @@
+{
+  "src/shared/runtime/scope.js": [
+    "CZRuntime",
+    null
+  ],
+  "src/shared/chat/roles.js": [
+    "CZChatRoles",
+    null
+  ],
+  "src/shared/chat/history.js": [
+    "CZChatHistory",
+    null
+  ],
+  "src/shared/media/object-urls.js": [
+    "CZObjectURLs",
+    null
+  ],
+  "src/viewer/media/export-job.js": [
+    "CZExportJobs",
+    null
+  ],
+  "src/viewer/controllers/session.js": [
+    "CZViewerSession",
+    null
+  ],
+  "src/viewer/models/channel-input.js": [
+    "CZChannelInputs",
+    null
+  ],
+  "src/viewer/layout.js": [
+    "CZLayout",
+    null
+  ],
+  "src/content/chat/dom-adapter.js": [
+    "CZChatDOM",
+    null
+  ],
+  "src/viewer/audio.js": [
+    "CZAudio",
+    "audio"
+  ],
+  "src/viewer/chat.js": [
+    "CZChat",
+    "chat"
+  ],
+  "src/viewer/players.js": [
+    "CZPlayers",
+    "players"
+  ],
+  "src/viewer/sync.js": [
+    "CZSync",
+    "sync"
+  ],
+  "src/viewer/media-tools.js": [
+    "CZMediaTools",
+    "mediaTools"
+  ],
+  "src/viewer/power-diagnostics.js": [
+    "CZPowerDiagnostics",
+    "powerDiagnostics"
+  ],
+  "src/viewer/important-chat.js": [
+    "CZImportantChatPanel",
+    "importantChatPanel"
+  ],
+  "src/viewer/screenshot-crop.js": [
+    "CZScreenshotCrop",
+    "screenshotCrop"
+  ],
+  "src/viewer/screenshot-gallery.js": [
+    "CZScreenshotGallery",
+    "screenshotGallery"
+  ],
+  "src/content/power-rewards.js": [
+    "CZPowerRewards",
+    null
+  ]
+}

@@ -1,4 +1,4 @@
-globalThis.CZPlayers = {create(context) {
+export const players = {create(context) {
   const {tileMap, escapeHtml, displayChannelName, removeChannel, showNotice, applyLayout, updateChat, refreshChannelManager, saveState, applyTileLock, syncVolumeUI, clearSyncState, sendTileVolume, makeMainAudible} = context;
   function isChannelVisibleInLayout(uid) {
     const index = context.state.channels.findIndex(c => c.uid === uid);
@@ -180,6 +180,8 @@ globalThis.CZPlayers = {create(context) {
     const toIndex = context.state.channels.findIndex(c => c.uid === toUid);
     if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
 
+    const proposed=context.state.channels.slice();[proposed[fromIndex],proposed[toIndex]]=[proposed[toIndex],proposed[fromIndex]];
+    if(!context.mediaTools.canDisplay(proposed,context.state.layout))return;
     [context.state.channels[fromIndex], context.state.channels[toIndex]] =
       [context.state.channels[toIndex], context.state.channels[fromIndex]];
 
@@ -193,6 +195,8 @@ globalThis.CZPlayers = {create(context) {
   function selectChannel(uid) {
     if (!context.state.channels.some(c => c.uid === uid)) return;
 
+    const proposed=context.state.layout==='main-sub'?[...context.state.channels.filter(channel=>channel.uid===uid),...context.state.channels.filter(channel=>channel.uid!==uid)]:context.state.channels;
+    if(!context.mediaTools.canDisplay(proposed,context.state.layout))return;
     context.state.selectedUid = uid;
 
     // In raid view, the selected/main broadcast is always the large tile.

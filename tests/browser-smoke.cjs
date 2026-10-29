@@ -3,7 +3,7 @@ const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const root = path.resolve(__dirname, '..');
+const root = (process.env.CZ_TEST_ROOT || path.resolve(__dirname, '..'));
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json')));
 
 async function checkCompactFavorites(page, prefix) {
@@ -67,7 +67,7 @@ async function checkCompactFavorites(page, prefix) {
 }
 
 async function run() {
-  const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || '/usr/lib/chromium/chromium', headless: true, args: ['--no-sandbox']});
+  const browser = await chromium.launch({executablePath: require('./support/browser.cjs').executablePath(), headless: true, args: ['--no-sandbox']});
   try {
     const context = await browser.newContext();
     context.setDefaultTimeout(10000);
@@ -143,7 +143,7 @@ async function run() {
       const url = new URL(route.request().url());
       if (url.host === 'popup.invalid' || url.host === 'viewer.invalid') {
         const file = url.pathname.slice(1);
-        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
+        return route.fulfill({body: fs.readFileSync(path.join(root, file)), headers: {'Content-Security-Policy': manifest.content_security_policy.extension_pages}, contentType: /\.m?js$/.test(file) ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html'});
       }
       if (url.host === 'api.chzzk.naver.com') {
         if (url.pathname.endsWith('/followings')) {
@@ -189,15 +189,19 @@ async function run() {
     if(process.argv.includes('--popup-only')){assert.deepEqual(errors,[]);return;}
 
     const main = await context.newPage();
+    const startupConsoleErrors=[];main.on('console',message=>{if(message.type()==='error')startupConsoleErrors.push(message.text());});
     main.on('pageerror', e => errors.push(e.message));
     main.on('framenavigated', async frame => {
       if (new URL(frame.url()).hostname !== 'chzzk.naver.com') return;
       try { for (const file of manifest.content_scripts[0].js) await frame.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')}); } catch (error) { if (!frame.isDetached()) errors.push(error.message); }
     });
     await main.goto('https://viewer.invalid/src/viewer/viewer.html?inputs=' + encodeURIComponent(JSON.stringify(['aaaaaa','bbbbbb'])));
-    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    await main.waitForFunction(() => document.body.classList.contains('ready')).catch(error=>{throw new Error(error.message+'; startup errors: '+JSON.stringify([...errors,...startupConsoleErrors]));});
     assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
+    await main.locator('#settingsManager > summary').click();await main.locator('#recordingProfile').selectOption('original');
+    assert.equal((await main.evaluate(()=>chrome.storage.local.get('chzzkRecordingProfileV1'))).chzzkRecordingProfileV1,'original');
+    await main.locator('#recordingProfile').selectOption('balanced');await main.locator('#settingsManager > summary').click();
     assert.equal(await main.locator('.layout-toggle-btn[data-layout="grid"]').textContent(),'그리드');
     await main.bringToFront();await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),'');
@@ -524,8 +528,10 @@ async function run() {
     assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
     const gallery=main.locator('.screenshot-gallery');await main.locator('.media-body img').evaluate(img=>img.decode());await main.bringToFront();const before=await gallery.boundingBox();
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
-    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
+    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
+    await main.locator('.screenshot-gallery').waitFor({state:'detached'});
+    await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.locator('.media-body img').waitFor();
     assert.equal(await main.locator('#chatOriginalBtn').count(),0);
     assert.equal(await main.locator('#chatSettingsBtn').count(),0);
     // Capture again while the non-modal preview is open.
@@ -544,9 +550,9 @@ async function run() {
     const imageBytes=fs.readFileSync(await savedImage.path());
     assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
     assert.equal(await main.locator('.screenshot-gallery').count(),1);
-    await main.locator('.gallery-next').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
-    await main.locator('.gallery-prev').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',true);
-    await main.locator('.gallery-close').click();
+    assert.equal(await main.locator('.gallery-index').textContent(),'1 / 1');
+    assert.equal(await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'false','remaining image retains its own crop setting');
+    const lastImageDownload=main.waitForEvent('download');await main.locator('.media-save').click();await lastImageDownload;
     await main.locator('.screenshot-gallery').waitFor({state:'detached'});
     // S in an editable field must not trigger a capture.
     await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));
@@ -586,6 +592,7 @@ async function run() {
     assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
     assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
     assert(!storage.chzzkMultiviewV09.channels.some(f => /오염/.test(f.name)), 'chat nicknames must never enter tile names');
+    await require('./release-ui-browser-helpers.cjs')(main);
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, group order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, DNR application, login and live playback require Chrome verification.');

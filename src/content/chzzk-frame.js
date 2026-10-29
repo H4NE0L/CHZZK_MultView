@@ -1,3 +1,4 @@
+import {create as createPowerRewards} from './power-rewards.js';
 /* CHZZK live iframe helper for MultiView. */
 (() => {
   if (window.top === window) return;
@@ -187,6 +188,7 @@
   const media = CZMediaFrame.create({chatOnly:chatMode,uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
   setInterval(reportSyncState, 1000);
 
+  const powerRewards=chatMode?null:createPowerRewards({findVideo});
   let theaterApplied = false;
   let theaterTimer = null;
 
@@ -237,7 +239,7 @@
   }
 
   function scheduleTheater() {
-    if (chatMode || theaterApplied || theaterTimer) return;
+    if (chatMode || powerRewards?.enabled || theaterApplied || theaterTimer) return;
 
     let tries = 0;
     theaterTimer = setInterval(() => {
@@ -277,18 +279,23 @@
 
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
+    if(event.data.type==='POWER_REWARDS_CONFIG' && powerRewards){
+      clearInterval(theaterTimer);theaterTimer=null;powerRewards.configure(event.data.enabled);
+      if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}
+    }
+    if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:result.diagnostics}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
     if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
-      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start({onSettings:()=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_SETTINGS_OPEN',uid:frameUid},PARENT_ORIGIN),onHeader:(height,menuOpen)=>window.parent.postMessage({source:'chzzk-multiview',type:'CHAT_HEADER',uid:frameUid,height,menuOpen},PARENT_ORIGIN)}); }
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start();chrome.runtime.sendMessage({type:'CHAT_METADATA_INIT'}).catch(error=>console.warn('원본 채팅 시각 읽기 초기화 실패:',error)); }
     }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);
     if (event.data.type === "SET_VOLUME") setVolume(event.data.volume, typeof event.data.muted === "boolean" ? event.data.muted : null);
-    if (event.data.type === "ENTER_THEATER" && !chatMode) { preventFrameScrollbars(); scheduleTheater(); }
+    if (event.data.type === "ENTER_THEATER" && !chatMode && !powerRewards?.enabled) { preventFrameScrollbars(); scheduleTheater(); }
     if (event.data.type === "SYNC_SEEK" && frameUid && !chatMode) {
       const delta = Number(event.data.delta);
       const result = Number.isFinite(delta) ? seekBy(delta) : { ok: false, reason: "bad-delta" };

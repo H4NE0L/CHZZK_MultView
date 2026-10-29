@@ -1,4 +1,4 @@
-globalThis.CZAudio = {create(context) {
+export const audio = {create(context) {
   const {tileMap, syncVolumeUI, saveStateSoon, saveState} = context;
   /* ------------------------------------------------------------------
      Volume model
@@ -50,6 +50,11 @@ globalThis.CZAudio = {create(context) {
 
   function sendAllTileVolumes() {
     for (const uid of tileMap.keys()) sendTileVolume(uid);
+  }
+
+  function reconcile() {
+    sendAllTileVolumes();
+    if(context.state.channels.some(channel=>tileMap.has(channel.uid) && !effectiveMuted(channel)))context.ensureAudible?.();
   }
 
   function setTileVolume(uid, volume) {
@@ -131,5 +136,5 @@ globalThis.CZAudio = {create(context) {
     syncVolumeUI();
     saveStateSoon();
   }
-  return {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState};
+  return {reconcile, clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState};
 }};

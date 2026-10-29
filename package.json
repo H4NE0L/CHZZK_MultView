@@ -1,0 +1,25 @@
+{
+  "name": "chzzk-control-room",
+  "version": "3.0.0",
+  "private": true,
+  "description": "치지직 통합관제실 development tools",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node scripts/test.mjs unit",
+    "test:browser": "npm run build && node scripts/test.mjs browser",
+    "test:chat": "npm run build && node scripts/test.mjs chat",
+    "test:backup": "npm run build && node scripts/test.mjs backup",
+    "test:media": "npm run build && node scripts/test.mjs media",
+    "package": "npm run build && node scripts/package.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.2",
+    "playwright": "1.62.1",
+    "typescript": "5.9.3"
+  }
+}

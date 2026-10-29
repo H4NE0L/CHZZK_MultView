@@ -1,56 +1,42 @@
-# 개발 안내
+# 개발 및 빌드
 
-아래 명령은 저장소 루트에서 실행합니다.
+Node.js 24 권장(최소 22). 저장소 루트에서 실행합니다.
 
-## 프로젝트 구조
-
-```text
-manifest.json
-src/
-  background/  background.js, viewer-tabs.js, recording-results.js
-  popup/       popup.html, popup.css, popup.js
-  viewer/      viewer.html, viewer.js, viewer.css, page.css
-               players.js, audio.js, chat.js, sync.js
-               media-tools.js, screenshot-crop.js, recording.html, recording.js, recording.css
-  content/     chzzk-frame.js, chat-layout.js, media-frame.js
-  shared/      chzzk-api.js, favorites-store.js, session-store.js, messages.js
-               followings-store.js, group-manager.js, group-manager.css, recordings-store.js
-assets/icons/
-docs/          media-features-plan.md
-tests/
-scripts/package.py
+```sh
+npm ci
+npm run verify       # 타입·빌드·단위·브라우저·백업·미디어·채팅 검사
+npm run package
 ```
 
-`viewer.js`는 화면 초기화·레이아웃·즐겨찾기 UI를 연결하며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `viewer.css`는 기존 Shadow DOM 스타일을 보존하는 별도 파일입니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
+Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로드합니다. 소스 폴더는 직접 로드하지 않습니다. 기존 설치를 업데이트할 때는 기존 설치 폴더에 ZIP 내용을 덮어쓰고 다시 로드해야 저장된 설정을 유지할 수 있습니다.
+
+- `config/runtime.json`: 콘텐츠 프레임·멀티뷰·팝업의 스크립트 순서. 홈페이지 실행과 별도 페이지 실행에 같은 목록을 사용합니다.
+- `src/viewer/template.ts`: 화면 마크업. 화면 상태와 이벤트는 viewer.js와 기능별 컨트롤러에서 관리합니다.
+- `src/shared/runtime/scope.ts`: UI 수명에 속한 이벤트·감시자 해제. 스크린샷 갤러리·메인 화면·주요 채팅 패널에 적용합니다.
+- `config/entries.json`: HTML·manifest 밖에서 동적으로 실행하는 스크립트와 Worker 진입점.
+- `config/styles.json`: 기능별 CSS 조각을 합치는 순서. 출력 경로와 cascade를 유지합니다.
+- `scripts/build.mjs`: Chrome 119 대상으로 진입점과 정적 importScripts 의존성만 배포합니다. ES import는 묶고 HTML·manifest를 생성하며 vendor 파일은 그대로 복사합니다.
+- `config/testing.json` / `.test-build/`: 단위 검사에 필요한 모듈 export와 테스트 전용 별칭. dist와 ZIP에는 포함하지 않습니다.
+- `scripts/verify.mjs`: 한 번 빌드한 산출물로 전체 검사를 순서대로 실행합니다. 녹화 인코더 검사를 병렬 실행하지 않습니다.
+- `scripts/test.mjs`: 소스 대신 실제 dist 산출물을 검사합니다. `CHROMIUM_PATH`로 Chromium 실행 파일을 지정할 수 있습니다.
+- `scripts/package.mjs`: dist만 ZIP으로 묶습니다. TS 원문·개발 의존성·소스맵은 포함하지 않습니다.
+
+계획한 1~6단계의 코드 정리를 구현했습니다. 멀티뷰 내부 모듈은 ES import로 연결합니다. 콘텐츠 스크립트·팝업·저장소처럼 독립 실행 경계에서 필요한 기존 전역 API는 유지합니다. 공통 계약·세션·채팅 규칙·레이아웃 등에 TypeScript를 적용했으며 전체 JS 전환은 하지 않았습니다. 저장 키와 기존 기능을 유지하며, 전체 메모리 감소율은 측정하지 않았습니다.
+
+브라우저 자동 검사는 모의 CHZZK 응답으로 수행합니다. 이 클라우드 Chromium은 확장 관리의 개발자 모드가 관리자 정책으로 제어되어 실제 MV3 등록 추가 검사를 완료하지 못했습니다. 로그인·실방송·DNR 적용·다른 확장과의 호환은 사용자 Chrome에서 확인해야 합니다.
+
+## 실행 구조
+
+`viewer.js`는 공통 상태·시작 흐름과 기능 조립을 담당합니다. `viewer/controllers`가 화면·즐겨찾기·방송 목록·음량 UI·세션을 맡으며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `src/viewer/styles`와 `src/popup/styles`의 CSS를 설정 순서대로 합쳐 기존 `viewer.css`·`popup.css` 경로에 출력합니다. 뒤쪽 덮어쓰기 규칙의 순서도 유지합니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
 
 확장 페이지에서 치지직 iframe을 열기 위해 `viewer-tabs.js`는 현재 전용 탭 ID, 확장 initiator, CHZZK 도메인, `sub_frame` 조건을 모두 충족하는 요청에만 CSP·X-Frame-Options 응답 헤더 예외를 적용합니다. 확장 페이지 자체 CSP는 로컬 스크립트와 CHZZK iframe만 허용합니다. 프레임 메시지는 origin과 실제 iframe 창을 함께 검증합니다. 채팅 DOM 정리는 부모에서 접근하지 않고 프레임 내부에서 수행합니다.
 
 즐겨찾기·그룹·세션의 기존 저장소 키는 유지합니다. 전체 볼륨·메인 방송·레이아웃·채팅 위치·화면 잠금은 복원하고, 새 멀티뷰의 타일 음량은 10%·음소거로 초기화합니다. 이미 열린 멀티뷰의 목록 변경은 음량을 유지하며, 싱크 조정값은 현재 플레이어에서만 유지합니다.
 
-## 개발과 검증
-
-저장소 폴더를 확장으로 로드해 개발합니다. 수정한 뒤 확장을 다시 로드하고 전용 멀티뷰 페이지를 새로고침하세요.
-
-Node.js 18 이상에서 데이터·세션·메시지·전용 탭 관리 회귀 테스트를 실행합니다.
-
-```sh
-node --test tests/*.test.cjs
-```
-
-Playwright와 Chromium이 설치된 개발 환경에서는 브라우저 DOM 검사를 실행합니다. `CHROMIUM_PATH`로 Chromium 실행 파일을 지정할 수 있습니다.
-
-```sh
-node tests/browser-smoke.cjs
-node tests/site-browser-smoke.cjs
-```
-
-브라우저 검사는 팝업과 멀티뷰의 양방향 동기화, 그룹 관리·즐겨찾기 변경, 그룹 순서·다중 소속, 팔로잉 조회·로그인 실패 처리, 빈 그룹 보존, 플레이어 프레임 유지와 싱크 UI를 확인합니다. Chrome API와 CHZZK 응답은 모의 구현이므로 실제 확장 등록·DNR 적용·로그인·방송 재생을 대신하지 않습니다.
-
-배포 전 실제 브라우저에서 기존 데이터 복원, 두 화면 간 동기화, 방송·채팅, 메인 변경·레이드 뷰, 볼륨·음소거와 싱크 조정·초기화를 확인하세요.
 
 ### 실제 Chrome 확인 순서
 
-1. 기존 설치 폴더에서 테스트 브랜치를 받고 확장을 다시 로드합니다. 일반 CHZZK 페이지에는 진입 버튼만 표시되고, 클릭 후 페이지 안에서 멀티뷰가 열리는지 확인합니다.
+1. 기존 설치 폴더에서 테스트 브랜치를 받고 빌드한 dist를 기존 설치 폴더에 반영한 뒤 확장을 다시 로드합니다. 일반 CHZZK 페이지에는 진입 버튼만 표시되고, 클릭 후 페이지 안에서 멀티뷰가 열리는지 확인합니다.
 2. 팝업에서 방송 2개를 열어 주소가 `chrome-extension://…/src/viewer/viewer.html`인지, 방송·로그인·채팅이 정상인지 확인합니다.
 3. 팝업의 새 탭·새 창 버튼으로 각각 반복해서 열 때 기존 멀티뷰와 별개로 새 탭·새 창이 생성되는지 확인합니다. 최신 창의 상태를 바꾼 뒤 이전 창을 조작·종료하고 다시 열어 최신 창의 방송·배치·전체 볼륨이 복원되는지 확인합니다.
 4. 레이드 뷰·메인 방송·개별/전체 볼륨·음소거·채팅 위치·화면 잠금을 바꾸고 새로고침해 타일이 10%·음소거로 시작하고 나머지 설정은 복원되는지 확인합니다. 자동 재생이 브라우저에서 차단되면 플레이어를 눌러 재생합니다.
@@ -59,46 +45,19 @@ node tests/site-browser-smoke.cjs
 7. S 촬영·영역 자르기·복사·저장, R 녹화·결과 창의 형식/구간 저장·종료 시 임시 데이터 삭제를 확인합니다. 실제 방송의 음성 녹음과 브라우저별 MP4 지원도 확인합니다.
 8. 라이브 싱크 ±0.1/±0.5초, 초기화, 다시보기 채팅, 즐겨찾기·그룹 동기화, 30초 상태 갱신을 확인합니다.
 
-### 배포 ZIP 생성
+## 저장소와 배포 파일
 
-빌드 도구 없이 Python 표준 라이브러리로 실행 파일·아이콘·문서만 묶습니다.
+GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.0.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions의 Build 워크플로도 main에서 설치용 ZIP artifact를 생성합니다. Actions artifact 압축을 풀면 안쪽 확장 ZIP을 사용할 수 있습니다.
 
-```sh
-python3 scripts/package.py
-```
+완료된 단계별 계획 문서와 이전 Python 패키징 진입점은 정리했습니다. 이전 문서는 Git 이력에 남아 있습니다. 검사·측정 스크립트, vendor 라이선스, 개인 백업은 유지합니다. 파일 수 감소를 실행 메모리 감소로 해석하지 않습니다.
 
-생성물은 `dist/CZ-Control-Room-v2.0.3.zip`이며 `tests/`와 개발 도구는 포함하지 않습니다.
+## 수명과 호환 규칙
 
-페이지 모드에서 기존 채팅 수집 확장의 방송 대상, 로그인, 실제 녹화 음성, 원본 페이지 복귀를 별도로 확인하세요. 모의 검사는 타사 확장의 동작을 검증하지 않습니다.
+- UI의 ResourceScope가 listener·observer·timer·저장소 구독을 해제합니다. 기존 iframe을 재배치하지 않고 CSS로 위치를 바꿉니다.
+- 채팅 표시 100개, 중복 식별 이력 2,048개를 유지합니다. 타임스탬프용 MAIN-world 색인은 원본 연결에서 받은 fingerprint/시각만 각각 최대 2,048개 보관하고 채팅 종료 시 해제합니다. 새 연결이나 송신은 하지 않습니다. 이름·본문이 같고 시각이 다른 메시지는 ID가 없으면 시각을 표시하지 않습니다.
+- 채팅 문서의 MAIN-world WebSocket 생성 관찰은 document_start에서 설치합니다. 원본 객체·이벤트·송신을 유지하며 닫힌 연결의 listener를 제거합니다. 시작 전 메시지나 지원하지 않는 원본 포맷은 작성 시각을 얻지 못할 수 있습니다.
+- 스크린샷은 동시 2개·보관 12개/128MiB, 녹화는 방송당 256MiB 한도입니다. URL·canvas·Worker를 종료 시 해제하고 원본 영상/음성 트랙은 stop하지 않습니다.
+- 즐겨찾기는 그룹 없이도 유지됩니다. 기존 기본 그룹은 자동 삭제하지 않으며 사용자가 삭제/이름 변경할 수 있습니다. 명시적 빈 memberships는 백업·복원에서도 유지합니다.
+- 통나무 수집 보조는 기본 OFF인 실험 기능입니다. 원본 채팅 유지에 따른 비용과 서비스 적립 조건은 [점검 안내](power-diagnostics.md), 장시간 측정은 [채팅 부하 점검](chat-performance.md)을 참고하세요.
 
-### 채팅 프레임 수명
-
-채팅을 닫으면 iframe을 about:blank로 전환하고 DOM에서 제거하며, load 핸들러와 viewer의 참조를 해제합니다. updateChat은 닫힘 상태를 확인하므로 시작·메인 변경 시 닫힌 채팅을 만들지 않습니다. 다시 열면 새로 연결하며 방송 타일 iframe은 유지합니다. 이는 별도 채팅 패널의 자원을 종료하는 변경이며, 방송 타일 내부 채팅·원본 페이지·타사 확장의 메모리 사용이나 실제 버퍼링 개선량을 측정한 결과는 아닙니다.
-
-### 주요 채팅 모음
-
-`shared/important-chat.js`가 설정 정규화·정확한 닉네임 일치·100개 버퍼를 담당합니다. `content/chat-collector.js`는 채팅 전용 프레임에서 DOM 변경을 관찰해 작성자 배지(alt/title/aria-label/data-role)와 닉네임으로 필터링하고, 최대 100개를 250ms 단위로 전달합니다. 일반 방송 타일에서는 관찰자를 생성하지 않습니다. 새 소켓·API 권한은 추가하지 않습니다.
-
-`viewer/important-chat.js`가 높이 조절 UI·설정 대화상자와 설정 저장을 담당합니다. 설정은 `chzzkImportantChatV1`에 저장하며 지정 닉네임은 방송 간 공통입니다. 채팅 본문은 저장하지 않고, 메인 방송 변경·채팅 닫기·필터 변경 시 비웁니다. 목록은 항상 펼쳐져 있고 높이는 chzzkImportantChatHeightV1에 별도 저장합니다. 통합 채팅 설정의 주요 채팅 사용을 끄면 수집을 중지하고 영역을 숨깁니다. 치지직 원본 헤더의 제목을 스트리머 이름으로 바꾸고 글씨 크기 조절만 숨깁니다. 기존 치지직 설정 옆에 주요 채팅 설정 버튼을 하나 추가하며, 검증된 프레임 메시지로 주요 채팅 설정 대화상자를 엽니다. 채팅 표시·위치는 멀티뷰 상단바에서, 모아보기 ON/OFF는 전체 설정에서 관리합니다. 헤더 탐지는 CSS 선택자와 제목·글씨 크기·버튼 조합을 함께 사용하며 본문과 헤더가 형제인 구조도 포함합니다. CHAT_PRESENTATION으로 수집 영역 높이를 전달해 원본 헤더 아래에 같은 높이의 공간을 확보하고 부모의 수집 패널을 그 위치에 겹쳐 배치합니다. 입력·후원 기능과 원본 채팅 연결은 유지합니다. 페이지 모드와 전용 페이지 모두 같은 모듈을 사용합니다.
-
-브라우저 검사는 두 모드에서 모의 작성자 배지·닉네임·악성 HTML 텍스트·100개 상한·중첩 DOM 중복 방지·닫기 정리를 확인합니다. 실제 CHZZK의 배지 표기·DOM 버전별 분류, 로그인 방송, 타사 확장과의 동시 사용은 별도 확인이 필요합니다. 역할이 자동 인식되지 않으면 닉네임 지정으로 확인할 수 있습니다.
-
-### 플레이어 음량 격리
-
-`content/player-audio.js`가 프레임별 목표 음량·음소거를 유지합니다. 신뢰된 음량 컨트롤 입력과 M/방향키 음량 입력에 한해 native player 변경을 보고하고, 초기화·자동 설정 변경은 부모 상태에 쓰지 않습니다. 문서 capture 단계에서 명령·자동 변경의 volumechange 전파를 차단하여 사이트의 공유 음량 설정으로 되먹임되지 않도록 합니다. 직접 조작 이벤트는 전파합니다. 미디어 교체 시 목표를 재적용하며, 자동 변경 복구는 지연 병합·빈도 제한을 사용합니다. 실제 치지직 컨트롤의 DOM이 바뀌면 native 조작 인식 여부를 확인해야 합니다. 멀티뷰 자체 음량 컨트롤은 부모에서 직접 목표를 설정합니다.
-
-`background/audible-tabs.js`는 명시적인 소리 켜기/음량 조절 시 올바른 최상위 멀티뷰 탭만 음소거 해제합니다. 하위 플레이어 프레임·다른 확장의 요청과 다른 URL 탭은 허용하지 않습니다. 이는 실제 오디오 출력·브라우저 자동재생 허용을 보장하는 검사는 아닙니다.
-
-수집 점검: IMPORTANT_CHAT_STATUS는 현재 설정 적용 이후의 읽기·해석·대상·전송 횟수만 최대 500ms 단위로 전달합니다. 설정창은 부모 수신·표시 수치를 함께 표시하며 채팅 본문을 진단에 기록하지 않습니다. 스트리머 이름은 API로 조회해 메모리에 캐시하고 IMPORTANT_CHAT_CONFIG의 별도 streamerName 필드로 전달합니다. 저장된 즐겨찾기 이름과 설정 저장소에는 이 판별 메타데이터를 섞지 않습니다.
-
-수집기 revision 20261028-3: 알려진 행 선택자 외에도 닉네임을 시작점으로 7단계 이내의 단일 메시지 조상을 찾습니다. 헤더 앞 DOM은 실제 화면 위치도 확인하여 제외하며, 변경 알림은 추가 노드를 우선 스캔합니다. 점검 정보의 dom은 행·닉네임 후보 수와 미탐지 시 제한된 CSS 클래스 목록만 포함합니다. 본문·닉네임 문자열·HTML·URL·토큰은 해당 클래스 구조 정보에서 읽지 않습니다.
-
-수집기 revision 20261028-4는 실제 점검 결과의 `_chatting_message_*`, `_nickname_*` CSS Modules 토큰을 인식합니다. 클래스 목록의 첫 토큰과 후속 토큰을 모두 지원하며 현재 해시나 줄 번호에는 의존하지 않습니다. 해당 메시지 요소의 첫 번째 최하위 닉네임을 작성자로 사용하고, 본문의 닉네임 컴포넌트는 사용자 언급으로 처리합니다.
-
-채팅에 한정한 DOM 회귀 검사는 `node tests/site-browser-smoke.cjs --chat-only`로 실행합니다. 전체 검사는 `node tests/browser-smoke.cjs`로 실행합니다. 모의 Chrome API·CHZZK 응답으로 실행하므로 실제 확장 등록·로그인·실방송 검증은 사용자 Chrome에서 수행합니다.
-
-수집기 revision 20261028-5는 원문 텍스트와 제한된 텍스트/이미지 세그먼트·배지 정보를 전달합니다. shared/important-chat.js는 송신 전과 수신 후에 HTTPS pstatic.net 이미지 URL과 개수·길이를 정규화합니다. 원본 HTML을 전달하거나 삽입하지 않습니다. viewer는 최대 100개 ID별 카드 DOM을 재사용하며 실패한 이미지는 alt 텍스트로 바꿉니다. 전체 이미지는 메시지당 배지 4개·이모티콘 8개로 제한하고 지연 로드합니다.
-
-멀티뷰 창과 복원 상태: viewer-tabs.js는 요청 방식에 따라 현재 창의 새 탭 또는 새 일반 창의 about:blank 탭을 먼저 만들고 전체 멀티뷰에 대한 DNR을 설치한 뒤 viewer URL로 이동합니다. chzzkMultiviewLatestTabV1의 tabId가 복원 저장 권한을 갖습니다. VIEWER_SAVE_STATE/REGISTER_SESSION과 새 창 열기는 같은 큐에서 처리해 이전 창의 지연 저장이 새 창 상태를 덮어쓰지 않도록 합니다. VIEWER_GET_STATE는 저장 대기 중인 메모리 상태를 가져오며 콜백 안에서 저장을 기다리지 않아 큐 교착을 피합니다. 최신 창을 닫아도 이전 창으로 저장 권한을 되돌리지 않습니다. 사이트 모드는 명시적으로 열 때 저장 권한을 받으며, 기존 방송 시작 시 10%·음소거 초기화 규칙은 유지합니다.
-
-팝업 열기 버튼의 DOM·요청 분기는 `node tests/browser-smoke.cjs --popup-only`로 검사합니다. 생성 실패 시 새 탭 모드는 임시 탭만 닫고, 새 창 모드는 임시 창만 닫아 기존 창을 유지합니다.
+이전 코드와 동일 화질·타일 수에서 30분 이상 시청, 타일/채팅 30회 열기·닫기, 캡처/녹화 반복 후 Chrome 작업 관리자와 힙 보유 경로를 비교합니다. 자동 검사의 합성 DOM·생성 영상은 실제 서비스의 로그인·보너스 지급이나 전체 메모리 감소율을 증명하지 않습니다.

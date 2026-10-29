@@ -1,23 +1,24 @@
 // The viewer owns desired audio. Site initialization/storage echoes are not user edits.
 globalThis.CZPlayerAudio = {create({findVideo,report}) {
-  let desired=null,intentUntil=0,pointer=null,timer=null,intentKind='volume';
+  let desired=null,intentUntil=0,pointer=null,timer=null,intentKind='volume',disposed=false;
+  const clearIntent=()=>{intentUntil=0;pointer=null;};
   const recoveries=[];
   const matches=video=>desired && Math.abs(video.volume-desired.volume)<0.00001 && video.muted===desired.muted;
   function apply(video){
-    if(!video || !desired)return;
+    if(disposed || !video || !desired)return;
     if(desired.muted && !video.muted)video.muted=true;
     if(Math.abs(video.volume-desired.volume)>0.00001)video.volume=desired.volume;
     if(video.muted!==desired.muted)video.muted=desired.muted;
   }
   function recover(){
-    if(timer)return;
+    if(disposed || timer)return;
     const now=Date.now();while(recoveries.length && now-recoveries[0]>=1000)recoveries.shift();
     // Coalesce hydration events and bound preference fights with the host player.
     const delay=recoveries.length>=4?Math.max(50,1000-(now-recoveries[0])):30;
     timer=setTimeout(()=>{timer=null;const video=findVideo();if(video && desired && !matches(video)){recoveries.push(Date.now());apply(video);}},delay);
   }
   function setVolume(volume,muted){
-    if(!Number.isFinite(volume))return false;
+    if(disposed || !Number.isFinite(volume))return false;
     const next={volume:Math.max(0,Math.min(1,volume)),muted:typeof muted==='boolean'?muted:volume<=0};
     const changed=!desired || next.volume!==desired.volume || next.muted!==desired.muted;
     desired=next;
@@ -31,8 +32,8 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   const bound=new WeakSet();
   document.addEventListener('volumechange',event=>{
     const video=event.target;
-    if(video!==findVideo() || !bound.has(video) || !desired)return;
-    if(!matches(video) && Date.now()<intentUntil){
+    if(disposed || video!==findVideo() || !bound.has(video) || !desired)return;
+    if(!video.ended && !matches(video) && Date.now()<intentUntil){
       const operation=intentKind==='mute' && (video.muted!==desired.muted || video.volume===0 || desired.muted)?'mute':'volume';
       desired={volume:video.volume,muted:video.muted};report(video,'player',operation);
       return;
@@ -61,6 +62,9 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   document.addEventListener('pointermove',event=>{if(event.isTrusted && event.pointerId===pointer)intentUntil=Date.now()+800;},true);
   document.addEventListener('pointerup',event=>{if(event.pointerId===pointer){pointer=null;intentUntil=Date.now()+250;}},true);
   document.addEventListener('pointercancel',()=>{pointer=null;intentUntil=0;},true);
-  window.addEventListener('pagehide',()=>{clearTimeout(timer);timer=null;});
+  // A shared-origin preference echo is never a native audio gesture, even
+  // when it arrives just after a click in this frame. Capture precedes site listeners.
+  window.addEventListener('storage',()=>{clearIntent();recover();},true);
+  window.addEventListener('pagehide',()=>{disposed=true;clearIntent();clearTimeout(timer);timer=null;});
   return {bind,setMuted,setVolume};
 }};
