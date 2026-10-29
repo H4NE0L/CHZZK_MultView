@@ -1,7 +1,7 @@
 // Synthetic DOM benchmark; excludes video decode, network and real-site scripts.
 // Usage: node scripts/profile-chat.cjs [baseline git ref]
-const {chromium}=require('playwright'),fs=require('node:fs'),{execFileSync}=require('node:child_process');
-const baseline=process.argv[2]||'f2afbf3';
+const {chromium}=require('playwright'),fs=require('node:fs'),{execFileSync}=require('node:child_process'),pathModule=require('node:path'),{buildSync,transformSync}=require('esbuild');
+const baseline=process.argv[2]||'9a90bcc';
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/lib/chromium/chromium',headless:true,args:['--no-sandbox']});
  try{
@@ -10,8 +10,14 @@ const baseline=process.argv[2]||'f2afbf3';
    const page=await browser.newPage();await page.route('https://chzzk.naver.com/**',route=>route.fulfill({body:'<!doctype html><body style="margin:0"><aside class="live_chat" style="height:600px"><div data-chat-toolbar><h2>채팅</h2><button>-</button><span>100%</span><button>+</button><button>⋮</button></div><div id="messages"></div></aside>'}));
    await page.goto('https://chzzk.naver.com/live/test/chat');
    for(const path of ['src/shared/important-chat.js','src/content/chat-layout.js','src/content/chat-collector.js']){
-    let source=variant==='baseline'?execFileSync('git',['show',`${baseline}:${path}`],{encoding:'utf8'}):fs.readFileSync('dist/'+path,'utf8');
+    let source;
+    if(variant==='baseline'){
+      let file=path;try{execFileSync('git',['cat-file','-e',`${baseline}:${file}`],{stdio:'ignore'});}catch(_){file=path.replace(/\.js$/,'.ts');}
+      source=execFileSync('git',['show',`${baseline}:${file}`],{encoding:'utf8'});
+      if(file.endsWith('.ts'))source=transformSync(source,{loader:'ts',format:'iife',target:'chrome119'}).code;
+    }else source=fs.readFileSync(path.endsWith('chat-collector.js')?path:'dist/'+path,'utf8');
     if(path.endsWith('chat-collector.js'))source=source.replace('function read(row) {','function read(row) { globalThis.__reads++;');
+    if(variant==='working' && path.endsWith('chat-collector.js'))source=buildSync({stdin:{contents:source,resolveDir:pathModule.resolve('src/content'),sourcefile:'chat-collector.js'},bundle:true,format:'iife',target:'chrome119',write:false}).outputFiles[0].text;
     await page.addScriptTag({content:source});
    }
    const session=await page.context().newCDPSession(page);await session.send('Performance.enable');

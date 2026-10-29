@@ -31,3 +31,7 @@ declare global {
   var CZSettingsBackup: typeof import('../shared/settings-backup').settingsBackup;
   var CZSettingsBackupClient: typeof import('../shared/settings-backup-client').settingsBackupClient;
 }
+declare global {
+  var CZChatRoles: typeof import('../shared/chat/roles').roles;
+  var CZChatHistory: typeof import('../shared/chat/history').history;
+}

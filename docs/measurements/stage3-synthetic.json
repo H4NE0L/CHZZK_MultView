@@ -1,0 +1,76 @@
+{
+  "scope": "Synthetic Chromium workload; excludes video decode, network and real CHZZK. Heap values are single-run differences after stopping observation and GC, then clearing only history. No overall memory reduction claim.",
+  "baseline": "9a90bcc",
+  "cpu": {
+    "baseline": "9a90bcc",
+    "workload": "400 messages in batches of 10; DOM retains 200; 10% match; 3 runs",
+    "results": [
+      {
+        "variant": "baseline",
+        "round": 0,
+        "durationMs": 174.3,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 92.8
+      },
+      {
+        "variant": "working",
+        "round": 0,
+        "durationMs": 169.6,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 86.4
+      },
+      {
+        "variant": "baseline",
+        "round": 1,
+        "durationMs": 173.8,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 91.4
+      },
+      {
+        "variant": "working",
+        "round": 1,
+        "durationMs": 175.9,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 91.1
+      },
+      {
+        "variant": "baseline",
+        "round": 2,
+        "durationMs": 182.3,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 99.1
+      },
+      {
+        "variant": "working",
+        "round": 2,
+        "durationMs": 181.9,
+        "readCalls": 400,
+        "received": 40,
+        "mainThreadTaskMs": 102.7
+      }
+    ]
+  },
+  "history": [
+    {
+      "variant": "9a90bcc",
+      "entries": 2048,
+      "processedMessages": 2400,
+      "retainedDomRows": 200,
+      "historyHeapBytes": 482452,
+      "scope": "Synthetic JS heap difference after full GC before/after clearing only the history. Excludes video, recording buffers and real CHZZK."
+    },
+    {
+      "variant": "working",
+      "entries": 2048,
+      "processedMessages": 2400,
+      "retainedDomRows": 200,
+      "historyHeapBytes": 486304,
+      "scope": "Synthetic JS heap difference after full GC before/after clearing only the history. Excludes video, recording buffers and real CHZZK."
+    }
+  ]
+}
