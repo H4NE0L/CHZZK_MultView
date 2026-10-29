@@ -4,17 +4,28 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   const names='[class*="live_chatting_username_nickname"],[class*="name_text"],[data-chat-nickname],[class*="username"] [class*="nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
   const texts='[class*="live_chatting_message_text"],[data-chat-text]';
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
-  const identities=new WeakMap();let replacements=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0};let structure=null;const pending=new Map();
+  const identities=new WeakMap(),history=new Map(),liveTails=new WeakMap();let liveInserts=new WeakSet();const HISTORY_LIMIT=2048;let scrollModes=new WeakMap();let replacements=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};let structure=null;const pending=new Map();
+  function hash(value){let a=2166136261,b=5381;for(let i=0;i<value.length;i++){const code=value.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b,33)^code;}return `${value.length}:${a>>>0}:${b>>>0}`;}
+  function readingHistory(row){
+    const parent=row.parentElement;if(!parent)return false;if(scrollModes.has(parent))return scrollModes.get(parent);
+    let past=false;
+    for(let node=parent;node;node=node.parentElement){
+      if(/auto|scroll|overlay/.test(getComputedStyle(node).overflowY) && node.scrollHeight>node.clientHeight+4){past=node.scrollHeight-node.clientHeight-node.scrollTop>32;break;}
+    }
+    scrollModes.set(parent,past);return past;
+  }
+  function remember(key,identity,signature,matched){if(!matched)return;history.delete(key);history.set(key,{id:identity.id,time:identity.time,signature:hash(signature),matched});if(history.size>HISTORY_LIMIT)history.delete(history.keys().next().value);}
   const nameKey=value=>String(value||'').normalize('NFC').trim().toLocaleLowerCase('ko-KR');
   function domSummary(){
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-5',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-6',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
     return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
   const decorations='[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i],svg,button,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
+  const isDecoration=node=>node.matches?.(decorations) && !node.matches('button[class*="button_chatting"]');
   function authorBoundary(row,nickname){
     let boundary=nickname;
     while(boundary.parentElement && boundary.parentElement!==row && (boundary.parentElement.matches(names) || /username|nickname/i.test(String(boundary.parentElement.className))))boundary=boundary.parentElement;
@@ -33,7 +44,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return /인증\s*(?:마크|배지)|공식\s*(?:마크|배지)|(?:파트너|스트리머|관리자)\s*(?:마크|배지)|verified|verification|certified|certification|official\s*(?:mark|badge)/i.test(label) || /(?:^|[/_.-])(?:badge|verified|verification|certified)(?:[/_.-]|$)/i.test(asset.split('?')[0]);
   }
   function cleanBody(fragment){
-    fragment.querySelectorAll(decorations).forEach(el=>el.remove());
+    fragment.querySelectorAll(decorations).forEach(el=>{if(isDecoration(el))el.remove();});
     // Only inspect the author suffix: an ordinary leading emote or any body
     // text ends this pass, preserving identical emotes used in the message.
     const prefix=node=>{for(const child of [...node.childNodes]){
@@ -54,18 +65,18 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     if(parts.length>=64)return parts;
     if(node.nodeType===3){parts.push({type:'text',text:node.textContent});return parts;}
     if(node.nodeType!==1 && node.nodeType!==11)return parts;
-    if(node.matches?.(decorations))return parts;
+    if(isDecoration(node))return parts;
     if(node.tagName==='IMG'){parts.push({type:'image',src:node.currentSrc||node.src||'',alt:node.getAttribute('alt')||'[이모티콘]'});return parts;}
     if(node.tagName==='BR'){parts.push({type:'text',text:'\n'});return parts;}
-    if(node.matches?.('script,style,button'))return parts;
     for(const child of node.childNodes)richParts(child,parts);return parts;
   }
   function rowForName(nickname){
     if(nickname.closest('.cz-native-chat-header,[role="menu"],#cz-chat-settings'))return null;
+    const known=nickname.closest(rows);if(known)return known;
     let row=nickname.parentElement;
     for(let depth=0;row && row!==document.body && depth<7;depth++,row=row.parentElement){
       const found=leafNames(row);if(found.length>1)return null;
-      if(found.length!==1 || /username|nickname/.test(String(row.className)))continue;
+      if(found.length!==1 || row.matches('button,a,[role=button]') || /username|nickname|button_chatting/.test(String(row.className)))continue;
       if(row.querySelector(texts) || textAfter(row,nickname))return row;
     }
     return null;
@@ -85,7 +96,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     const boundary=authorBoundary(row,nickname),walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);let node;
     while((node=walker.nextNode())){
       if(boundary.contains(node) || !String(node.textContent).trim() || !(boundary.compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
-      const parent=node.parentElement;if(!parent || parent.closest(decorations))continue;
+      const parent=node.parentElement;if(!parent)continue;const decoration=parent.closest(decorations);if(decoration && isDecoration(decoration))continue;
       const style=getComputedStyle(parent);if(style.display==='none' || style.visibility==='hidden')continue;
       return {role:colorRole(style.color),color:style.color};
     }
@@ -122,13 +133,14 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   function content(node) {
     if(node.nodeType===3)return node.textContent;
     if(node.nodeType!==1 && node.nodeType!==11)return '';
-    if(node.matches?.(decorations))return '';
+    if(isDecoration(node))return '';
     if(node.tagName==='IMG')return node.getAttribute('alt') || '[이모티콘]';
     if(node.tagName==='BR')return '\n';
     return Array.from(node.childNodes,content).join('');
   }
   function flush(){timer=null;if(pending.size){const batch=Array.from(pending.values());send(batch);counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
+    row=row.closest(rows)||row;
     const outer=row.closest('[class*="live_chatting_list_item"],[data-chat-message]');
     if(outer && leafNames(outer).length===1)row=outer;
     if(leafNames(row).length>1){for(const child of [...row.querySelectorAll(rows)].slice(-200))if(leafNames(child).length===1)read(child);return;}
@@ -153,17 +165,28 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     const name=authorName(nickname),text=body.slice(0,1000);
     if(!name || !text)return;
     const fingerprint=JSON.stringify([name,text]),sourceId=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id'),hint=replacements.get(row);
-    const previous=identities.get(row)||((hint?.fingerprint===fingerprint && (!sourceId || sourceId===hint.id))?hint:null);
-    const id=String(sourceId || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
     const segments=[];if(topParts.length){for(const part of bodyFragments)richParts(part,segments);}else richParts(fallbackFragment||afterName(row,nickname),segments);
+    const nativeTime=row.getAttribute('data-timestamp')||row.getAttribute('data-created-at')||row.querySelector('time:not(.cz-native-chat-time)')?.getAttribute('datetime')||'';
+    const historyKey=sourceId?'native:'+sourceId:hash(JSON.stringify([name,text,segments,nativeTime]));
+    const existing=identities.get(row),sameExisting=existing?.fingerprint===fingerprint && (!sourceId || existing.id===sourceId);
+    const cached=history.get(historyKey),restored=cached && !sameExisting && (sourceId || !liveInserts.has(row) && readingHistory(row))?cached:null;
+    const previous=(sameExisting?existing:null)||((hint?.fingerprint===fingerprint && (!sourceId || sourceId===hint.id))?hint:null)||(restored?{...restored,fingerprint}:null);
+    const id=String(sourceId || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
     const badges=[...row.querySelectorAll('img')].filter(img=>!!(img.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING) && !topParts.some(part=>part.contains(img))).slice(0,4).map(img=>({src:img.currentSrc||img.src||'',alt:img.getAttribute('alt')||''}));
     const item=CZImportantChat.message({id,name,text,segments,badges,role:role(row,topParts,nickname),time:previous?.fingerprint===fingerprint?previous.time:Date.now()});
     if(!item)return;
+    if(liveInserts.has(row) || !readingHistory(row))liveTails.set(row.parentElement,new WeakRef(row));
     const signature=JSON.stringify(item);
+    if(sameExisting && existing.historical && cached?.matched && !liveInserts.has(row)){
+      const identity={...existing,signature};identities.set(row,identity);seen.set(row,identity);return;
+    }
+    if(restored && restored.id===id && (restored.matched || restored.signature===hash(signature))){
+      const identity={fingerprint,id,time:item.time,signature,historical:true};identities.set(row,identity);seen.set(row,identity);counts.restored++;remember(historyKey,identity,signature,restored.matched || CZImportantChat.matches(item,filter));report();return;
+    }
     if(replacements.has(row) && previous?.signature===signature){identities.set(row,previous);seen.set(row,previous);return;}
     if(seen.get(row)?.signature===signature)return;
     counts.parsed++;report();
-    const identity={fingerprint,id,time:item.time,signature};identities.set(row,identity);seen.set(row,identity);
+    const identity={fingerprint,id,time:item.time,signature};identities.set(row,identity);seen.set(row,identity);remember(historyKey,identity,signature,CZImportantChat.matches(item,filter));
     if(!CZImportantChat.matches(item,filter))return;
     counts.matched++;
     pending.set(id,item);if(pending.size>CZImportantChat.LIMIT)pending.delete(pending.keys().next().value);
@@ -186,10 +209,15 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   }
   function stop(){observer?.disconnect();observer=null;clearTimeout(timer);timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();clearTimeout(statusTimer);statusTimer=null;}
   function configure(value,identity={}) {
-    stop();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
+    stop();history.clear();scrollModes=new WeakMap();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
-      replacements=new WeakMap();
+      scrollModes=new WeakMap();replacements=new WeakMap();
       const messageRows=node=>node.nodeType===1?[...(node.matches(rows)?[node]:[]),...node.querySelectorAll(rows)].slice(0,200):[];
+      liveInserts=new WeakSet();
+      for(const record of records){
+        if(record.type!=='childList' || !record.addedNodes.length || record.nextSibling!==null || record.previousSibling!==liveTails.get(record.target)?.deref())continue;
+        const added=[...record.addedNodes].flatMap(messageRows);added.forEach(row=>liveInserts.add(row));if(added.length)liveTails.set(record.target,new WeakRef(added.at(-1)));
+      }
       // Reuse identity only for an observed replacement in the same mutation,
       // never merely because two independently posted messages have equal text.
       for(const record of records){

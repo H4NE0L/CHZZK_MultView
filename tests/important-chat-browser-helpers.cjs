@@ -180,6 +180,26 @@ module.exports=async function checkImportantChat(page){
  assert.equal(replacementResult.afterReinsert,1,'separate removal and insertion at the same DOM position is a replacement');
  assert.equal(replacementResult.total,2,'a separately posted identical message remains a separate chat');
  assert.notEqual(replacementResult.ids[0],replacementResult.ids[1]);
+ const scrollingResult=await frame.evaluate(async()=>{
+   const captured=[],statuses=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch),status:value=>statuses.push(value)});
+   const viewport=document.createElement('div');viewport.style.cssText='height:80px;overflow-y:auto';const list=document.createElement('div'),filler=document.createElement('div');filler.style.height='400px';list.append(filler);viewport.append(list);document.querySelector('aside.live_chat').append(viewport);
+   const make=()=>{const row=document.createElement('div');row.className='_chatting_message_history_1';row.style.height='24px';row.innerHTML='<img src="https://ssl.pstatic.net/old-badge.png" alt="구독 배지"><button class="_button_chatting_1cgzf_35"><span class="_nickname_1mc5x_80">스크롤 검사</span>동일 메시지</button>';return row;};
+   collector.configure({enabled:true,streamers:false,managers:false,partners:false,names:['스크롤 검사']});
+   let row=make();list.append(row);viewport.scrollTop=viewport.scrollHeight;await new Promise(resolve=>setTimeout(resolve,300));const initial=captured.length;
+   row.remove();await new Promise(resolve=>setTimeout(resolve,0));viewport.scrollTop=0;row=make();row.querySelector('img').src='https://ssl.pstatic.net/updated-badge.png';list.prepend(row);await new Promise(resolve=>setTimeout(resolve,600));row.querySelector('img').src='https://ssl.pstatic.net/lazily-loaded-badge.png';await new Promise(resolve=>setTimeout(resolve,300));const afterHistory=captured.length;
+   row.remove();await new Promise(resolve=>setTimeout(resolve,0));const live=make();list.append(live);viewport.scrollTop=viewport.scrollHeight;await new Promise(resolve=>setTimeout(resolve,300));const afterLive=captured.length;
+   viewport.scrollTop=0;const whileReading=make();list.append(whileReading);await new Promise(resolve=>setTimeout(resolve,300));const afterLiveWhileReading=captured.length;whileReading.remove();
+   // Restore again after the new live message: neither historical occurrence is appended anew.
+   live.remove();await new Promise(resolve=>setTimeout(resolve,0));viewport.scrollTop=0;list.prepend(make());await new Promise(resolve=>setTimeout(resolve,600));
+   const result={initial,afterHistory,afterLive,afterLiveWhileReading,total:captured.length,restored:statuses.at(-1)?.restored,row:statuses.at(-1)?.structure?.row,ids:captured.map(item=>item.id)};collector.stop();viewport.remove();return result;
+ });
+ assert.equal(scrollingResult.initial,1);
+ assert.equal(scrollingResult.afterHistory,1,'remounting a past message while scrolled up never appends it again');
+ assert.equal(scrollingResult.afterLive,2,'the same text newly posted at the live edge is retained');
+ assert.equal(scrollingResult.afterLiveWhileReading,3,'an observed live-tail append stays new even while reading history');
+ assert.equal(scrollingResult.total,3);assert(scrollingResult.restored>=2);
+ assert(scrollingResult.row.includes('_chatting_message_'),'nested button is canonicalized to the message row');
+ assert.notEqual(scrollingResult.ids[0],scrollingResult.ids[1]);
  const reorderedCaptured=await frame.evaluate(async()=>{
    const row=document.createElement('div');row.dataset.chatMessage='';row.style.cssText='position:fixed;top:500px;height:24px';row.innerHTML='<span data-chat-nickname>범위 점검 사용자</span><span data-chat-text>DOM 순서와 화면 순서가 다른 채팅</span>';
    document.querySelector('.cz-native-chat-header').before(row);
@@ -201,7 +221,7 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261029-5');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-6');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
