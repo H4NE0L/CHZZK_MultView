@@ -11,6 +11,9 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    window.__socket=new WebSocket('wss://kr-ss1.chat.naver.com/chat');window.__nativeReads=0;__socket.addEventListener('message',()=>__nativeReads++);
    window.__receive=messages=>__socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({cmd:93101,bdy:messages})}));
    window.__row=(text,id)=>{const row=document.createElement('div');row.className='_chatting_message_test_1';if(id)row.dataset.messageId=id;row.innerHTML='<span class="_nickname_test_1">작성자</span><span data-chat-text></span>';row.querySelector('[data-chat-text]').textContent=text;document.querySelector('#messages').replaceChildren(row);return row;};
+   __receive([{msgTime:1793277296000,profile:{nickname:'작성자'},msg:'OFF에서 무시'}]);
+   if(__CZChatSourceTimesV1.size!==0)throw Error('Default OFF captured socket time');
+   document.documentElement.setAttribute('data-cz-timestamps-enabled','true');document.dispatchEvent(new Event('cz-chat-timestamps-config'));
    __receive([{msgId:'m1',msgTime:1793277296000,profile:JSON.stringify({nickname:'작성자'}),msg:'원본 작성 시각'}]);__row('원본 작성 시각','m1');
   });
   await page.waitForFunction(()=>document.querySelector('[data-cz-message-time]')?.getAttribute('data-cz-message-time')==='2026-10-29T12:34:56.000Z');
@@ -22,7 +25,9 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.evaluate(()=>__row('원본 작성 시각','m2'));await page.waitForFunction(()=>document.querySelector('[data-cz-message-time]')?.getAttribute('data-cz-message-time')==='2026-10-29T12:36:36.000Z');
   await page.evaluate(()=>{__row('원본 작성 시각','m2').querySelector('._nickname_test_1').textContent='다른 작성자';});await page.waitForFunction(()=>!document.querySelector('[data-cz-message-time]'));
   await page.evaluate(()=>{for(let i=0;i<2300;i++)__receive([{msgTime:1793277296000,profile:{nickname:'작성자'},msg:'메시지 '+i}]);});
-  assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),2048);assert.equal(await page.evaluate(()=>window.__sent||0),0);assert.equal(await page.evaluate(()=>__nativeReads),2302);
+  assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),2048);assert.equal(await page.evaluate(()=>window.__sent||0),0);assert.equal(await page.evaluate(()=>__nativeReads),2303);
+  await page.evaluate(()=>{document.documentElement.setAttribute('data-cz-timestamps-enabled','false');document.dispatchEvent(new Event('cz-chat-timestamps-config'));__receive([{msgTime:1793277296000,profile:{nickname:'작성자'},msg:'OFF 후 무시'}]);});
+  assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),0,'OFF clears the index and removes socket data listeners');
   await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));
   assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),0);assert(await page.evaluate(()=>WebSocket===__NativeSocket));
   console.log('PASS: passive native socket timestamps, exact author/text/ID matching, ambiguous duplicates, remount, 2048 bound and teardown; no socket sends.');

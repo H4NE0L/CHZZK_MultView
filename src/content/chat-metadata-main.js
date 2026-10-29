@@ -65,14 +65,25 @@ import {sourceTimes} from '../shared/chat/source-times.js';
     else row.removeAttribute('data-cz-message-time');
     const schema=[...fields].join(',').slice(0,600);if(row.getAttribute('data-cz-time-fields')!==schema)row.setAttribute('data-cz-time-fields',schema);
   }
-  const pending=new Set();let timer=null;
+  const pending=new Set();let timer=null,enabled=false,disposed=false;
   function queue(node){
+    if(!enabled||disposed)return;
     if(node.nodeType!==1)node=node.parentElement;if(!node||node.matches('.cz-native-chat-time'))return;
     const closest=node.closest(rows);if(closest)pending.add(closest);else [...node.querySelectorAll(rows)].slice(-200).forEach(row=>pending.add(row));
     if(!timer&&pending.size)timer=setTimeout(()=>{timer=null;const batch=[...pending].slice(-200);pending.clear();batch.forEach(row=>{try{inspect(row);}catch(_){row.removeAttribute('data-cz-message-time');row.setAttribute('data-cz-time-fields','reader-error');}});},50);
   }
   const observer=new MutationObserver(records=>{for(const record of records){if(record.type==='characterData'||record.type==='attributes')queue(record.target);else for(const node of record.addedNodes)queue(node);}});
-  observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['data-index','data-item-index']});
-  queue(document.documentElement);
-  window.addEventListener('pagehide',()=>{observer.disconnect();clearTimeout(timer);pending.clear();},{once:true});
+  function configure(){
+    observer.disconnect();clearTimeout(timer);timer=null;pending.clear();
+    enabled=!disposed && document.documentElement.getAttribute('data-cz-timestamps-enabled')==='true';
+    if(enabled){
+      observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['data-index','data-item-index']});
+      queue(document.documentElement);
+    }else{
+      sourceTimes.clear();
+      document.querySelectorAll('[data-cz-message-time],[data-cz-time-fields]').forEach(row=>{row.removeAttribute('data-cz-message-time');row.removeAttribute('data-cz-time-fields');});
+    }
+  }
+  document.addEventListener('cz-chat-timestamps-config',configure);configure();
+  window.addEventListener('pagehide',()=>{disposed=true;observer.disconnect();clearTimeout(timer);pending.clear();document.removeEventListener('cz-chat-timestamps-config',configure);},{once:true});
 })();

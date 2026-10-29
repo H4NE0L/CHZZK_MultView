@@ -1,6 +1,9 @@
 const assert=require('node:assert/strict');
 module.exports=async function checkImportantChat(page){
  const settings=page.locator('.ic-dialog');
+ await page.locator('#settingsManager > summary').click();
+ assert.equal(await page.locator('#chatTimestampsEnabled').isChecked(),false,'timestamps default OFF');
+ await page.locator('#chatTimestampsEnabled').check({force:true});await page.locator('#settingsManager > summary').click();
  const panel=page.locator('.important-chat-panel');await panel.waitFor();
  await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-name').disabled);
  assert.equal(await panel.evaluate(el=>el.tagName),'SECTION');
@@ -300,11 +303,15 @@ module.exports=async function checkImportantChat(page){
  await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
  const historyBeforeDisabled=await panel.locator('.ic-message').count();await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
+ await page.locator('#settingsManager > summary').click();
+ assert.equal(await page.locator('#chatTimestampsEnabled').isChecked(),true);
+ await page.locator('#chatTimestampsEnabled').check({force:true});await page.locator('#settingsManager > summary').click();
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','2026-10-28T12:34:00Z'));
  await frame.waitForFunction(()=>document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:00.000Z');
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','invalid'));
  await frame.waitForFunction(()=>!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
- assert.equal(await panel.locator('.ic-message').count(),historyBeforeDisabled,'disabling collection retains existing history');
+ await page.locator('#settingsManager > summary').click();await page.locator('#chatTimestampsEnabled').uncheck({force:true});await page.locator('#settingsManager > summary').click();
+ assert.equal(await panel.locator('.ic-message').count(),historyBeforeDisabled,'timestamp toggle and collection disabling retain existing history');
  assert(!(await panel.locator('.ic-list').textContent()).includes('수집 중지 확인'));
  await setEnabled(true);assert(await panel.isVisible());await page.waitForTimeout(350);await openSettings();
  await page.locator('.ic-clear').click();

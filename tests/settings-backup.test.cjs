@@ -43,3 +43,14 @@ test('invalid settings and failed storage writes preserve data; foreign/child se
  assert.equal(await f.send('SETTINGS_BACKUP_EXPORT',null,{...f.sender,url:'https://evil.invalid/'}),undefined);
  const valid=(await f.send('SETTINGS_BACKUP_EXPORT')).document;f.setFail();assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',valid)).ok,false);assert.deepEqual(plain(f.data),before);
 });
+
+test('timestamp setting defaults OFF for old backups and roundtrips explicit ON without changing chat filters',async()=>{
+ const f=setup();let document=plain((await f.send('SETTINGS_BACKUP_EXPORT')).document);
+ assert.equal(document.data.session.chatTimestamps,false);
+ const filters=structuredClone(document.data.chat);
+ delete document.data.session.chatTimestamps;assert.equal(f.api.parse(document).data.session.chatTimestamps,false);
+ document.data.session.chatTimestamps=true;
+ assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);
+ const restored=plain((await f.send('SETTINGS_BACKUP_EXPORT')).document);assert.equal(restored.data.session.chatTimestamps,true);assert.deepEqual(restored.data.chat,filters);
+ document.data.session.chatTimestamps='true';assert.throws(()=>f.api.parse(document),/타임스탬프/);
+});

@@ -14,6 +14,7 @@ export function bind(context) {
     if (data.type === 'CHAT_READY') {
       if (data.uid !== chatFrame?.dataset.uid) return;
       frame.dataset.playerReady = 'true';
+      CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_TIMESTAMP_CONFIG',enabled:state.chatTimestamps===true});
       importantChat?.sync(true);
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});

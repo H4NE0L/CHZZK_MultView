@@ -89,6 +89,10 @@ export const html = `
                 <label class="settings-option"><span>통나무 수집 보조 (실험)</span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
               </div>
+              <div class="settings-feature">
+                <label class="settings-option"><span>채팅 타임스탬프 (임시 보류)</span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>
+              </div>
               <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
             </div>
           </details>

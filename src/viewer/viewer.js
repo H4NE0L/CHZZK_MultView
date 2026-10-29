@@ -92,6 +92,8 @@ import {create as createChannelList} from './controllers/channel-list.js';
   const {externalSeek, adjustSync, resetSync, resetAllSync, clearSyncState, clearAllSyncState, handleSyncResult, handleSyncState, scheduleSyncRender, renderSyncUI} = CZSync.create({get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, escapeHtml, displayChannelName});
 
   function syncShortcutSettings() {
+    ui.dataset.chatTimestamps=String(state.chatTimestamps===true);
+    CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'CHAT_TIMESTAMP_CONFIG',enabled:state.chatTimestamps===true});
     CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
     for(const tile of tileMap.values()){
       CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});

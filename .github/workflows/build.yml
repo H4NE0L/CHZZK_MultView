@@ -2,12 +2,15 @@ name: Build extension ZIP
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
+concurrency:
+  group: installation-release
+  cancel-in-progress: true
 permissions:
-  contents: read
+  contents: write
 jobs:
   package:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,3 +27,4 @@ jobs:
           name: CHZZK-MultView-extension
           path: artifacts/*.zip
           if-no-files-found: error
+      - run: npm run publish:install

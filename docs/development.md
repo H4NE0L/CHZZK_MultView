@@ -47,17 +47,36 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 
 ## 저장소와 배포 파일
 
-GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.0.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions의 Build 워크플로도 main에서 설치용 ZIP artifact를 생성합니다. Actions artifact 압축을 풀면 안쪽 확장 ZIP을 사용할 수 있습니다.
+GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.0.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
 
 완료된 단계별 계획 문서와 이전 Python 패키징 진입점은 정리했습니다. 이전 문서는 Git 이력에 남아 있습니다. 검사·측정 스크립트, vendor 라이선스, 개인 백업은 유지합니다. 파일 수 감소를 실행 메모리 감소로 해석하지 않습니다.
 
 ## 수명과 호환 규칙
 
 - UI의 ResourceScope가 listener·observer·timer·저장소 구독을 해제합니다. 기존 iframe을 재배치하지 않고 CSS로 위치를 바꿉니다.
-- 채팅 표시 100개, 중복 식별 이력 2,048개를 유지합니다. 타임스탬프용 MAIN-world 색인은 원본 연결에서 받은 fingerprint/시각만 각각 최대 2,048개 보관하고 채팅 종료 시 해제합니다. 새 연결이나 송신은 하지 않습니다. 이름·본문이 같고 시각이 다른 메시지는 ID가 없으면 시각을 표시하지 않습니다.
+- 채팅 표시 100개, 중복 식별 이력 2,048개를 유지합니다. 타임스탬프는 임시 보류·기본 OFF입니다. 켜면 MAIN-world 색인은 원본 연결에서 받은 fingerprint/시각만 각각 최대 2,048개 보관합니다. OFF 시 메시지 listener·시각 판독 observer와 색인을 해제합니다. 기존 연결을 다시 만들지 않고 토글할 수 있도록 document_start의 얇은 소켓 생성/종료 추적은 유지하며 데이터는 읽지 않습니다. 새 연결이나 송신은 하지 않습니다. 이름·본문이 같고 시각이 다른 메시지는 ID가 없으면 시각을 표시하지 않습니다.
 - 채팅 문서의 MAIN-world WebSocket 생성 관찰은 document_start에서 설치합니다. 원본 객체·이벤트·송신을 유지하며 닫힌 연결의 listener를 제거합니다. 시작 전 메시지나 지원하지 않는 원본 포맷은 작성 시각을 얻지 못할 수 있습니다.
 - 스크린샷은 동시 2개·보관 12개/128MiB, 녹화는 방송당 256MiB 한도입니다. URL·canvas·Worker를 종료 시 해제하고 원본 영상/음성 트랙은 stop하지 않습니다.
 - 즐겨찾기는 그룹 없이도 유지됩니다. 기존 기본 그룹은 자동 삭제하지 않으며 사용자가 삭제/이름 변경할 수 있습니다. 명시적 빈 memberships는 백업·복원에서도 유지합니다.
 - 통나무 수집 보조는 기본 OFF인 실험 기능입니다. 원본 채팅 유지에 따른 비용과 서비스 적립 조건은 [점검 안내](power-diagnostics.md), 장시간 측정은 [채팅 부하 점검](chat-performance.md)을 참고하세요.
 
 이전 코드와 동일 화질·타일 수에서 30분 이상 시청, 타일/채팅 30회 열기·닫기, 캡처/녹화 반복 후 Chrome 작업 관리자와 힙 보유 경로를 비교합니다. 자동 검사의 합성 DOM·생성 영상은 실제 서비스의 로그인·보너스 지급이나 전체 메모리 감소율을 증명하지 않습니다.
+
+## 로컬 폴더와 브랜치 정리
+
+기존 프로젝트 경로에서 실행합니다. 기존 확장을 삭제하거나 새 경로에 다시 등록하지 마세요.
+
+```sh
+git switch main
+git pull --ff-only --prune
+npm ci
+npm run build
+npm run package
+npm run clean -- --branches
+```
+
+`clean`은 `.test-build`와 artifacts 안의 구버전 CZ-Control-Room ZIP만 삭제합니다. 현재 버전 ZIP·dist·.backup·소스·node_modules와 알 수 없는 파일은 유지합니다. `--branches`는 main에 포함된 로컬 브랜치만 삭제하며 main/release/현재 브랜치를 제외합니다. 원격 브랜치를 삭제하는 명령은 아닙니다. 다음 테스트는 npm test가 필요한 테스트 산출물을 다시 생성합니다.
+
+## 설치 파일 게시
+
+검사를 마치고 main에 커밋·push한 뒤 `npm run publish:install`을 실행합니다. 기존 HTTPS Git 인증을 사용하며 API 토큰을 따로 읽지 않습니다. main 커밋의 깨끗한 소스로 재빌드하고 별도 임시 Git index에서 설치 트리를 만들어 release에 게시합니다. 기본 작업 트리·개인 백업은 변경하지 않습니다. 갱신 전 main 기준과 release의 기존 SHA를 확인해 오래된 배포가 덮어쓰지 않도록 합니다. `-- --dry-run`으로 원격 게시 없이 트리를 점검할 수 있습니다.

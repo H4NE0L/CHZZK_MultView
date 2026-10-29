@@ -288,9 +288,14 @@ globalThis.CZChatLayout = (() => {
     const height=Math.round(header.getBoundingClientRect().bottom);if(height>=24)reportHeader(header);
   }
   const timestampRows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
-  let timestampRoot=null,timestampObserver=null;
+  let timestampRoot=null,timestampObserver=null,timestampsEnabled=false;
+  function setTimestamps(on){
+    timestampsEnabled=on===true;timestampObserver?.disconnect();timestampObserver=null;timestampRoot=null;
+    if(!timestampsEnabled)document.querySelectorAll('.cz-native-chat-time').forEach(node=>node.remove());
+    else if(preparedRoot)stampMessages(preparedRoot);
+  }
   function stampMessages(root){
-    if(timestampRoot===root)return;
+    if(!timestampsEnabled || timestampRoot===root)return;
     timestampObserver?.disconnect();timestampRoot=root;
     const stamp=row=>{
       const own=row.querySelector('.cz-native-chat-time');
@@ -358,5 +363,5 @@ globalThis.CZChatLayout = (() => {
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);
   }
-  return {start,setPresentation};
+  return {start,setPresentation,setTimestamps};
 })();

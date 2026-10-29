@@ -9,7 +9,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   const evaluate=async expression=>{const result=await session.send('Runtime.evaluate',{contextId:world.executionContextId,expression,returnByValue:true});if(result.exceptionDetails)throw Error(result.exceptionDetails.text);return result.result.value;};
   assert.equal(await evaluate("!!document.querySelector('#message').__reactProps$fixture"),false,'isolated content scripts cannot see source React props');
   for(const file of ['src/shared/important-chat.js','src/content/chat-layout.js'])await evaluate(fs.readFileSync(file,'utf8'));
-  await evaluate('CZChatLayout.start()');assert.equal(await page.locator('.cz-native-chat-time').count(),0,'no observation-time fallback');
+  await evaluate("CZChatLayout.start();CZChatLayout.setTimestamps(true);document.documentElement.setAttribute('data-cz-timestamps-enabled','true')");assert.equal(await page.locator('.cz-native-chat-time').count(),0,'no observation-time fallback');
   await page.addScriptTag({content:fs.readFileSync('src/content/chat-metadata-main.js','utf8')});
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:56.000Z');
   await page.evaluate(()=>{Date.now=()=>Date.parse('2026-10-29T18:00:00Z');const old=document.querySelector('#message'),row=old.cloneNode(true);row.querySelector('time').remove();row.removeAttribute('data-cz-message-time');row.__reactProps$fixture=old.__reactProps$fixture;old.replaceWith(row);});
@@ -23,6 +23,11 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T10:00:00.000Z');
   await page.evaluate(()=>{const row=document.querySelector('#message');delete row.__reactFiber$fixture;const message={messageTime:Date.parse('2026-10-28T11:00:00Z'),profile:{nickname:'작성자'}};Object.defineProperty(message,'content',{get(){window.__unexpectedGetter=true;return '원본 본문';}});row.__reactProps$fixture={message};row.setAttribute('data-item-index','5');});
   await page.waitForFunction(()=>!document.querySelector('#message .cz-native-chat-time'));assert.equal(await page.evaluate(()=>!!window.__unexpectedGetter),false,'source data getters are not invoked');
+  await evaluate("document.documentElement.setAttribute('data-cz-timestamps-enabled','false');document.dispatchEvent(new Event('cz-chat-timestamps-config'));CZChatLayout.setTimestamps(false)");
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}};row.setAttribute('data-item-index','6');});
+  await page.waitForTimeout(100);assert.equal(await page.locator('[data-cz-message-time],.cz-native-chat-time').count(),0,'OFF stops metadata reads and removes timestamps');
+  await evaluate("document.documentElement.setAttribute('data-cz-timestamps-enabled','true');document.dispatchEvent(new Event('cz-chat-timestamps-config'));CZChatLayout.setTimestamps(true)");
+  await page.waitForFunction(()=>document.querySelector('.cz-native-chat-time')?.dateTime==='2026-10-29T12:34:56.000Z');
   console.log('PASS: isolated content sees only verified source-message time; scroll remount stays fixed; mismatched author is rejected and row reuse updates time.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

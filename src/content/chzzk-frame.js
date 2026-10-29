@@ -4,7 +4,17 @@ import {create as createPowerRewards} from './power-rewards.js';
   if (window.top === window) return;
 
   let PARENT_ORIGIN = chrome.runtime.getURL("").replace(/\/$/, "");
-  let chatLayoutStarted = false;
+  let chatLayoutStarted = false,timestampsEnabled=false,timestampReaderRequested=false;
+  function configureTimestamps(on){
+    timestampsEnabled=on===true;
+    document.documentElement.setAttribute('data-cz-timestamps-enabled',String(timestampsEnabled));
+    document.dispatchEvent(new Event('cz-chat-timestamps-config'));
+    CZChatLayout.setTimestamps(timestampsEnabled);
+    if(timestampsEnabled && !timestampReaderRequested){
+      timestampReaderRequested=true;
+      chrome.runtime.sendMessage({type:'CHAT_METADATA_INIT'}).then(result=>{if(!result?.ok)timestampReaderRequested=false;}).catch(error=>{timestampReaderRequested=false;console.warn('원본 채팅 시각 읽기 초기화 실패:',error);});
+    }
+  }
   let videoObserver = null;
   let uiObserver = null;
   let chatMode = new URLSearchParams(location.search).get("multiview") === "chat" || new URLSearchParams(location.search).get("multiview") === "1" && location.pathname.endsWith("/chat");
@@ -284,13 +294,14 @@ import {create as createPowerRewards} from './power-rewards.js';
       if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}
     }
     if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:result.diagnostics}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
+    if(event.data.type==='CHAT_TIMESTAMP_CONFIG' && chatMode)configureTimestamps(event.data.enabled);
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
     if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
-      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start();chrome.runtime.sendMessage({type:'CHAT_METADATA_INIT'}).catch(error=>console.warn('원본 채팅 시각 읽기 초기화 실패:',error)); }
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start();CZChatLayout.setTimestamps(timestampsEnabled); }
     }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);

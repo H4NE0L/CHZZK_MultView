@@ -3,7 +3,9 @@
   "version": "3.0.0",
   "private": true,
   "description": "치지직 통합관제실 development tools",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
@@ -13,7 +15,9 @@
     "test:backup": "npm run build && node scripts/test.mjs backup",
     "test:media": "npm run build && node scripts/test.mjs media",
     "package": "npm run build && node scripts/package.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "publish:install": "node scripts/publish.mjs",
+    "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
     "@types/chrome": "0.3.7",

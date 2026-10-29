@@ -4,9 +4,9 @@ import {sourceTimes} from '../shared/chat/source-times.js';
 (() => {
  if(!['1','chat'].includes(new URLSearchParams(location.search).get('multiview')) || window.__CZChatSocketReaderV1 || typeof WebSocket!=='function')return;
  window.__CZChatSocketReaderV1=true;
- const Native=window.WebSocket,sockets=new Map();let disposed=false;
+ const Native=window.WebSocket,sockets=new Map();let disposed=false,enabled=false;
  function receive(event){
-  if(disposed || typeof event.data!=='string' || event.data.length>1024*1024)return;
+  if(disposed || !enabled || typeof event.data!=='string' || event.data.length>1024*1024)return;
   let packet;try{packet=JSON.parse(event.data);}catch(_){return;}
   const body=packet?.bdy??packet?.body;
   const messages=Array.isArray(body)?body:body?.messageList??body?.messages??(body?.profile?[body]:[]);
@@ -19,11 +19,17 @@ import {sourceTimes} from '../shared/chat/source-times.js';
    const url=new URL(String(args[0]),location.href);
    if(!disposed && url.protocol==='wss:' && /(^|\.)chat\.naver\.com$/.test(url.hostname)){
     const close=()=>{socket.removeEventListener('message',receive);socket.removeEventListener('close',close);sockets.delete(socket);};
-    sockets.set(socket,close);socket.addEventListener('message',receive);socket.addEventListener('close',close);
+    sockets.set(socket,close);if(enabled)socket.addEventListener('message',receive);socket.addEventListener('close',close);
    }
   }catch(_){}
   return socket;
  }});
+ function configure(){
+  enabled=!disposed && document.documentElement?.getAttribute('data-cz-timestamps-enabled')==='true';
+  for(const socket of sockets.keys()){socket.removeEventListener('message',receive);if(enabled)socket.addEventListener('message',receive);}
+  if(!enabled)sourceTimes.clear();
+ }
+ document.addEventListener('cz-chat-timestamps-config',configure);configure();
  window.WebSocket=ProxySocket;
- window.addEventListener('pagehide',()=>{disposed=true;for(const close of sockets.values())close();sockets.clear();sourceTimes.clear();if(window.WebSocket===ProxySocket)window.WebSocket=Native;},{once:true});
+ window.addEventListener('pagehide',()=>{disposed=true;document.removeEventListener('cz-chat-timestamps-config',configure);for(const close of sockets.values())close();sockets.clear();sourceTimes.clear();if(window.WebSocket===ProxySocket)window.WebSocket=Native;},{once:true});
 })();

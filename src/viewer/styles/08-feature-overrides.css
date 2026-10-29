@@ -214,3 +214,5 @@
 
 .settings-debug-panel { border-top:1px solid #34373d; margin-top:14px; padding-top:12px; }
 .power-diagnostic-rows { overflow-wrap:anywhere; }
+
+.mv-root[data-chat-timestamps="false"] .ic-message time { display:none; }

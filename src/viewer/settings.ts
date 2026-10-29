@@ -29,6 +29,10 @@ export function bind(context: SettingsContext) {
   const power=element<HTMLInputElement>('#powerRewardsEnabled');
   power.checked=context.state.powerRewards===true;
   scope.listen(power,'change',()=>{context.state.powerRewards=power.checked;context.syncShortcuts();context.save();});
+  const timestamps=element<HTMLInputElement>('#chatTimestampsEnabled');
+  timestamps.checked=context.state.chatTimestamps===true;
+  root.dataset.chatTimestamps=String(timestamps.checked);
+  scope.listen(timestamps,'change',()=>{context.state.chatTimestamps=timestamps.checked;context.syncShortcuts();context.save();});
   const others=['favoriteManager','followingManager','syncManager','volumeManager','channelManager'].map(id=>element<HTMLDetailsElement>('#'+id));
   scope.listen(settings,'toggle',()=>{if(settings.open)for(const panel of others)panel.open=false;});
   for(const panel of others)scope.listen(panel,'toggle',()=>{if(panel.open)settings.open=false;});
