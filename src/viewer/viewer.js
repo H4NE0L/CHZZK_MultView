@@ -216,6 +216,7 @@ function saveState() {
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
+              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
             </div>
           </details>
         </div>
@@ -312,6 +313,7 @@ function saveState() {
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
+    ui.querySelector('#powerDiagnosticsBtn').onclick=()=>{ui.querySelector('#settingsManager').open=false;powerDiagnostics.open();};
     ui.querySelector('#importantChatSettings').onclick=()=>{ui.querySelector('#settingsManager').open=false;importantChat.openSettings();};
     const shortcutInput=ui.querySelector('#shortcutsEnabled');shortcutInput.checked=state.shortcutsEnabled!==false;
     shortcutInput.onchange=()=>{state.shortcutsEnabled=shortcutInput.checked;syncShortcutSettings();saveState();};
@@ -628,6 +630,7 @@ function saveState() {
     else if(key==='c')toggleChat();
     else if(key==='g')ui.querySelector(`.layout-toggle-btn[data-layout="${state.layout==='grid'?'main-sub':'grid'}"]`).click();
   }
+  const powerDiagnostics=CZPowerDiagnostics.create({get state(){return state;},get ui(){return ui;},tileMap});
   const mediaTools = CZMediaTools.create({get shortcutsEnabled(){return state.shortcutsEnabled!==false;},onShortcut:handleShortcut,get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
 
   window.addEventListener("message", event => {
@@ -635,6 +638,7 @@ function saveState() {
     const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
+    if(data.type==='POWER_DIAGNOSTICS_RESULT'){powerDiagnostics.receive(data);return;}
     if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
     if(data.type==='CHAT_HEADER')return;
     if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}

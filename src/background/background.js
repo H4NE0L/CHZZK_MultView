@@ -136,3 +136,5 @@ importScripts("recording-results.js");
 importScripts("site-viewer.js");
 
 importScripts("chat-metadata.js");
+
+importScripts("power-diagnostics.js");

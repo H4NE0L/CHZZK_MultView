@@ -2474,3 +2474,9 @@ select:hover {
 .ic-exclude-form input { flex:1; min-width:0; border:1px solid #444; border-radius:4px; color:#eee; background:#222428; padding:5px 8px; font-size:12px; }
 
 .ic-message time[hidden] { display:none; }
+
+.power-diagnostic-help,.power-diagnostic-status { font-size:12px; line-height:1.6; color:#b9c1cc; }
+.power-diagnostic-rows p { font-size:12px; margin:8px 0; }
+
+.settings-debug-panel { border-top:1px solid #34373d; margin-top:14px; padding-top:12px; }
+.power-diagnostic-rows { overflow-wrap:anywhere; }
