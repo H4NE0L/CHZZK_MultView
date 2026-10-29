@@ -283,7 +283,7 @@
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {
       chatMode = !!event.data.visible;
-      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start(); }
+      if (chatMode && !chatLayoutStarted) { chatLayoutStarted = true; preventFrameScrollbars(); CZChatLayout.start();chrome.runtime.sendMessage({type:'CHAT_METADATA_INIT'}).catch(error=>console.warn('원본 채팅 시각 읽기 초기화 실패:',error)); }
     }
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);

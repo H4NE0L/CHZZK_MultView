@@ -134,6 +134,7 @@ module.exports=async function checkImportantChat(page){
 
  await frame.evaluate(()=>document.querySelector('._chatting_message_w9pvh_21').remove());
  await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
+ await page.route('https://ssl.pstatic.net/emote*.png',route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKf8AAAAASUVORK5CYII=','base64')}));
  await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='visible-body-regression';row.innerHTML='<span data-chat-nickname><button>테스트 방송</button><span class="_sr_only_123">인증마크</span></span><span data-chat-text><img alt="웃음" src="https://ssl.pstatic.net/emote.png"> 일반 본문 <img alt="인증마크" src="https://ssl.pstatic.net/emote-other.png"></span>';document.querySelector('aside.live_chat').append(row);});
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('일반 본문'));
  const visibleBody=panel.locator('.ic-message').filter({hasText:'일반 본문'});
@@ -172,9 +173,10 @@ module.exports=async function checkImportantChat(page){
    const replacement=first.cloneNode(true);first.replaceWith(replacement);await new Promise(resolve=>setTimeout(resolve,300));const afterReplacement=captured.length;
    const reinserted=replacement.cloneNode(true),next=replacement.nextSibling;replacement.remove();host.insertBefore(reinserted,next);await new Promise(resolve=>setTimeout(resolve,300));const afterReinsert=captured.length;
    const genuinelyNew=reinserted.cloneNode(true);host.append(genuinelyNew);await new Promise(resolve=>setTimeout(resolve,300));collector.stop();reinserted.remove();genuinelyNew.remove();
-   return {originalTime:reinserted.querySelector('time')?.dateTime,afterReplacement,afterReinsert,total:captured.length,ids:captured.map(item=>item.id)};
+   return {collectedTime:captured[0]?.time,originalTime:reinserted.querySelector('time')?.dateTime,afterReplacement,afterReinsert,total:captured.length,ids:captured.map(item=>item.id)};
  });
  assert.equal(replacementResult.originalTime,'2026-10-28T12:34:00.000Z','original send timestamp survives DOM replacement');
+ assert.equal(replacementResult.collectedTime,Date.parse('2026-10-28T12:34:00Z'),'collected timestamps use original send time too');
  assert.equal(replacementResult.afterReplacement,1,'replacing a message DOM node is not a new chat');
  assert.equal(replacementResult.afterReinsert,1,'separate removal and insertion at the same DOM position is a replacement');
  assert.equal(replacementResult.total,2,'a separately posted identical message remains a separate chat');
@@ -220,7 +222,7 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261029-6');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-7');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
@@ -243,14 +245,23 @@ module.exports=async function checkImportantChat(page){
  assert(!(await panel.locator('.ic-list').textContent()).includes('늦게 적용된 역할 색상'));
  await frame.evaluate(()=>document.querySelector('[data-message-id="role-late"]').style.color='#00d58a');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('늦게 적용된 역할 색상'));
- await settings.locator('.ic-partners').uncheck();
- await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-message[data-role="partner"]'));
+ const partnerHistoryCount=await panel.locator('.ic-message[data-role=partner]').count();await settings.locator('.ic-partners').uncheck();
+ assert.equal(await panel.locator('.ic-message[data-role=partner]').count(),partnerHistoryCount,'turning a collection rule off does not erase collected history');
  await settings.locator('.ic-partners').check();
  await page.waitForFunction(()=>!!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-message[data-role="partner"]'));
  await frame.evaluate(()=>document.querySelectorAll('[data-message-id^="role-"]').forEach(row=>row.remove()));await settings.locator('.ic-clear').click();
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
+ await add('방송인','설정 후에도 보존할 기록','스트리머','settings-retain');await add('지정 사용자','제외 대상의 기존 기록','','settings-exclude');
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('제외 대상의 기존 기록'));
+ await frame.locator('[data-message-id=settings-retain],[data-message-id=settings-exclude]').evaluateAll(nodes=>nodes.forEach(node=>node.remove()));
+ await settings.locator('.ic-name').fill('임시 추가 사용자');await settings.locator('.ic-form button').click();
+ assert((await panel.locator('.ic-list').textContent()).includes('설정 후에도 보존할 기록'),'adding a nickname retains records no longer present in source DOM');
+ await settings.locator('.ic-names').first().getByRole('button',{name:'임시 추가 사용자 ×',exact:true}).click();
+ assert((await panel.locator('.ic-list').textContent()).includes('제외 대상의 기존 기록'),'removing a manual inclusion is not a history reset');
  await settings.locator('.ic-exclude-name').fill('지정 사용자');await settings.locator('.ic-exclude-form button').click();
  assert.equal(await settings.locator('.ic-excluded-names button').count(),1);
+ assert((await panel.locator('.ic-list').textContent()).includes('설정 후에도 보존할 기록'));
+ assert(!(await panel.locator('.ic-list').textContent()).includes('제외 대상의 기존 기록'),'only explicitly excluded history is removed');
  await add('지정 사용자','제외 우선 검사','스트리머','excluded-manual-role');await page.waitForTimeout(350);
  assert(!(await panel.locator('.ic-list').textContent()).includes('제외 우선 검사'),'exclusion overrides manual inclusion and streamer role');
  await settings.locator('.ic-excluded-names button').click();
@@ -287,13 +298,14 @@ module.exports=async function checkImportantChat(page){
  await add('지정 사용자','목록은 항상 표시','','visible-1');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('항상 표시'));
  await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
- await setEnabled(false);assert.equal(await panel.isVisible(),false);
+ const historyBeforeDisabled=await panel.locator('.ic-message').count();await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','2026-10-28T12:34:00Z'));
  await frame.waitForFunction(()=>document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:00.000Z');
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','invalid'));
  await frame.waitForFunction(()=>!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
- assert.equal(await panel.locator('.ic-message').count(),0);
+ assert.equal(await panel.locator('.ic-message').count(),historyBeforeDisabled,'disabling collection retains existing history');
+ assert(!(await panel.locator('.ic-list').textContent()).includes('수집 중지 확인'));
  await setEnabled(true);assert(await panel.isVisible());await page.waitForTimeout(350);await openSettings();
  await page.locator('.ic-clear').click();
  await frame.evaluate(()=>{

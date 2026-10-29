@@ -295,9 +295,9 @@ globalThis.CZChatLayout = (() => {
     const stamp=row=>{
       const own=row.querySelector('.cz-native-chat-time');
       if(row.querySelector('time:not(.cz-native-chat-time)') || row.querySelector(timestampRows)){own?.remove();return;}
-      const raw=row.getAttribute('data-message-time')||row.getAttribute('data-timestamp')||row.getAttribute('data-created-at'),number=raw?Number(raw):NaN;
-      const parsed=raw?(Number.isFinite(number)?number*(number<1e12?1000:1):Date.parse(raw)):NaN;
-      if(!Number.isFinite(parsed) || parsed<946684800000 || parsed>Date.now()+60000){own?.remove();return;}
+      const raw=row.getAttribute('data-cz-message-time')||row.getAttribute('data-message-time')||row.getAttribute('data-timestamp')||row.getAttribute('data-created-at');
+      const parsed=CZImportantChat.timestamp(raw);
+      if(parsed===null){own?.remove();return;}
       const date=new Date(parsed),iso=date.toISOString();
       if(own?.dateTime===iso)return;
       const time=own||document.createElement('time');time.className='cz-native-chat-time';time.dateTime=iso;time.textContent=date.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});time.title='원본 메시지 작성 시각';
@@ -307,7 +307,7 @@ globalThis.CZChatLayout = (() => {
     const scan=node=>{if(node.nodeType!==1 || node.matches('.cz-native-chat-time'))return;if(node.matches(timestampRows))stamp(node);node.querySelectorAll(timestampRows).forEach(stamp);};
     root.querySelectorAll(timestampRows).forEach(stamp);
     timestampObserver=new MutationObserver(records=>{for(const record of records){if(record.type==='attributes'){if(record.target.matches(timestampRows))stamp(record.target);continue;}for(const node of record.addedNodes)scan(node);}});
-    timestampObserver.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['data-message-time','data-timestamp','data-created-at']});
+    timestampObserver.observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:['data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
   }
   let preparedRoot = null,preparedRootStyle='';
   function prepare() {

@@ -56,3 +56,12 @@ test('excluded names take priority over every role and manual inclusion',()=>{
  assert.equal(api.settings({excludedNames:Array.from({length:60},(_,i)=>'user'+i)}).excludedNames.length,50);
  const buffer=api.create();buffer.reset('A');assert(!buffer.add('A',[{id:'x',name:'Alice',text:'blocked',role:'streamer'}],filter));
 });
+test('changing inclusion retains collected history and exclusion removes only that author',()=>{
+ const api=setup(),buffer=api.create(),original=api.settings({names:['Alice','Bob']});buffer.reset('A');buffer.add('A',[{id:'a',name:'Alice',text:'old',time:1234},{id:'b',name:'Bob',text:'keep',time:5678}],original);
+ buffer.applySettings(api.settings({names:['Alice','Bob','Charlie']}));assert.equal(buffer.items.length,2);assert.equal(buffer.items[1].time,5678);
+ buffer.applySettings(api.settings({names:['Charlie'],excludedNames:['ALICE']}));assert.equal(buffer.items.length,1);assert.equal(buffer.items[0].id,'b');
+ buffer.applySettings(api.settings({enabled:false}));assert.equal(buffer.items.length,1);
+ buffer.add('A',[{id:'missing',name:'Bob',text:'historical metadata',updateOnly:true,time:9999}],original);assert.equal(buffer.items.length,1);
+ buffer.add('A',[{id:'b',name:'Bob',text:'keep',updateOnly:true,time:9999}],original);assert.equal(buffer.items.length,1);assert.equal(buffer.items[0].time,9999);
+ assert.equal(api.message({id:'unknown',name:'A',text:'x'}).time,null);
+});

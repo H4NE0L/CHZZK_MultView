@@ -27,25 +27,31 @@ globalThis.CZImportantChat = (() => {
     }
     return result.length?result:[{type:'text',text:fallback}];
   }
+  function timestamp(value){
+    if(value==null || value==='')return null;
+    const numeric=Number(value),time=Number.isFinite(numeric)?numeric*(numeric<1e11?1000:1):Date.parse(value);
+    return Number.isFinite(time)&&time>=946684800000&&time<=Date.now()+60000?time:null;
+  }
   function message(value) {
     if(!value || typeof value.id!=='string' || !value.id || value.id.length>160 || typeof value.name!=='string' || typeof value.text!=='string')return null;
     const name=clean(value.name).slice(0,80),text=clean(value.text).slice(0,1000);
     if(!name || !text)return null;
     const badges=(Array.isArray(value.badges)?value.badges:[]).slice(0,4).map(badge=>({src:imageUrl(badge?.src),alt:clean(badge?.alt).slice(0,80)})).filter(badge=>badge.src);
-    return {id:value.id,name,text,segments:segments(value.segments,text),badges,role:['streamer','manager','partner'].includes(value.role)?value.role:'',time:Number.isFinite(value.time) && Math.abs(value.time)<=8640000000000000?value.time:Date.now()};
+    return {id:value.id,name,text,updateOnly:value.updateOnly===true,segments:segments(value.segments,text),badges,role:['streamer','manager','partner'].includes(value.role)?value.role:'',time:Number.isFinite(value.time) && Math.abs(value.time)<=8640000000000000?value.time:null};
   }
   function matches(item,filter) {
     return filter.enabled && !(filter.excludedNames||[]).some(n=>nameKey(n)===nameKey(item.name)) && ((item.role==='streamer' && filter.streamers) || (item.role==='manager' && filter.managers) || (item.role==='partner' && filter.partners) || filter.names.some(n=>nameKey(n)===nameKey(item.name)));
   }
   function create() {
     let uid=null,items=[];
-    return {reset(next){uid=next;items=[];},get uid(){return uid;},get items(){return items.slice();},clear(){items=[];},
+    return {reset(next){uid=next;items=[];},get uid(){return uid;},get items(){return items.slice();},clear(){items=[];},applySettings(filter){items=items.filter(item=>!(filter.excludedNames||[]).some(name=>nameKey(name)===nameKey(item.name)));},
       add(channel,batch,filter){
         if(channel!==uid || !filter.enabled || !Array.isArray(batch))return false;
         let changed=false;
         for(const raw of batch.slice(0,LIMIT)){
           const item=message(raw);if(!item || !matches(item,filter))continue;
           const existing=items.findIndex(old=>old.id===item.id);
+          if(existing<0 && item.updateOnly)continue;
           if(existing>=0){if(JSON.stringify(items[existing])===JSON.stringify(item))continue;items[existing]=item;}
           else items.push(item);
           if(items.length>LIMIT)items.shift();changed=true;
@@ -53,5 +59,5 @@ globalThis.CZImportantChat = (() => {
         return changed;
       }};
   }
-  return {KEY,LIMIT,settings,message,matches,create,imageUrl};
+  return {KEY,LIMIT,settings,message,matches,create,imageUrl,timestamp};
 })();

@@ -107,7 +107,7 @@ src/
 | 방송 iframe | PlayerRegistry | 방송 제거·멀티뷰 종료 |
 | 원본 채팅 iframe | ChatController | 채팅 닫기·채널 전환·종료 |
 | 수집 observer·시각 표시 observer | 해당 채팅 프레임 scope | 프레임 종료·기능 중단 |
-| 모아보기 본문/DOM | ChatController | 최대 100개, 채널/필터 변경·닫기 정책 유지 |
+| 모아보기 본문/DOM | ChatController | 최대 100개, 채널 변경·닫기·명시적 초기화 때 정리; 설정 변경은 제외 대상만 제거 |
 | 수집 식별 이력 | ChatHistory | 최대 2,048개, 해시·ID·시각만 저장 |
 | 스크린샷 Blob·미리보기 URL | ScreenshotGallery | 저장한 항목·닫은 갤러리에서 해제, 활성 이미지 위주로 디코딩 |
 | 녹화 청크·자체 캔버스 트랙 | RecordingSession | 녹화 종료/실패 시 정리, 방송당 256MiB 유지 |
