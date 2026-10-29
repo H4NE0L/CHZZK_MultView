@@ -46,3 +46,13 @@ test('streamer, manager and partner default on and remain independently filterab
  assert(api.matches({name:'owner',role:'streamer'},api.settings({partners:false})));
  assert.equal(api.settings({streamers:false,managers:false}).partners,true);
 });
+
+test('excluded names take priority over every role and manual inclusion',()=>{
+ const api=setup(),filter=api.settings({names:['Alice'],excludedNames:[' Alice ','ALICE',null]});
+ assert.equal(filter.excludedNames.length,1);
+ for(const role of ['streamer','manager','partner',''])assert(!api.matches({name:'alice',role},filter));
+ assert(api.matches({name:'Alice2',role:'streamer'},filter));
+ assert.equal(api.settings().excludedNames.length,0);
+ assert.equal(api.settings({excludedNames:Array.from({length:60},(_,i)=>'user'+i)}).excludedNames.length,50);
+ const buffer=api.create();buffer.reset('A');assert(!buffer.add('A',[{id:'x',name:'Alice',text:'blocked',role:'streamer'}],filter));
+});

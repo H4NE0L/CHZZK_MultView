@@ -2,10 +2,11 @@ globalThis.CZImportantChat = (() => {
   const KEY='chzzkImportantChatV1', LIMIT=100;
   const clean=value=>typeof value==='string'?value.normalize('NFC').trim():'';
   const nameKey=value=>clean(value).toLocaleLowerCase('ko-KR');
+  const nameList=value=>[...new Map((Array.isArray(value)?value:[]).filter(n=>typeof n==='string').map(n=>clean(n).slice(0,40)).filter(Boolean).map(n=>[nameKey(n),n])).values()].slice(0,50);
   function settings(value={}) {
     if(!value || typeof value!=='object')value={};
     return {enabled:value.enabled!==false,streamers:value.streamers!==false,managers:value.managers!==false,partners:value.partners!==false,
-      names:[...new Map((Array.isArray(value.names)?value.names:[]).filter(n=>typeof n==='string').map(n=>clean(n).slice(0,40)).filter(Boolean).map(n=>[nameKey(n),n])).values()].slice(0,50)};
+      names:nameList(value.names),excludedNames:nameList(value.excludedNames)};
   }
   function imageUrl(value){
     if(typeof value!=='string' || value.length>2048)return '';
@@ -34,7 +35,7 @@ globalThis.CZImportantChat = (() => {
     return {id:value.id,name,text,segments:segments(value.segments,text),badges,role:['streamer','manager','partner'].includes(value.role)?value.role:'',time:Number.isFinite(value.time) && Math.abs(value.time)<=8640000000000000?value.time:Date.now()};
   }
   function matches(item,filter) {
-    return filter.enabled && ((item.role==='streamer' && filter.streamers) || (item.role==='manager' && filter.managers) || (item.role==='partner' && filter.partners) || filter.names.some(n=>nameKey(n)===nameKey(item.name)));
+    return filter.enabled && !(filter.excludedNames||[]).some(n=>nameKey(n)===nameKey(item.name)) && ((item.role==='streamer' && filter.streamers) || (item.role==='manager' && filter.managers) || (item.role==='partner' && filter.partners) || filter.names.some(n=>nameKey(n)===nameKey(item.name)));
   }
   function create() {
     let uid=null,items=[];

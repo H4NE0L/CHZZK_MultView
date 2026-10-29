@@ -230,6 +230,14 @@ module.exports=async function checkImportantChat(page){
  await page.waitForFunction(()=>!!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-message[data-role="partner"]'));
  await frame.evaluate(()=>document.querySelectorAll('[data-message-id^="role-"]').forEach(row=>row.remove()));await settings.locator('.ic-clear').click();
  await page.locator('.ic-name').fill('지정 사용자');await page.locator('.ic-form button').click();
+ await settings.locator('.ic-exclude-name').fill('지정 사용자');await settings.locator('.ic-exclude-form button').click();
+ assert.equal(await settings.locator('.ic-excluded-names button').count(),1);
+ await add('지정 사용자','제외 우선 검사','스트리머','excluded-manual-role');await page.waitForTimeout(350);
+ assert(!(await panel.locator('.ic-list').textContent()).includes('제외 우선 검사'),'exclusion overrides manual inclusion and streamer role');
+ await settings.locator('.ic-excluded-names button').click();
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('제외 우선 검사'));
+ await frame.locator('[data-message-id=excluded-manual-role]').evaluate(el=>el.remove());await settings.locator('.ic-clear').click();
+
  const imageUrl='https://ssl.pstatic.net/__cz_collected_chat_test.png';
  await page.route(imageUrl,route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKf8AAAAASUVORK5CYII=','base64')}));
  await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
