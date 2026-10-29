@@ -1,5 +1,5 @@
 export function bind(context) {
-  const {ui,addFromInput,clearAll,favoriteController,toggleToolbar,toggleChat,toggleChatSide,toggleScreenLock,scope,saveState,syncShortcutSettings,
+  const {ui,mediaTools,addFromInput,clearAll,favoriteController,toggleToolbar,toggleChat,toggleChatSide,toggleScreenLock,scope,saveState,syncShortcutSettings,
     importantChat,powerDiagnostics,volumePanel,renderSyncUI,resetAllSync,adjustSync,resetSync,moveSelectedToFront,applyLayout,
     updateLayoutToggle,refreshFavoriteList,refreshChannelManager,setChatOpen,setChatSide,setScreenLock,updateToolbarToggleUI,syncVolumeUI}=context;
     ui.querySelector("#addBtn").addEventListener("click", addFromInput);
@@ -42,6 +42,8 @@ export function bind(context) {
         const nextLayout = button.dataset.layout;
         if (!["grid", "main-sub"].includes(nextLayout)) return;
         if (state.layout === nextLayout) return;
+        const proposed=nextLayout==='main-sub'?[...state.channels.filter(channel=>channel.uid===state.selectedUid),...state.channels.filter(channel=>channel.uid!==state.selectedUid)]:state.channels;
+        if(!mediaTools.canDisplay(proposed,nextLayout))return;
         state.layout = nextLayout;
         // The raid view always shows the current main broadcast in the big slot.
         if (nextLayout === "main-sub") moveSelectedToFront();

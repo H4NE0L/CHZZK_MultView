@@ -10,7 +10,7 @@ function fixture(video) {
     start(){this.state='recording';}
     stop(){this.state='inactive';this.ondataavailable?.({data:new Blob(['video'])});this.onstop?.();}
   }
-  const ctx=vm.createContext({Blob,Date,MediaRecorder:Recorder,setInterval:()=>1,clearInterval(){},window:{addEventListener:(name,fn)=>handlers[name]=fn},document:{addEventListener:(name,fn)=>handlers[name]=fn,createElement:()=>({getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['png'],{type:'image/png'}))})}});
+  const ctx=vm.createContext({Blob,Date,MediaRecorder:Recorder,setInterval:()=>1,clearInterval(){},window:{addEventListener:(name,fn)=>handlers[name]=fn,removeEventListener:(name,fn)=>{if(handlers[name]===fn)delete handlers[name];}},document:{addEventListener:(name,fn)=>handlers[name]=fn,createElement:()=>({getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['png'],{type:'image/png'}))})}});
   vm.runInContext(fs.readFileSync('src/shared/messages.js','utf8'),ctx);
   vm.runInContext(fs.readFileSync('src/content/media-frame.js','utf8'),ctx);
   const media=ctx.CZMediaFrame.create({uid:'aaaaaa',findVideo:()=>video,send:data=>sent.push(data),seekRange:()=>[0,10],seekBy:delta=>({ok:true,applied:delta})});
@@ -62,4 +62,10 @@ test('disabling general shortcuts preserves S/R and does not intercept native pl
   f.handlers.keydown(event('f'));f.handlers.keydown(event('s'));f.handlers.keydown(event('r'));
   assert.equal(prevented,2);assert.deepEqual(f.sent.map(message=>message.action),['screenshot','record']);
   await f.media.command({type:'MEDIA_SHORTCUTS',enabled:true});f.handlers.keydown(event('f'));assert.equal(f.sent.at(-1).key,'f');
+});
+test('disposing a recording frame discards callbacks and chunks without stopping source tracks',async()=>{
+ let stopped=0;const f=fixture({captureStream:()=>({getVideoTracks:()=>[{stop:()=>stopped++}]})});
+ await f.media.command({type:'MEDIA_RECORD',mime:'video/webm',requestId:9});const recorder=f.active(),before=f.sent.length;
+ f.media.dispose();f.media.dispose();assert.equal(recorder.state,'inactive');assert.equal(stopped,0);assert.equal(f.sent.length,before);assert.equal(f.handlers.keydown,undefined);
+ await f.media.command({type:'MEDIA_SCREENSHOT',requestId:10});assert.equal(f.sent.length,before);
 });

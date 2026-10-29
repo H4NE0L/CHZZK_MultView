@@ -14,7 +14,7 @@ const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=
  await page.addInitScript(()=>{
    // Wait for encoded data instead of racing a fixed 500ms stop timer.
    const NativeRecorder=window.MediaRecorder;
-   window.MediaRecorder=class extends NativeRecorder{constructor(...args){super(...args);this.addEventListener('dataavailable',event=>{window.__recordedBytes=(window.__recordedBytes || 0)+event.data.size;});}};
+   window.MediaRecorder=class extends NativeRecorder{constructor(...args){super(...args);window.__lastRecorder=this;this.addEventListener('dataavailable',event=>{window.__recordedBytes=(window.__recordedBytes || 0)+event.data.size;});}};
    const data={chzzkMultiviewFavoritesV08:[{uid:'aaaaaa',name:'테스트 방송',group:'기본 그룹',online:true},{uid:'bbbbbb',name:'다른 방송',group:'기본 그룹',online:true}],chzzkFollowingCacheV2:{channels:[{uid:'aaaaaa',name:'테스트 방송',online:true},{uid:'bbbbbb',name:'다른 방송',online:true}]},chzzkMultiviewV09:{chatOpen:!new URL(location.href).searchParams.has('chatClosed'),channels:[{uid:'aaaaaa',name:'테스트 방송',url:'https://chzzk.naver.com/live/aaaaaa',muted:true,volume:1}],selectedUid:'aaaaaa'}};
    window.__messages=[];
    window.chrome={runtime:{id:'mock',getURL:p=>'https://viewer.invalid/'+p,onMessage:{addListener(){}},sendMessage:async m=>{window.__messages.push(m);if(m.type==='VIEWER_SAVE_STATE')data.chzzkMultiviewV09=m.state;if(m.type==='OPEN_MULTIVIEW_ON_SITE')return window.__launch();return {ok:true,tabId:1};}},storage:{local:{get:async keys=>data,set:async values=>Object.assign(data,values)},onChanged:{addListener(){}}}};
@@ -98,7 +98,7 @@ const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=
  assert(alignment.center<2);assert(alignment.bottom && alignment.top);assert(alignment.handle<2);
  await page.locator('.gallery-close').click();await page.locator('.tile-record').click();
  const recordingFrame=page.frames().find(frame=>new URL(frame.url()).pathname==='/live/aaaaaa');
- await recordingFrame.waitForFunction(()=>window.__recordedBytes>0);await page.locator('.tile-record').click();
+ await recordingFrame.waitForFunction(()=>window.__recordedBytes>0).catch(async error=>{throw Error(error.message+'; recording diagnostics: '+JSON.stringify({errors,notice:await page.locator('.mv-notice').textContent().catch(()=>''),frame:await recordingFrame.evaluate(()=>({bytes:window.__recordedBytes,state:window.__lastRecorder?.state,video:[...document.querySelectorAll('video')].map(v=>({paused:v.paused,width:v.videoWidth,ready:v.readyState}))}))}));});await page.locator('.tile-record').click();
  await page.waitForFunction(()=>window.__messages.some(m=>m.type==='SITE_OPEN_RECORDING'));
  const types=await page.evaluate(()=>window.__messages.map(m=>m.type));assert(types.includes('SITE_RECORDING_BEGIN') && types.includes('SITE_RECORDING_CHUNK') && types.includes('SITE_RECORDING_FINISH'));
  await page.locator('.remove-btn').click();

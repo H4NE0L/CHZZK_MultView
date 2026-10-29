@@ -27,6 +27,9 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.waitForFunction(()=>!!window.__release);await page.evaluate(()=>__add('new'));await ready();await page.evaluate(()=>{window.__waiting=false;__release();});
   await page.waitForFunction(()=>document.querySelector('.gallery-index').textContent==='1 / 1');assert(await page.evaluate(()=>__gallery.hasUnsaved()));
   await page.locator('.media-save').click();await page.locator('.screenshot-gallery').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>__closed),2);
+  await page.evaluate(async()=>{__newGallery();for(let i=0;i<12;i++)await __add('limit-'+i);});await ready();
+  const limits=await page.evaluate(async()=>{let message='';try{await __add('overflow');}catch(error){message=error.message;}const size=__gallery.size;__gallery.close();__newGallery();let bytes='';try{__gallery.add({blob:{size:129*1024*1024},name:'too-large'});}catch(error){bytes=error.message;}__gallery.close();return {message,size,bytes};});
+  assert.equal(limits.size,12);assert(limits.message.includes('12장'));assert(limits.bytes.includes('128MB'));
   assert.deepEqual(errors,[]);console.log('PASS: copy keeps images, save removes only its image, final save closes, crop state and async capture/failure are preserved.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -41,3 +41,7 @@ declare global {
 declare global {
   var CZChannelInputs: typeof import('../viewer/models/channel-input').channelInputs;
 }
+declare global {
+  var CZObjectURLs: typeof import('../shared/media/object-urls').objectURLs;
+  var CZExportJobs: typeof import('../viewer/media/export-job').exportJobs;
+}

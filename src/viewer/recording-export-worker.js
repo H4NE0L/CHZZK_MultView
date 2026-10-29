@@ -10,6 +10,7 @@ self.onmessage=async({data})=>{
   conversion.onProgress=progress=>{const percent=Math.floor(progress*100);if(percent!==last){last=percent;self.postMessage({type:'progress',percent});}};
   await conversion.execute();
   if(!target.buffer?.byteLength)throw Error('저장할 영상 데이터가 없습니다.');
+  input.dispose();input=null;
   self.postMessage({type:'done',buffer:target.buffer,mime:data.container==='mp4'?'video/mp4':'video/webm'},[target.buffer]);
  }catch(error){self.postMessage({type:'error',error:error.message});}
  finally{input?.dispose();}

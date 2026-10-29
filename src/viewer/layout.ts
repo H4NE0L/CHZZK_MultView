@@ -6,6 +6,7 @@ interface LayoutContext {
   readonly videoGrid: HTMLElement | null;
   tileMap: Map<string, HTMLElement>;
   scope: ResourceScope;
+  onRemove?(uid: string): void;
   createTile(channel: SessionChannel): void;
   sendTileVolume(uid: string): void;
   applyTileLock(tile: HTMLElement, locked: boolean): void;
@@ -53,6 +54,7 @@ export function create(context: LayoutContext) {
       if (iframe) iframe.src = "about:blank";
       const hiddenChannel = state.channels.find(c => c.uid === uid);
       if (hiddenChannel) hiddenChannel.muted = true;
+      context.onRemove?.(uid);
       tile.remove();
       tileMap.delete(uid);
     }

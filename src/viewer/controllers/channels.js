@@ -108,6 +108,7 @@ export function create(context) {
     if (tile) {
       const iframe = tile.querySelector("iframe");
       if (iframe) iframe.src = "about:blank";
+      mediaTools.detach(uid);
       tile.remove();
     }
 
@@ -132,9 +133,10 @@ export function create(context) {
   function clearAll() {
     const state=context.state;
     if(mediaTools.hasRecordings()){showNotice("녹화를 중지한 뒤 전체 삭제하세요.");return;}
-    for (const tile of tileMap.values()) {
+    for (const [uid,tile] of tileMap) {
       const iframe = tile.querySelector("iframe");
       if (iframe) iframe.src = "about:blank";
+      mediaTools.detach(uid);
       tile.remove();
     }
     tileMap.clear();
@@ -178,6 +180,7 @@ export function create(context) {
     // Drop only removed tiles; retain surviving iframe instances and audio state.
     for (const [uid, tile] of tileMap) {
       if (state.channels.some(c => c.uid === uid)) continue;
+      mediaTools.detach(uid);
       tile.remove();
       tileMap.delete(uid);
       clearSyncState(uid);

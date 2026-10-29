@@ -36,7 +36,8 @@ globalThis.CZScreenshotCrop = {attach(img, host, onChange=()=>{},initial={}) {
     const x=Math.min(img.naturalWidth-1,Math.round(area.x*img.naturalWidth)),y=Math.min(img.naturalHeight-1,Math.round(area.y*img.naturalHeight));
     const width=Math.max(1,Math.min(img.naturalWidth-x,Math.round(area.width*img.naturalWidth))),height=Math.max(1,Math.min(img.naturalHeight-y,Math.round(area.height*img.naturalHeight)));
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
-    canvas.getContext('2d').drawImage(img,x,y,width,height,0,0,width,height);
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('이미지를 저장할 수 없습니다.');return blob;
+    try{canvas.getContext('2d').drawImage(img,x,y,width,height,0,0,width,height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('이미지를 저장할 수 없습니다.');return blob;
+    }finally{canvas.width=canvas.height=0;}
   }};
 }};

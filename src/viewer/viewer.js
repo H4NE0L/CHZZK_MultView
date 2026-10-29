@@ -47,7 +47,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
     importantChat=CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});
     scope.add(()=>importantChat.dispose());
     scope.frame(()=>{mvResizeObserver.observe(videoGrid);mvResizeObserver.observe(ui);});
-    bindControls({get state(){return state;},ui,addFromInput,clearAll,favoriteController,toggleToolbar,toggleChat,toggleChatSide,toggleScreenLock,scope,saveState,syncShortcutSettings,
+    bindControls({mediaTools,get state(){return state;},ui,addFromInput,clearAll,favoriteController,toggleToolbar,toggleChat,toggleChatSide,toggleScreenLock,scope,saveState,syncShortcutSettings,
       importantChat,powerDiagnostics,volumePanel,renderSyncUI,resetAllSync,adjustSync,resetSync,moveSelectedToFront,applyLayout,
       updateLayoutToggle,refreshFavoriteList,refreshChannelManager,setChatOpen,setChatSide,setScreenLock,updateToolbarToggleUI,syncVolumeUI});
   }
@@ -100,12 +100,13 @@ import {create as createChannelList} from './controllers/channel-list.js';
   const powerDiagnostics=CZPowerDiagnostics.create({get state(){return state;},get ui(){return ui;},tileMap});
   const mediaTools = CZMediaTools.create({get shortcutsEnabled(){return state.shortcutsEnabled!==false;},onShortcut:handleShortcut,get state() {return state;}, get ui() {return ui;}, tileMap, showNotice, adjustSync, externalSeek});
 
+  scope.add(()=>mediaTools.dispose());
   bindMessages({scope,tileMap,powerDiagnostics,clearSyncState,sendTileVolume,mediaTools,receiveVideoState,handleSyncState,handleSyncResult,
     get state(){return state;},get chatFrame(){return chatFrame;},get importantChat(){return importantChat;}});
 
   const {updateLayoutToggle,applyLayout,resizeFixedAspectGrid}=CZLayout.create({
     get state(){return state;},get ui(){return ui;},get videoGrid(){return videoGrid;},
-    tileMap,scope,createTile,sendTileVolume,applyTileLock,refreshChannelManager,refreshVolumeManager
+    tileMap,scope,onRemove:uid=>mediaTools.detach(uid),createTile,sendTileVolume,applyTileLock,refreshChannelManager,refreshVolumeManager
   });
 
   const {updateChat} = CZChat.create({onUpdated:()=>importantChat?.sync(),get state() {return state;}, get chatPanel() {return chatPanel;}, get chatFrame() {return chatFrame;}, set chatFrame(value) {chatFrame = value;}});
