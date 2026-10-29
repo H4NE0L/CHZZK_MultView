@@ -14,6 +14,7 @@ function cleanSession(value: unknown): ViewerSession {
   if(!['grid','main-sub'].includes(String(raw.layout)) || !['left','right'].includes(String(raw.chatSide)))throw Error('화면 배치 설정을 확인해주세요.');
   for(const key of ['chatOpen','screenLocked','mainOnly','shortcutsEnabled'])if(typeof raw[key]!=='boolean')throw Error('설정 ON/OFF 값을 확인해주세요.');
   if(typeof raw.masterVolume!=='number' || !Number.isFinite(raw.masterVolume) || raw.masterVolume<0 || raw.masterVolume>1)throw Error('전체 음량을 확인해주세요.');
+  if(raw.powerRewards!==undefined && typeof raw.powerRewards!=='boolean')throw Error('통나무 수집 설정을 확인해주세요.');
   const channels=raw.channels.map(value=>{
     const channel=object(value);
     if(typeof channel.uid!=='string' || channel.uid.length>160)throw Error('방송 ID를 확인해주세요.');

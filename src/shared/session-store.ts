@@ -2,7 +2,7 @@ import type {ParsedChannel, SessionChannel, ViewerSession} from './contracts/ses
 const record=(value: unknown): Record<string, unknown> => value && typeof value==='object' ? value as Record<string, unknown> : {};
 export const sessionStore = (() => {
   const KEY = 'chzzkMultiviewV09';
-  const DEFAULT_STATE = Object.freeze<ViewerSession>({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right', shortcutsEnabled:true});
+  const DEFAULT_STATE = Object.freeze<ViewerSession>({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right', shortcutsEnabled:true,powerRewards:false});
   const clamp01 = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
   function parseInput(value: unknown): ParsedChannel | null {
     const raw = String(value || "").trim();
@@ -52,7 +52,7 @@ export const sessionStore = (() => {
     return {channels, selectedUid: typeof saved.selectedUid==='string' && visible.some(c => c.uid === saved.selectedUid) ? saved.selectedUid : visible[0]?.uid || null,
       layout, chatOpen: saved.chatOpen !== false, screenLocked: saved.screenLocked === true,
       mainOnly: saved.mainOnly === true, masterVolume: saved.masterVolume == null ? 1 : clamp01(saved.masterVolume),
-      chatSide: saved.chatSide === 'left' ? 'left' : 'right',shortcutsEnabled:saved.shortcutsEnabled!==false};
+      chatSide: saved.chatSide === 'left' ? 'left' : 'right',shortcutsEnabled:saved.shortcutsEnabled!==false,powerRewards:saved.powerRewards===true};
   }
   async function read() { return normalize((await chrome.storage.local.get(KEY))[KEY]); }
   async function write(state: unknown) { await chrome.storage.local.set({[KEY]: normalize(state)}); }

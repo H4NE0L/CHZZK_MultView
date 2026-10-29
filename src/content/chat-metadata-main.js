@@ -1,20 +1,21 @@
-// Read only the source data already attached to a rendered chat row. No sockets,
-// network requests, React hooks or changes to the site's event handlers.
+import {sourceTimes} from '../shared/chat/source-times.js';
+// Read row-owned source data or the passive socket time index. No new
+// connections, network requests, React hooks or changes to site handlers.
 (() => {
   if(window.__CZ_CHAT_METADATA_V1__)return;
-  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261029-1');
+  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261030-1');
   const rows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
   const names='[data-chat-nickname],[class*="live_chatting_username_nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
   const own=(object,key)=>object && typeof object==='object'?Object.getOwnPropertyDescriptor(object,key)?.value:undefined;
   const clean=value=>String(value||'').normalize('NFC').replace(/\s+/g,' ').trim();
   const time=value=>{if(!['string','number'].includes(typeof value)||value==='')return null;const number=Number(value),ms=Number.isFinite(number)?number*(number<1e11?1000:1):Date.parse(value);return Number.isFinite(ms)&&ms>=946684800000&&ms<=Date.now()+60000?ms:null;};
   function sourceMessage(object,author,body){
-    const raw=own(object,'messageTime')??own(object,'messageTimestamp')??own(object,'createdAt')??own(object,'createTime')??own(object,'ctime');
+    const raw=own(object,'messageTime')??own(object,'messageTimestamp')??own(object,'msgTime')??own(object,'createdAt')??own(object,'createTime')??own(object,'ctime');
     const timestamp=time(raw);if(timestamp===null)return null;
     let profile=own(object,'profile')??own(object,'user')??own(object,'sender');
     if(typeof profile==='string'&&profile.length<16000){try{profile=JSON.parse(profile);}catch(_){profile=null;}}
     const name=own(profile,'nickname')??own(profile,'nickName')??own(object,'nickname')??own(object,'nickName');
-    const content=own(object,'content')??own(object,'message')??own(object,'text');
+    const content=own(object,'content')??own(object,'msg')??own(object,'message')??own(object,'text');
     if(typeof name!=='string'||typeof content!=='string'||!clean(content)||clean(name)!==author || !body.includes(clean(content)))return null;
     return timestamp;
   }
@@ -25,13 +26,13 @@
       for(const key of Object.keys(value).slice(0,12))if(fields.size<24)fields.add(key.slice(0,40));
       const timestamp=sourceMessage(value,author,body);if(timestamp!==null)return timestamp;
       if(depth>=4)continue;
-      for(const key of ['message','chatMessage','chattingMessage','chatting','chat','item','data','props','children']){const child=own(value,key);if(child&&typeof child==='object'&&!Array.isArray(child))queue.push({value:child,depth:depth+1});}
+      for(const key of ['message','messageData','chatMessage','chattingMessage','chatting','chat','item','data','props','children']){const child=own(value,key);if(child&&typeof child==='object'&&!Array.isArray(child))queue.push({value:child,depth:depth+1});}
     }
     return null;
   }
   function inspect(row){
     if(!row.isConnected)return;
-    const nickname=row.querySelector(names);if(!nickname)return;
+    const nickname=[...row.querySelectorAll(names)].find(node=>!node.querySelector(names));if(!nickname)return;
     const walker=document.createTreeWalker(nickname,NodeFilter.SHOW_TEXT),parts=[];let textNode;
     while((textNode=walker.nextNode()) && parts.length<40){
       const parent=textNode.parentElement;if(!parent || parent.closest('svg,[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[hidden],[aria-hidden="true"]'))continue;
@@ -47,6 +48,18 @@
         if(timestamp!==null)break;
       }
       if(timestamp!==null)break;
+    }
+    if(timestamp===null){
+      const explicit=row.querySelector('[data-chat-text],[class*="live_chatting_message_text"]');
+      let content=explicit?.textContent;
+      if(content==null){
+        let boundary=nickname;while(boundary.parentElement && boundary.parentElement!==row && /nickname|username/i.test(String(boundary.parentElement.className)))boundary=boundary.parentElement;
+        const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(boundary);const fragment=range.cloneContents();
+        fragment.querySelectorAll('svg,time,[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[hidden],[aria-hidden="true"]').forEach(node=>node.remove());
+        content=fragment.textContent;
+      }
+      timestamp=sourceTimes.lookup(author,clean(content),row.getAttribute('data-message-id')||row.getAttribute('data-chat-id'));
+      if(timestamp!==null && fields.size<24)fields.add('socket:source-time');
     }
     if(timestamp!==null){const iso=new Date(timestamp).toISOString();if(row.getAttribute('data-cz-message-time')!==iso)row.setAttribute('data-cz-message-time',iso);}
     else row.removeAttribute('data-cz-message-time');

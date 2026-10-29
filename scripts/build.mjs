@@ -23,6 +23,7 @@ async function write(relative,data){await mkdir(path.dirname(path.join(out,relat
 // CSS fragments retain their original cascade order and stay out of the package.
 for(const [output,inputs] of Object.entries(styles))await write(output,(await Promise.all(inputs.map(input=>readFile(path.join(root,input),'utf8')))).join(''));
 for(const relative of files){
+  if(relative.startsWith('docs/') && !['docs/development.md','docs/favorites-backup.md','docs/settings-backup.md','docs/power-diagnostics.md','docs/chat-performance.md'].includes(relative))continue;
   if(sources.has(relative.replace(/\.ts$/,'.js'))||relative.endsWith('.d.ts')||styleInputs.has(relative))continue;
   if(relative.endsWith('.html')){
     const kind=pages[relative],marker=`<!-- ${kind}-scripts -->`;

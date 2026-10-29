@@ -70,5 +70,9 @@
   "src/viewer/screenshot-gallery.js": [
     "CZScreenshotGallery",
     "screenshotGallery"
+  ],
+  "src/content/power-rewards.js": [
+    "CZPowerRewards",
+    null
   ]
 }

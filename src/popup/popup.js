@@ -1,4 +1,3 @@
-const DEFAULT_GROUP = CZFavoritesStore.DEFAULT_GROUP;
 
 const statusEl = document.getElementById("status");
 const uidInput = document.getElementById("uidInput");
@@ -6,7 +5,7 @@ const favoritesEl = document.getElementById("favorites");
 const multiListEl = document.getElementById("multiList");
 const versionEl = document.getElementById("version");
 let favorites = [];
-let favoriteGroups = [DEFAULT_GROUP];
+let favoriteGroups = [];
 let multiList = [];
 
 function setStatus(text, error = false) {
@@ -45,14 +44,14 @@ function getGroupItems(group) {
 
 function renderFavorites() {
   ensureGroups();
-  const groups = favoriteGroups;
+  const groups = [...favoriteGroups,...(getGroupItems('').length?['']:[])];
 
   favoritesEl.innerHTML = groups.map(group => {
     const allItems = getGroupItems(group);
     const items = CZGroupManager.visibleItems(group, allItems);
     return `<details class="favorite-group" open data-group="${escapeHtml(group)}">
       <summary class="favorite-group-summary">
-        <span class="group-name">${escapeHtml(group)}</span>
+        <span class="group-name">${escapeHtml(group || '그룹 없음')}</span>
         <span class="favorite-group-count">(${allItems.length})</span>
         ${items.some(f => f.online) ? `<button class="group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${items.filter(f=>f.online).length}개 멀티뷰</button>` : ''}
       </summary>

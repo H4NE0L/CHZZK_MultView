@@ -27,7 +27,7 @@ test('legacy read migrates in memory, keeps empty groups and never writes', asyn
   const f = fixture({chzzkMultiviewFavoritesV07: [{uid: 'aaaaaa', name: 'A - CHZZK', group: '첫 그룹', order: '2'}], chzzkMultiviewFavoriteGroupsV01: ['빈 그룹']});
   const state = plain(await f.store.read());
   assert.equal(state.favorites[0].name, 'A');
-  assert.deepEqual(state.groups, ['빈 그룹', '기본 그룹', '첫 그룹']);
+  assert.deepEqual(state.groups, ['빈 그룹', '첫 그룹']);
   assert.equal(f.writes(), 0);
 });
 
@@ -57,11 +57,11 @@ test('group add, rename, delete and membership changes retain global order', () 
   assert.equal(state.favorites[2].group, '변경 그룹');
   state = store.setFavoriteGroup(state.favorites, state.groups, 'bbbbbb', '변경 그룹');
   state = store.deleteGroup(state.favorites, state.groups, '변경 그룹');
-  assert(state.favorites.every(f => f.group === '기본 그룹'));
+  assert(state.favorites.every(f => f.group === '' && f.groups.length===0));
   assert.deepEqual(plain(state.favorites.map(f => f.uid)), ['aaaaaa','bbbbbb','cccccc']);
   assert.deepEqual(plain(state.favorites.map(f => f.order)), [1,2,3]);
   assert(state.groups.includes('빈 그룹'));
-  assert.deepEqual(plain(store.deleteGroup(state.favorites, state.groups, '기본 그룹')), plain(state));
+  assert(!store.deleteGroup(state.favorites, state.groups, '기본 그룹').groups.includes('기본 그룹'));
   assert.deepEqual(favorites.map(f => f.group), ['첫 그룹','둘째 그룹','첫 그룹']);
 });
 
@@ -210,4 +210,17 @@ test('viewer counts format zero and unknown values and merge without changing gr
   assert.equal(result.viewerCount, 1234);
   assert.equal(result.group, '그룹');
   assert.equal(result.order, 2);
+});
+
+test('default group is optional; ungrouped favorites survive removal, editing and storage roundtrip',async()=>{
+ const f=fixture();assert.deepEqual(plain((await f.store.read()).groups),[]);
+ const favorite={uid:'aaaaaa',name:'A',groups:['기본 그룹']};
+ let state=f.store.renameGroup([favorite],['기본 그룹'],'기본 그룹','내 그룹');assert.deepEqual(plain(state.groups),['내 그룹']);
+ state=f.store.deleteGroup(state.favorites,state.groups,'내 그룹');
+ assert.deepEqual(plain(state.groups),[]);assert.deepEqual(plain(state.favorites[0].groups),[]);
+ assert.equal(f.store.itemsForGroup(state.favorites,'').length,1);
+ await f.store.write(state.favorites,state.groups);assert.deepEqual(plain(await f.store.read()),plain(state));
+ state=f.store.setGroupMembers(state.favorites,[],null,'새 그룹',state.favorites);
+ state=f.store.setGroupMembers(state.favorites,state.groups,'새 그룹','새 그룹',[]);
+ assert.equal(state.favorites.length,1);assert.deepEqual(plain(state.favorites[0].groups),[]);
 });

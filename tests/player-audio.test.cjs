@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 function fixture(){
- const events={},reports=[],timers=new Map();let seq=0;
+ const events={},windowEvents={},reports=[],timers=new Map();let seq=0;
  let video={volume:1,muted:true,addEventListener(type,fn){this[type]=fn;}};
- const ctx=vm.createContext({Date,setTimeout:fn=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),document:{addEventListener(type,fn){events[type]=fn;}},window:{addEventListener(){}}});
+ const ctx=vm.createContext({Date,setTimeout:fn=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),document:{addEventListener(type,fn){events[type]=fn;}},window:{addEventListener(type,fn){windowEvents[type]=fn;}}});
  vm.runInContext(fs.readFileSync('src/content/player-audio.js','utf8'),ctx);
  const audio=ctx.CZPlayerAudio.create({findVideo:()=>video,report:(v,reason,operation)=>reports.push({reason,operation,volume:v.volume,muted:v.muted})});const bind=audio.bind;audio.bind=v=>{v.volumechange=()=>events.volumechange({target:v,stopImmediatePropagation(){}});bind(v);};audio.bind(video);
- return {audio,reports,events,get video(){return video;},set video(v){video=v;},flush(){for(const [id,fn]of [...timers]){timers.delete(id);fn();}}};
+ return {audio,reports,events,windowEvents,get video(){return video;},set video(v){video=v;},flush(){for(const [id,fn]of [...timers]){timers.delete(id);fn();}}};
 }
 test('site initialization and zero-volume preference echoes cannot overwrite desired audio',()=>{
  const f=fixture();f.audio.setVolume(.3,false);f.video.volume=0;f.video.muted=true;f.video.volumechange();
@@ -43,4 +43,15 @@ test('volume slider zero remains a volume adjustment rather than a mute button',
  const range={tagName:'INPUT',closest:()=>true,matches:selector=>selector.includes('input')};
  f.events.input({isTrusted:true,target:range,composedPath:()=>[range]});f.video.volume=0;f.video.muted=true;f.video.volumechange();
  assert.equal(f.reports.at(-1).operation,'volume');
+});
+
+test('ended media and shared storage echoes cannot become user mute edits',()=>{
+ const f=fixture();f.audio.setVolume(.4,false);
+ f.events.click({isTrusted:true,target:{closest:()=>true}});
+ f.video.ended=true;f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
+ assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);assert(!f.reports.some(r=>r.reason==='player'));
+ f.video.ended=false;f.events.click({isTrusted:true,target:{closest:()=>true}});
+ f.windowEvents.storage();f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
+ assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);assert(!f.reports.some(r=>r.reason==='player'));
+ f.windowEvents.pagehide();assert.equal(f.audio.setVolume(0,true),false);
 });

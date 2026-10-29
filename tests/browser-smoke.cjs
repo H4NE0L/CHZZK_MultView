@@ -592,6 +592,7 @@ async function run() {
     assert.deepEqual(await popup.evaluate(() => window.__policyViolations), []);
     assert(!storage.chzzkMultiviewFavoritesV08.some(f => /오염/.test(f.name)), 'chat nicknames must never enter favorite names');
     assert(!storage.chzzkMultiviewV09.channels.some(f => /오염/.test(f.name)), 'chat nicknames must never enter tile names');
+    await require('./release-ui-browser-helpers.cjs')(main);
     assert.deepEqual(errors, []);
     console.log('PASS: browser DOM smoke (mock Chrome APIs/CHZZK): popup controls, two-way group/item sync, group order, empty-group preservation, no read/write echo, retained player frames, sync UI; no runtime errors.');
     console.log('Actual extension registration, DNR application, login and live playback require Chrome verification.');

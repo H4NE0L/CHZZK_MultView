@@ -1,8 +1,7 @@
 export function create(context) {
   const {scope,showNotice,refreshChannelManager,escapeHtml}=context;
-  const DEFAULT_FAVORITE_GROUP=CZFavoritesStore.DEFAULT_GROUP;
   const addToListFromFavorite=favorite=>context.addFavorite(favorite);
-  let favorites=[],favoriteGroups=[DEFAULT_FAVORITE_GROUP],groupManager=null;
+  let favorites=[],favoriteGroups=[],groupManager=null;
   function applyFavoriteSnapshot(snapshot) {
     favorites = snapshot.favorites;
     favoriteGroups = snapshot.groups;
@@ -42,13 +41,14 @@ export function create(context) {
     const list = ui.querySelector("#favoriteList");
     if (!list) return;
 
-    list.innerHTML = favoriteGroups.map(group => {
+    const displayGroups=[...favoriteGroups,...(favoriteItemsForGroup('').length?['']:[])];
+    list.innerHTML = displayGroups.map(group => {
       const allItems = favoriteItemsForGroup(group);
       const items = CZGroupManager.visibleItems(group, allItems);
       const online = items.filter(f=>f.online);
       return `<details class="favorite-list-group" open data-group="${escapeHtml(group)}">
         <summary class="favorite-list-group-summary">
-          <span class="favorite-list-group-name">${escapeHtml(group)}</span>
+          <span class="favorite-list-group-name">${escapeHtml(group || '그룹 없음')}</span>
           <span class="favorite-list-group-count">(${allItems.length})</span>
           ${online.length ? `<button class="favorite-group-open-online" type="button" data-group="${escapeHtml(group)}">온라인 ${online.length}개 멀티뷰</button>` : ''}
         </summary>
@@ -126,7 +126,7 @@ export function create(context) {
 
   function toggleFavorite(uid, title = uid) {
     if (isFavorite(uid)) favorites = favorites.filter(f => f.uid !== uid);
-    else { const nextOrder=favorites.reduce((max,f)=>Math.max(max,Number(f.order)||0),0)+1; favorites.push({ uid, name:title||uid, title:title||uid, group:DEFAULT_FAVORITE_GROUP, online:false, openAt:null, category:"", order:nextOrder }); }
+    else { const nextOrder=favorites.reduce((max,f)=>Math.max(max,Number(f.order)||0),0)+1; favorites.push({ uid, name:title||uid, title:title||uid, group:'', groups:[], online:false, openAt:null, category:"", order:nextOrder }); }
     ensureFavoriteGroups();
     saveFavorites().catch(console.warn);
     refreshFavoriteList();

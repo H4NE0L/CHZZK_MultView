@@ -37,3 +37,11 @@ test('native unmute restoring a site default volume keeps the existing tile leve
  f.audio.receiveVideoState({uid:'A',reason:'player',operation:'mute',volume:1,muted:false});
  assert.equal(f.state.channels[0].volume,.6);assert.equal(f.state.channels[0].muted,false);assert.equal(f.sent.at(-1).volume,.3);
 });
+
+
+test('removal reconciliation keeps remaining audio and releases a tab-level mute only when audible',()=>{
+ const f=fixture();f.state.channels=f.state.channels.filter(channel=>channel.uid==='A');
+ f.audio.reconcile();assert.equal(f.audible(),1);assert.equal(f.sent.at(-1).volume,.3);assert.equal(f.sent.at(-1).muted,false);
+ assert.equal(f.state.masterVolume,.5);assert.equal(f.state.channels[0].volume,.6);
+ f.state.masterVolume=0;f.audio.reconcile();assert.equal(f.audible(),1);assert.equal(f.sent.at(-1).muted,true);
+});

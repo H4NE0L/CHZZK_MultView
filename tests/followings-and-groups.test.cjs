@@ -66,7 +66,7 @@ test('checklist groups add memberships and preserve existing global item order',
   assert(renamed.favorites[0].groups.includes('이름 변경'));
   const removed=store.deleteGroup(renamed.favorites,renamed.groups,'이름 변경');
   assert.deepEqual(Array.from(removed.favorites[0].groups),['원래 그룹']);
-  assert.deepEqual(Array.from(removed.favorites[1].groups),['기본 그룹']);
+  assert.deepEqual(Array.from(removed.favorites[1].groups),[]);
 });
 test('empty or duplicate group names are rejected; group shifting never reorders items', () => {
   const {store}=fixture(async()=>{throw Error('unused');});

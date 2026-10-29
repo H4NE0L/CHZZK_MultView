@@ -47,11 +47,11 @@ export function parse(input: unknown): BackupDocument {
     const memberships=names(entry.groups??(entry.group?[entry.group]:['기본 그룹']),'그룹');
     const existing=byUid.get(entry.uid);
     if(existing){existing.groups=[...new Set([...existing.groups,...memberships])];continue;}
-    byUid.set(entry.uid,{uid:entry.uid,name,title,groups:memberships.length?memberships:['기본 그룹'],order:typeof entry.order==='number' && Number.isFinite(entry.order) && entry.order>0?entry.order:byUid.size+1});
+    byUid.set(entry.uid,{uid:entry.uid,name,title,groups:memberships,order:typeof entry.order==='number' && Number.isFinite(entry.order) && entry.order>0?entry.order:byUid.size+1});
   }
   const favorites=[...byUid.values()].sort((a,b)=>a.order-b.order);
   favorites.forEach((favorite,index)=>favorite.order=index+1);
-  const allGroups=[...new Set([...groups,'기본 그룹',...favorites.flatMap(f=>f.groups)])];
+  const allGroups=[...new Set([...groups,...favorites.flatMap(f=>f.groups)])];
   const options=object(data.groupOptions),groupOptions: BackupData['groupOptions']=Object.create(null);
   for(const group of allGroups){
     const option=object(options[group]);

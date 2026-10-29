@@ -48,3 +48,10 @@ test('duplicate UIDs and prototype-like group names are handled as data',()=>{
  assert.equal(backup.data.favorites.length,1);assert.deepEqual(backup.data.favorites[0].groups,['__proto__','constructor']);
  assert.equal(backup.data.groupOptions.__proto__.color,'#123456');assert.equal({}.color,undefined);
 });
+
+test('ungrouped favorites stay ungrouped through export, replace and recovery snapshots',async()=>{
+ const f=setup({[F]:[{uid:'aaaaaa',name:'A',groups:[]}],[G]:[]});
+ const backup=plain(await f.api.create());assert.deepEqual(backup.data.groups,[]);assert.deepEqual(backup.data.favorites[0].groups,[]);
+ await f.api.restore(backup,'replace');assert.deepEqual(f.data[G],[]);assert.deepEqual(f.data[F][0].groups,[]);
+ assert.deepEqual(plain((await f.api.previous()).data.favorites[0].groups),[]);
+});

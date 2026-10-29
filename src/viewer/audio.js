@@ -52,6 +52,11 @@ export const audio = {create(context) {
     for (const uid of tileMap.keys()) sendTileVolume(uid);
   }
 
+  function reconcile() {
+    sendAllTileVolumes();
+    if(context.state.channels.some(channel=>tileMap.has(channel.uid) && !effectiveMuted(channel)))context.ensureAudible?.();
+  }
+
   function setTileVolume(uid, volume) {
     const channel = context.state.channels.find(c => c.uid === uid);
     if (!channel) return;
@@ -131,5 +136,5 @@ export const audio = {create(context) {
     syncVolumeUI();
     saveStateSoon();
   }
-  return {clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState};
+  return {reconcile, clamp01, mainUid, effectiveVolume, isForcedMuted, effectiveMuted, sendTileVolume, sendAllTileVolumes, setTileVolume, toggleTileMute, setMasterVolume, toggleMasterMute, makeMainAudible, setMainOnly, receiveVideoState};
 }};

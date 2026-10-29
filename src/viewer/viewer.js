@@ -93,7 +93,10 @@ import {create as createChannelList} from './controllers/channel-list.js';
 
   function syncShortcutSettings() {
     CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
-    for(const tile of tileMap.values())CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
+    for(const tile of tileMap.values()){
+      CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
+      CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'POWER_REWARDS_CONFIG',enabled:state.powerRewards===true});
+    }
   }
   function handleShortcut(key) {
     if(state.shortcutsEnabled===false)return;
@@ -130,7 +133,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
   }
 
   const channels=createChannels({get state(){return state;},set state(value){state=value;},get ui(){return ui;},scope,tileMap,session,mediaTools,
-    favorites:favoriteController,showNotice,saveState,applyLayout,updateChat,refreshChannelManager,syncSelection,updateLayoutToggle,
+    favorites:favoriteController,reconcileAudio:audio.reconcile,showNotice,saveState,applyLayout,updateChat,refreshChannelManager,syncSelection,updateLayoutToggle,
     isChannelVisibleInLayout,createTile,selectChannel,clearSyncState,clearAllSyncState,makeMainAudible,moveSelectedToFront,
     syncVolumeUI,createUI,refreshFavoriteList,refreshFavoriteOnlineStatus,applyFavoriteSnapshot});
   function addFromInput(){channels.addFromInput();}

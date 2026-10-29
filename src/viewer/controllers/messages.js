@@ -20,6 +20,7 @@ export function bind(context) {
     } else if (data.type === 'PLAYER_READY') {
       frame.dataset.playerReady = 'true';
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
+      CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'POWER_REWARDS_CONFIG',enabled:state.powerRewards===true});
       clearSyncState(data.uid);
       sendTileVolume(data.uid);
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'ENTER_THEATER'});

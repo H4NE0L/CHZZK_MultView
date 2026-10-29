@@ -48,7 +48,7 @@ globalThis.CZGroupManager = (() => {
               const state = await CZFavoritesStore.read(), uid = row.dataset.uid;
               const next = state.favorites.some(f => f.uid === uid)
                 ? CZFavoritesStore.removeFavorite(state.favorites,state.groups,uid)
-                : CZFavoritesStore.snapshot([...state.favorites,{...following.find(f => f.uid === uid),group:CZFavoritesStore.DEFAULT_GROUP,groups:[CZFavoritesStore.DEFAULT_GROUP],order:state.favorites.length}],state.groups);
+                : CZFavoritesStore.snapshot([...state.favorites,{...following.find(f => f.uid === uid),group:'',groups:[],order:state.favorites.length}],state.groups);
               const result = await CZFavoritesStore.write(next.favorites,next.groups);
               favoriteUids = new Set(result.favorites.map(f => f.uid));
               await onSaved(result); renderFollowing();
@@ -87,12 +87,12 @@ globalThis.CZGroupManager = (() => {
       CZFavoritesBackupUI.attach(body.querySelector('.cg-backup'),async()=>{saved=await CZFavoritesStore.read();await loadOptions();await onSaved(saved);sync();});
       body.querySelector('.cg-backup-status').textContent=backupMessage;
       body.querySelector('.cg-add').onclick = () => openEditor(null);
-      body.querySelector('.cg-groups').innerHTML = saved.groups.map((group,index) => `<div class="cg-group" data-group="${esc(group)}"><span class="cg-group-name">${esc(group)} (${CZFavoritesStore.itemsForGroup(saved.favorites,group).length})</span><button type="button" data-action="up" ${index===0?'disabled':''} aria-label="${esc(group)} 위로">↑</button><button type="button" data-action="down" ${index===saved.groups.length-1?'disabled':''} aria-label="${esc(group)} 아래로">↓</button><button type="button" data-action="edit">관리</button><button type="button" data-action="delete" ${group===CZFavoritesStore.DEFAULT_GROUP?'disabled':''}>삭제</button></div>`).join('');
+      body.querySelector('.cg-groups').innerHTML = saved.groups.map((group,index) => `<div class="cg-group" data-group="${esc(group)}"><span class="cg-group-name">${esc(group)} (${CZFavoritesStore.itemsForGroup(saved.favorites,group).length})</span><button type="button" data-action="up" ${index===0?'disabled':''} aria-label="${esc(group)} 위로">↑</button><button type="button" data-action="down" ${index===saved.groups.length-1?'disabled':''} aria-label="${esc(group)} 아래로">↓</button><button type="button" data-action="edit">관리</button><button type="button" data-action="delete">삭제</button></div>`).join('');
       body.querySelectorAll('[data-action]').forEach(button => button.onclick = async () => {
         const group = button.closest('[data-group]').dataset.group;
         const action = button.dataset.action;
         if (action==='edit') return openEditor(group);
-        if (action==='delete' && !window.confirm(`'${group}' 그룹을 삭제할까요? 다른 그룹이 없는 방송은 기본 그룹으로 이동합니다.`)) return;
+        if (action==='delete' && !window.confirm(`'${group}' 그룹을 삭제할까요? 방송은 즐겨찾기에 유지되며 다른 그룹이 없으면 그룹 없음에 표시됩니다.`)) return;
         button.disabled = true;
         try {
           await commit(state => action==='delete' ? CZFavoritesStore.deleteGroup(state.favorites,state.groups,group) : CZFavoritesStore.shiftGroup(state.favorites,state.groups,group,action==='up'?-1:1));
@@ -105,7 +105,7 @@ globalThis.CZGroupManager = (() => {
       selected = new Set(group ? CZFavoritesStore.itemsForGroup(saved.favorites,group).map(f => f.uid) : []);
       frame(group ? '그룹 편집' : '그룹 추가','<button class="cg-cancel" type="button">취소</button><button class="cg-save" type="button">저장</button>');
       const body = overlay.querySelector('.cg-body');
-      body.innerHTML = `<div class="cg-fields"><label>그룹 이름<input class="cg-name" maxlength="80" value="${esc(group || '')}" ${group===CZFavoritesStore.DEFAULT_GROUP?'readonly':''} placeholder="그룹 이름"></label><label>강조색<input type="color" class="cg-color" value="${color(options[group]?.color)}"></label></div><div class="cg-search-row"><input type="search" class="cg-search" placeholder="팔로잉 채널명 검색" aria-label="팔로잉 검색"><button class="cg-refresh" type="button" aria-label="팔로잉 새로고침">↻</button><button class="cg-select-results" type="button">검색 결과 선택</button><button class="cg-clear" type="button">선택 해제</button></div><p class="cg-count"></p><p class="cg-feed-status cg-help" role="status"></p><p class="cg-error" role="status"></p><div class="cg-picker"></div>`;
+      body.innerHTML = `<div class="cg-fields"><label>그룹 이름<input class="cg-name" maxlength="80" value="${esc(group || '')}" placeholder="그룹 이름"></label><label>강조색<input type="color" class="cg-color" value="${color(options[group]?.color)}"></label></div><div class="cg-search-row"><input type="search" class="cg-search" placeholder="팔로잉 채널명 검색" aria-label="팔로잉 검색"><button class="cg-refresh" type="button" aria-label="팔로잉 새로고침">↻</button><button class="cg-select-results" type="button">검색 결과 선택</button><button class="cg-clear" type="button">선택 해제</button></div><p class="cg-count"></p><p class="cg-feed-status cg-help" role="status"></p><p class="cg-error" role="status"></p><div class="cg-picker"></div>`;
       body.querySelector('.cg-search').oninput = renderPicker;
       body.querySelector('.cg-refresh').onclick = refreshFollowing;
       body.querySelector('.cg-select-results').onclick = () => {candidates().forEach(f => selected.add(f.uid));renderPicker();};

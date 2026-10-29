@@ -26,6 +26,11 @@ module.exports=async function checkAudioIsolation(page){
  });
  if(!routed){await page.locator('#uidInput').fill('audiotest');await page.locator('#addBtn').click();}
  await page.locator('.video-tile[data-uid="audiotest"]').waitFor();await playing();
+ const endingHandle=await page.locator('.video-tile[data-uid="audiotest"] iframe').elementHandle(),ending=await endingHandle.contentFrame();await endingHandle.dispose();
+ await ending.waitForFunction(()=>!!document.querySelector('video'));
+ await ending.evaluate(()=>{const video=document.querySelector('video');Object.defineProperty(video,'ended',{get:()=>true});video.pause();video.volume=0;video.muted=true;});
+ await frame.evaluate(()=>{window.dispatchEvent(new StorageEvent('storage',{key:'player-volume',newValue:'0'}));document.querySelector('video').volume=0;document.querySelector('video').muted=true;});
+
  await page.locator('.video-tile[data-uid="audiotest"] .remove-btn').click();await playing();assert(!frame.isDetached());
  await page.locator('#volumeManager > summary').click();
  await page.locator('#masterMuteBtn').click();

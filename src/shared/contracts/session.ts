@@ -7,5 +7,5 @@ export interface SessionChannel extends Record<string, unknown> {
 export interface ViewerSession {
   channels: SessionChannel[]; selectedUid: string | null; layout: Layout;
   chatOpen: boolean; screenLocked: boolean; mainOnly: boolean;
-  masterVolume: number; chatSide: 'left' | 'right'; shortcutsEnabled: boolean;
+  masterVolume: number; chatSide: 'left' | 'right'; shortcutsEnabled: boolean; powerRewards?: boolean;
 }

@@ -126,6 +126,7 @@ export function create(context) {
     refreshChannelManager();
     syncSelection();
     applyLayout();
+    context.reconcileAudio();
     updateChat();
     saveState();
   }
