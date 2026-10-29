@@ -527,8 +527,10 @@ async function run() {
     assert.equal(await main.locator('.screenshot-crop').isVisible(),false);
     const gallery=main.locator('.screenshot-gallery');await main.locator('.media-body img').evaluate(img=>img.decode());await main.bringToFront();const before=await gallery.boundingBox();
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
-    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
+    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
+    await main.locator('.screenshot-gallery').waitFor({state:'detached'});
+    await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.locator('.media-body img').waitFor();
     assert.equal(await main.locator('#chatOriginalBtn').count(),0);
     assert.equal(await main.locator('#chatSettingsBtn').count(),0);
     // Capture again while the non-modal preview is open.
@@ -547,9 +549,9 @@ async function run() {
     const imageBytes=fs.readFileSync(await savedImage.path());
     assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
     assert.equal(await main.locator('.screenshot-gallery').count(),1);
-    await main.locator('.gallery-next').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',false);
-    await main.locator('.gallery-prev').click();assert.equal((await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'))==='true',true);
-    await main.locator('.gallery-close').click();
+    assert.equal(await main.locator('.gallery-index').textContent(),'1 / 1');
+    assert.equal(await main.locator('.gallery-crop-toggle').getAttribute('aria-pressed'),'false','remaining image retains its own crop setting');
+    const lastImageDownload=main.waitForEvent('download');await main.locator('.media-save').click();await lastImageDownload;
     await main.locator('.screenshot-gallery').waitFor({state:'detached'});
     // S in an editable field must not trigger a capture.
     await replayPlayer.evaluate(()=>document.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true,cancelable:true})));

@@ -1,10 +1,12 @@
 globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
+  const saving=new WeakSet();
   const items=[];let index=-1,crop=null,url=null,drag=null,closed=false;
   const panel=document.createElement('section');panel.className='media-dialog screenshot-dialog screenshot-gallery';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','스크린샷 목록');
   panel.innerHTML='<header><strong>스크린샷 미리보기</strong><button class="gallery-close" type="button" aria-label="닫기">✕</button></header><div class="media-body"></div><footer class="media-footer"><div class="gallery-tools"><button class="gallery-crop-toggle" type="button" aria-pressed="false">자르기</button><button class="gallery-reset" type="button">영역 초기화</button><span class="screenshot-size"></span></div><div class="gallery-navigation"><button class="gallery-prev" type="button" aria-label="이전 이미지">‹</button><span class="gallery-index"></span><button class="gallery-next" type="button" aria-label="다음 이미지">›</button></div><div class="gallery-actions"><button class="media-copy" type="button">이미지 복사</button><button class="media-save" type="button">이미지 저장</button></div></footer><p class="gallery-status" role="status"></p>';
   host.appendChild(panel);const $=selector=>panel.querySelector(selector),body=$('.media-body'),status=$('.gallery-status');
   function update() {
     const item=items[index];if(!item)return;
+    $('.media-save').disabled=saving.has(item);
     $('.gallery-index').textContent=`${index+1} / ${items.length}`;
     $('.gallery-prev').disabled=index===0;$('.gallery-next').disabled=index===items.length-1;
     const enabled=crop?.isEnabled()===true;$('.gallery-crop-toggle').setAttribute('aria-pressed',String(enabled));$('.gallery-reset').disabled=!enabled;
@@ -44,8 +46,20 @@ globalThis.CZScreenshotGallery = {create({host,download,onClose}) {
   $('.gallery-crop-toggle').onclick=()=>{crop.setEnabled(!crop.isEnabled());update();};$('.gallery-reset').onclick=()=>crop.reset();
   $('.media-save').onclick=async()=>{
     const item=items[index],controller=crop;
-    try {const blob=await controller.blob();if(closed)return;download(blob,item.name+'.png');item.saved=true;status.textContent='이미지를 저장했습니다.';}
-    catch(error){status.textContent=error.message;}
+    if(!item || !controller || saving.has(item))return;
+    saving.add(item);update();
+    try {
+      const blob=await controller.blob();if(closed)return;
+      await download(blob,item.name+'.png');if(closed)return;
+      const current=items[index],position=items.indexOf(item);if(position<0)return;
+      if(current===item){release();crop=null;}
+      items.splice(position,1);
+      if(!items.length){close();return;}
+      if(current===item){index=-1;show(Math.min(position,items.length-1));}
+      else {index=items.indexOf(current);update();}
+      status.textContent='이미지를 저장했습니다.';
+    }catch(error){if(!closed)status.textContent=error.message;}
+    finally{saving.delete(item);if(!closed)update();}
   };
   $('.media-copy').onclick=async()=>{try {const blob=await crop.blob();await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);status.textContent='이미지를 복사했습니다.';}catch(error){status.textContent='이미지 복사 실패: '+error.message;}};
   panel.addEventListener('keydown',event=>{
