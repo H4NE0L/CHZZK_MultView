@@ -26,7 +26,7 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 
 ## 실행 구조
 
-`viewer.js`는 화면 초기화·레이아웃·즐겨찾기 UI를 연결하며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `viewer.css`는 기존 Shadow DOM 스타일을 보존하는 별도 파일입니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
+`viewer.js`는 공통 상태·시작 흐름과 기능 조립을 담당합니다. `viewer/controllers`가 화면·즐겨찾기·방송 목록·음량 UI·세션을 맡으며, 플레이어·음량·채팅·싱크 제어는 각 모듈이 담당합니다. `viewer.css`는 기존 Shadow DOM 스타일을 보존하는 별도 파일입니다. 일반 CHZZK 페이지에는 진입 버튼만 표시합니다. 버튼을 누르면 `site-viewer.js`가 최상위 프레임의 isolated world에 공용 UI 모듈을 주입합니다. 프레임 제어는 전용 확장 페이지 또는 같은 출처의 최상위 통합관제실 Shadow DOM에 속한 iframe에만 적용합니다. 페이지 모드의 녹화 Blob은 청크 메시지로 서비스 워커에 전달하여 확장 IndexedDB에 저장합니다.
 
 확장 페이지에서 치지직 iframe을 열기 위해 `viewer-tabs.js`는 현재 전용 탭 ID, 확장 initiator, CHZZK 도메인, `sub_frame` 조건을 모두 충족하는 요청에만 CSP·X-Frame-Options 응답 헤더 예외를 적용합니다. 확장 페이지 자체 CSP는 로컬 스크립트와 CHZZK iframe만 허용합니다. 프레임 메시지는 origin과 실제 iframe 창을 함께 검증합니다. 채팅 DOM 정리는 부모에서 접근하지 않고 프레임 내부에서 수행합니다.
 
@@ -47,3 +47,5 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 2단계 변경 범위와 검증 기준은 [리팩토링 2단계](refactor-stage2.md)를 참고하세요.
 
 채팅 수집의 DOM 어댑터·역할 규칙·중복 이력과 수명 관리, 측정 방법은 [리팩토링 3단계](refactor-stage3.md)를 참고하세요.
+
+메인 화면의 기능별 책임과 보존 규칙은 [리팩토링 4단계](refactor-stage4.md)를 참고하세요.

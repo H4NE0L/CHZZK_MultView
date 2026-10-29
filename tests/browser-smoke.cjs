@@ -189,13 +189,14 @@ async function run() {
     if(process.argv.includes('--popup-only')){assert.deepEqual(errors,[]);return;}
 
     const main = await context.newPage();
+    const startupConsoleErrors=[];main.on('console',message=>{if(message.type()==='error')startupConsoleErrors.push(message.text());});
     main.on('pageerror', e => errors.push(e.message));
     main.on('framenavigated', async frame => {
       if (new URL(frame.url()).hostname !== 'chzzk.naver.com') return;
       try { for (const file of manifest.content_scripts[0].js) await frame.addScriptTag({content: fs.readFileSync(path.join(root, file), 'utf8')}); } catch (error) { if (!frame.isDetached()) errors.push(error.message); }
     });
     await main.goto('https://viewer.invalid/src/viewer/viewer.html?inputs=' + encodeURIComponent(JSON.stringify(['aaaaaa','bbbbbb'])));
-    await main.waitForFunction(() => document.body.classList.contains('ready'));
+    await main.waitForFunction(() => document.body.classList.contains('ready')).catch(error=>{throw new Error(error.message+'; startup errors: '+JSON.stringify([...errors,...startupConsoleErrors]));});
     assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
     await main.locator('#settingsManager > summary').click();await main.locator('#recordingProfile').selectOption('original');

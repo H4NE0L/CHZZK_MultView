@@ -35,3 +35,9 @@ declare global {
   var CZChatRoles: typeof import('../shared/chat/roles').roles;
   var CZChatHistory: typeof import('../shared/chat/history').history;
 }
+declare global {
+  var CZViewerSession: typeof import('../viewer/controllers/session').viewerSession;
+}
+declare global {
+  var CZChannelInputs: typeof import('../viewer/models/channel-input').channelInputs;
+}
