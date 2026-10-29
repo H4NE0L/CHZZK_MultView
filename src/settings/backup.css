@@ -3,3 +3,5 @@ main.cg-dialog { width:min(680px,100%); margin:24px auto; max-height:none; }
 p { line-height:1.7; }
 .cg-help { font-size:12px; }
 .cg-backup-controls select[hidden] { display:none; }
+.project-backup-folder { margin:16px 0; padding:12px; background:#191b1d; border-radius:5px; }
+#projectFolder { overflow-wrap:anywhere; }

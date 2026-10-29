@@ -1,7 +1,7 @@
 import {readJson} from './backup-file';
 import type {SettingsDocument} from './settings-backup';
 import type {BackupDocument} from './favorites-backup';
-export function attach(host: HTMLElement,onRestored: () => Promise<void>,options: {settings?: boolean}={}) {
+export function attach(host: HTMLElement,onRestored: () => Promise<void>,options: {settings?: boolean; prepareDestination?: () => Promise<(document: unknown,kind: 'settings'|'favorites') => Promise<string>>}={}) {
   host.innerHTML='<div class="cg-backup-actions"><button class="cg-backup-export" type="button">즐겨찾기 백업</button><button class="cg-backup-import" type="button">백업 불러오기</button><button class="cg-backup-undo" type="button">불러오기 전 목록 복구</button><input class="cg-backup-file" type="file" accept=".json,application/json" hidden></div><div class="cg-backup-preview" hidden><p class="cg-backup-summary"></p><div class="cg-backup-controls"><select class="cg-backup-mode" aria-label="즐겨찾기 불러오기 방식"><option value="merge">기존 목록에 합치기</option><option value="replace">백업으로 교체</option></select><button class="cg-backup-apply" type="button">불러오기</button><button class="cg-backup-cancel" type="button">취소</button></div></div><p class="cg-backup-status" role="status"></p>';
   const full=options.settings===true,api=full?CZSettingsBackupClient:CZFavoritesBackup;
   const $=<T extends HTMLElement>(selector: string)=>host.querySelector<T>(selector)!;
@@ -21,14 +21,15 @@ export function attach(host: HTMLElement,onRestored: () => Promise<void>,options
   $('.cg-backup-export').onclick=async()=>{
     setBusy(true);
     try{
+      if(!options.prepareDestination){
+        const result=await chrome.runtime.sendMessage({type:'OPEN_SETTINGS_BACKUP',kind:full?'settings':'favorites'});
+        if(!result?.ok)throw Error(result?.error||'백업 탭을 열지 못했습니다.');
+        message('백업 탭에서 프로젝트 폴더를 선택하고 저장해주세요.');return;
+      }
+      const save=await options.prepareDestination();
       const document=await api.create();
-      const url=URL.createObjectURL(new Blob([JSON.stringify(document,null,2)],{type:'application/json'}));
-      try{
-        const link=globalThis.document.createElement('a');link.href=url;
-        link.download=`CZ-${full?'settings':'favorites'}-${new Date().toLocaleDateString('sv-SE')}.json`;
-        globalThis.document.body.appendChild(link);link.click();link.remove();
-      }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
-      message(`즐겨찾기 ${count(document).favorites.length}개 백업 파일 다운로드를 요청했습니다.`);
+      const filename=await save(document,full?'settings':'favorites');
+      message(`백업 파일을 저장했습니다: ${filename}`);
     }catch(error){message(error instanceof Error?error.message:String(error));}finally{setBusy(false);}
   };
   $('.cg-backup-import').onclick=()=>{if(!busy){input.value='';input.click();}};

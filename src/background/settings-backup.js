@@ -10,7 +10,7 @@ importScripts('../shared/chzzk-api.js','../shared/favorites-store.js','../shared
   chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(!['OPEN_SETTINGS_BACKUP','SETTINGS_BACKUP_EXPORT','SETTINGS_BACKUP_PREVIOUS','SETTINGS_BACKUP_RESTORE'].includes(message?.type) || !authorized(sender))return;
     if(message.type==='OPEN_SETTINGS_BACKUP'){
-      chrome.tabs.create({url:chrome.runtime.getURL('src/settings/backup.html'),active:true}).then(()=>reply({ok:true})).catch(error=>reply({ok:false,error:String(error)}));return true;
+      chrome.tabs.create({url:chrome.runtime.getURL('src/settings/backup.html'+(message.kind==='favorites'?'?kind=favorites':'')),active:true}).then(()=>reply({ok:true})).catch(error=>reply({ok:false,error:String(error)}));return true;
     }
     CZViewerTabs.transaction(async()=>{
       if(message.type==='SETTINGS_BACKUP_PREVIOUS')return {ok:true,document:await CZSettingsBackup.previous()};

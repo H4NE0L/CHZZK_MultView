@@ -8,7 +8,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    await page.evaluate(shadow=>{
     const F='chzzkMultiviewFavoritesV08',G='chzzkMultiviewFavoriteGroupsV02',O='chzzkFavoriteGroupOptionsV2';
     window.__data={[F]:[{uid:'aaaaaa',name:'원래 이름',groups:['기존'],online:true,order:1}],[G]:['기존'],[O]:{'기존':{color:'#112233'}}};window.__writes=0;const listeners=new Set();
-    window.chrome={storage:{local:{get:async()=>structuredClone(__data),set:async values=>{const changes={};for(const key in values)changes[key]={newValue:values[key],oldValue:__data[key]};Object.assign(__data,structuredClone(values));__writes++;for(const listener of listeners)listener(changes,'local');}},onChanged:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}}};
+    window.__openBackup=[];window.chrome={runtime:{sendMessage:async message=>{__openBackup.push(message);return {ok:true};}},storage:{local:{get:async()=>structuredClone(__data),set:async values=>{const changes={};for(const key in values)changes[key]={newValue:values[key],oldValue:__data[key]};Object.assign(__data,structuredClone(values));__writes++;for(const listener of listeners)listener(changes,'local');}},onChanged:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}}};
     window.CZFollowings={KEY:'followings',read:async()=>({channels:[]})};
     window.__root=shadow?document.body.appendChild(document.createElement('div')).attachShadow({mode:'open'}):document;
    },shadow);
@@ -16,8 +16,9 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    await page.evaluate(async()=>{window.__manager=CZGroupManager.attach({root:__root,onSaved:async()=>{},onAdd:()=>{}});await __manager.open();});
    await page.addStyleTag({content:fs.readFileSync('src/shared/group-manager.css','utf8')});
    assert(await page.locator('.cg-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'backup controls fit the dialog');
-   const downloadPromise=page.waitForEvent('download');await page.locator('.cg-backup-export').click();const download=await downloadPromise;
-   const exported=JSON.parse(fs.readFileSync(await download.path(),'utf8'));assert.equal(exported.data.favorites[0].name,'원래 이름');assert.equal(await page.evaluate(()=>__writes),0);
+   await page.locator('.cg-backup-export').click();await page.waitForFunction(()=>__openBackup.length===1);
+   assert.deepEqual(await page.evaluate(()=>__openBackup[0]),{type:'OPEN_SETTINGS_BACKUP',kind:'favorites'});
+   const exported=await page.evaluate(()=>CZFavoritesBackup.create());assert.equal(exported.data.favorites[0].name,'원래 이름');assert.equal(await page.evaluate(()=>__writes),0);
    await page.locator('.cg-backup-file').setInputFiles({name:'wrong.json',mimeType:'application/json',buffer:Buffer.from('{"other":1}')});
    await page.locator('.cg-backup-status').filter({hasText:'즐겨찾기 데이터가 없는 파일'}).waitFor();assert.equal(await page.evaluate(()=>__writes),0);
    await page.locator('.cg-backup-file').setInputFiles({name:'undefined.json',mimeType:'application/json',buffer:Buffer.from('undefined')});
@@ -40,7 +41,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
    await page.locator('.cg-backup-undo').click();await page.locator('.cg-backup-preview').waitFor();assert.equal(await page.locator('.cg-backup-mode').inputValue(),'replace');
    await page.locator('.cg-backup-apply').click();await page.waitForFunction(()=>__data.chzzkMultiviewFavoritesV08.length===1);await page.locator('.cg-backup-status').filter({hasText:'불러왔습니다'}).waitFor();
    assert.equal(await page.evaluate(()=>__data.chzzkMultiviewFavoritesV08[0].name),'원래 이름');assert.deepEqual(errors,[]);
-   console.log(`PASS: ${shadow?'Shadow DOM viewer':'popup'} backup download, malformed-file rejection, legacy preview/merge and previous-list recovery.`);await page.close();
+   console.log(`PASS: ${shadow?'Shadow DOM viewer':'popup'} project-backup tab opening, malformed-file rejection, legacy preview/merge and previous-list recovery.`);await page.close();
   }
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
