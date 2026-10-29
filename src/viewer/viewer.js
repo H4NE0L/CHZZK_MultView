@@ -209,8 +209,8 @@ function saveState() {
                 <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
               </div>
               <div class="settings-feature">
-                <label class="settings-option"><span>채팅 모아보기 사용</span><span class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p><button id="importantChatSettings" type="button">수집 설정·점검</button>
+                <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><button id="importantChatSettings" class="settings-gear" type="button" title="수집 설정·점검" aria-label="수집 설정·점검"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
               </div>
               <div class="settings-feature">
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>

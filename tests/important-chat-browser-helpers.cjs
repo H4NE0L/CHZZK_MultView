@@ -4,7 +4,9 @@ module.exports=async function checkImportantChat(page){
  const panel=page.locator('.important-chat-panel');await panel.waitFor();
  await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-name').disabled);
  assert.equal(await panel.evaluate(el=>el.tagName),'SECTION');
- assert(await panel.locator('.ic-list').isVisible());
+ assert.equal(await panel.locator('.ic-toggle').getAttribute('aria-expanded'),'false');
+ assert.equal(await panel.locator('.ic-list').isVisible(),false,'collection starts collapsed');
+ await panel.locator('.ic-toggle').click();assert(await panel.locator('.ic-list').isVisible());
  assert.equal(await settings.isVisible(),false);
  assert.equal(await settings.locator('.ic-clear').isVisible(),false);
  assert.equal(await settings.locator('.ic-clear').textContent(),'수집된 내용 초기화');
@@ -110,10 +112,20 @@ module.exports=async function checkImportantChat(page){
    nested.append(author,body);host.appendChild(row);
  },{name,text,role,id});
  await frame.evaluate(()=>{
-   const row=document.createElement('div');row.className='_chatting_message_w9pvh_21';row.innerHTML='<span class="_nickname_w9pvh_33"><button class="_nickname_1mc5x_80">테스트 방송</button></span>새 CSS 모듈의 스트리머 채팅 <img alt="웃음"> @<span class="_nickname_mention_80">다른 사용자</span>';document.querySelector('aside.live_chat').appendChild(row);
+   const row=document.createElement('div');row.className='_chatting_message_w9pvh_21';row.innerHTML='<span class="_nickname_w9pvh_33"><button class="_nickname_1mc5x_80">테스트 방송<svg><title>인증 배지</title></svg></button><span class="_trailing_decoration_1"><img alt="파트너 배지"></span></span>새 CSS 모듈의 스트리머 채팅 <img alt="웃음"> @<span class="_nickname_mention_80">다른 사용자</span>';document.querySelector('aside.live_chat').appendChild(row);
  });
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 CSS 모듈의 스트리머 채팅 웃음'));
  assert.equal(await panel.locator('.ic-message').count(),1,'nested nickname CSS modules must not duplicate the message');
+ assert.equal(await panel.locator('.ic-author').textContent(),'테스트 방송','author excludes SVG badge titles');
+ assert(!(await panel.locator('.ic-message-text').textContent()).includes('파트너 배지'),'badges after the inner nickname are outside the body');
+ const expandedFrameHeight=(await page.locator('.chat-frame').boundingBox()).height;
+ await panel.locator('.ic-toggle').click();
+ await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='collapsed-collection-test';row.innerHTML='<span data-chat-nickname>테스트 방송</span><span data-chat-text>접힌 동안 수집 유지</span>';document.querySelector('aside.live_chat').append(row);});
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('접힌 동안 수집 유지'));
+ assert((await page.locator('.chat-frame').boundingBox()).height>expandedFrameHeight,'collapse gives space back to native chat');
+ await panel.locator('.ic-toggle').click();assert(await panel.locator('.ic-message').filter({hasText:'접힌 동안 수집 유지'}).isVisible());
+ await frame.locator('#collapsed-collection-test').evaluate(el=>el.remove());
+
  await frame.evaluate(()=>document.querySelector('._chatting_message_w9pvh_21').remove());
  await openSettings();await settings.locator('.ic-clear').click();await closeSettings();
  await add('테스트 방송','배지 없는 실제 스트리머','','api-owner');
@@ -150,7 +162,10 @@ module.exports=async function checkImportantChat(page){
  assert(reorderedCaptured,'a visually lower chat row must not be rejected just because it precedes the header in DOM order');
 
 
- await page.locator('#settingsManager > summary').click();await page.locator('#importantChatSettings').click();assert(await settings.isVisible());
+ await page.locator('#settingsManager > summary').click();
+ const gearBox=await page.locator('#importantChatSettings').boundingBox(),toggleBox=await page.locator('#importantChatEnabled').locator('..').boundingBox();
+ assert(gearBox.x+gearBox.width<=toggleBox.x && Math.abs(gearBox.y+gearBox.height/2-toggleBox.y-toggleBox.height/2)<1,'gear sits immediately left of and centered with the collection toggle');
+ await page.locator('#importantChatSettings').click();assert(await settings.isVisible());assert(await page.locator('#importantChatEnabled').isChecked(),'opening collection settings does not switch collection off');
  assert.equal(await settings.locator('.ic-diagnostics').isVisible(),false,'detailed diagnostics is collapsed by default');
  await settings.locator('.ic-debug summary').click();
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-diagnostics').textContent.includes('스트리머 확인: 테스트 방송'));
@@ -159,7 +174,7 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'20261029-2');
+ assert.equal(copiedDiagnostic.collectorRevision,'20261029-3');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');

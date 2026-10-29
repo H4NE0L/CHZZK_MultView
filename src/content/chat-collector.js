@@ -10,19 +10,27 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     return {rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:counts.scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
-  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-2',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
+  function report(){if(!statusTimer)statusTimer=setTimeout(()=>{statusTimer=null;status({...counts,revision:'20261029-3',ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample,dom:domSummary()});},500);}
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
     return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
+  const decorations='[class*="badge" i],svg,button,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
+  function authorBoundary(row,nickname){
+    let boundary=nickname;
+    while(boundary.parentElement && boundary.parentElement!==row && (boundary.parentElement.matches(names) || /username|nickname/i.test(String(boundary.parentElement.className))))boundary=boundary.parentElement;
+    return boundary;
+  }
+  function authorName(nickname){const copy=nickname.cloneNode(true);copy.querySelectorAll(decorations).forEach(el=>el.remove());return copy.textContent.trim().slice(0,80);}
   function afterName(row,nickname){
-    const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(nickname);
-    const fragment=range.cloneContents();fragment.querySelectorAll('button,script,style,time,[class*="badge"],[class*="Badge"]').forEach(el=>el.remove());return fragment;
+    const range=document.createRange();range.selectNodeContents(row);range.setStartAfter(authorBoundary(row,nickname));
+    const fragment=range.cloneContents();fragment.querySelectorAll(decorations).forEach(el=>el.remove());return fragment;
   }
   function textAfter(row,nickname){return content(afterName(row,nickname)).trim();}
   function richParts(node,parts=[]){
     if(parts.length>=64)return parts;
     if(node.nodeType===3){parts.push({type:'text',text:node.textContent});return parts;}
     if(node.nodeType!==1 && node.nodeType!==11)return parts;
+    if(node.matches?.(decorations))return parts;
     if(node.tagName==='IMG'){parts.push({type:'image',src:node.currentSrc||node.src||'',alt:node.getAttribute('alt')||'[이모티콘]'});return parts;}
     if(node.tagName==='BR'){parts.push({type:'text',text:'\n'});return parts;}
     if(node.matches?.('script,style,button'))return parts;
@@ -61,7 +69,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   }
   let roleSample=[];
   function role(row,textElements,nickname) {
-    if(ownerName && nameKey(nickname.textContent)===nameKey(ownerName))return 'streamer';
+    if(ownerName && nameKey(authorName(nickname))===nameKey(ownerName))return 'streamer';
     let author=nickname.parentElement;
     for(let node=author,depth=0;node && node!==row && depth<4;node=node.parentElement,depth++)if(/username|nickname|author/.test(String(node.className)))author=node;
     let detected='';const priority={streamer:3,manager:2,partner:1};roleSample=[];
@@ -90,6 +98,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   function content(node) {
     if(node.nodeType===3)return node.textContent;
     if(node.nodeType!==1 && node.nodeType!==11)return '';
+    if(node.matches?.(decorations))return '';
     if(node.tagName==='IMG')return node.getAttribute('alt') || '[이모티콘]';
     if(node.tagName==='BR')return '\n';
     return Array.from(node.childNodes,content).join('');
@@ -115,7 +124,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
       fallbackFragment=afterName(row,nickname);body=content(fallbackFragment).trim();
       if(body)structure.text='이름 뒤 DOM (대체 경로)';
     }
-    const name=nickname.textContent.trim().slice(0,80),text=body.slice(0,1000);
+    const name=authorName(nickname),text=body.slice(0,1000);
     if(!name || !text)return;
     const fingerprint=JSON.stringify([name,text]),previous=identities.get(row);
     const id=String(row.getAttribute('data-message-id') || row.getAttribute('data-chat-id') || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);

@@ -110,3 +110,5 @@ python3 scripts/package.py
 모아보기는 채팅 패널의 첫 번째 flex 영역이고 원본 iframe 래퍼는 남은 높이를 차지합니다. 경계 드래그는 모아보기 높이와 실제 iframe viewport를 함께 조절하며 높이만 저장합니다. 이전 위치 저장 값은 사용하지 않습니다. 원본 채팅창의 헤더·입력·팝업 DOM은 iframe 내부에 유지합니다.
 
 녹화 변경 검증: `node tests/recording-capture-browser.cjs`는 실제 1080p 소스에서 저부하 720p 캡처·연속 프레임 콜백·원본 트랙 보존을 검사합니다. `node tests/recording-export-browser.cjs`는 실제 생성한 WebM과 지원되는 MP4를 Worker로 자르고, 영상·음성 보존과 결과 디코딩 및 재생/MediaRecorder 재호출이 없는지 확인합니다. 실제 CHZZK·장시간·최소화 상태 검증을 대신하지 않습니다.
+
+모아보기 접힘 상태는 페이지를 열 때 기본 true이며 저장하지 않습니다. 헤더 버튼은 aria-expanded/aria-controls로 제어하고 CSS로 본문·리사이저를 숨깁니다. 수집기나 버퍼는 중단·초기화하지 않습니다. 수집 본문의 대체 경로는 가장 안쪽 이름 노드 대신 이름/사용자 컴포넌트 전체의 다음부터 읽어 후행 배지를 제외하며, 이름과 본문 모두 SVG·배지 장식을 걸러 냅니다. 전체 설정 톱니 버튼은 switch label 바깥에 두어 수집 ON/OFF가 함께 눌리지 않도록 합니다.
