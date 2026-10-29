@@ -81,8 +81,11 @@ globalThis.CZGroupManager = (() => {
     }
     function renderGroups() {
       editor = false;
+      const backupMessage=overlay.querySelector('.cg-backup-status')?.textContent || '';
       frame('그룹 관리'); const body = overlay.querySelector('.cg-body');
-      body.innerHTML = '<div class="cg-toolbar"><p class="cg-help">방송을 여러 그룹에 넣을 수 있습니다.</p><div class="cg-actions"><button class="cg-add" type="button">+ 그룹 추가</button></div></div><div class="cg-groups"></div><p class="cg-error" role="status"></p>';
+      body.innerHTML = '<div class="cg-toolbar"><p class="cg-help">방송을 여러 그룹에 넣을 수 있습니다.</p><div class="cg-actions"><button class="cg-add" type="button">+ 그룹 추가</button></div></div><div class="cg-groups"></div><div class="cg-backup"></div><p class="cg-error" role="status"></p>';
+      CZFavoritesBackupUI.attach(body.querySelector('.cg-backup'),async()=>{saved=await CZFavoritesStore.read();await loadOptions();await onSaved(saved);sync();});
+      body.querySelector('.cg-backup-status').textContent=backupMessage;
       body.querySelector('.cg-add').onclick = () => openEditor(null);
       body.querySelector('.cg-groups').innerHTML = saved.groups.map((group,index) => `<div class="cg-group" data-group="${esc(group)}"><span class="cg-group-name">${esc(group)} (${CZFavoritesStore.itemsForGroup(saved.favorites,group).length})</span><button type="button" data-action="up" ${index===0?'disabled':''} aria-label="${esc(group)} 위로">↑</button><button type="button" data-action="down" ${index===saved.groups.length-1?'disabled':''} aria-label="${esc(group)} 아래로">↓</button><button type="button" data-action="edit">관리</button><button type="button" data-action="delete" ${group===CZFavoritesStore.DEFAULT_GROUP?'disabled':''}>삭제</button></div>`).join('');
       body.querySelectorAll('[data-action]').forEach(button => button.onclick = async () => {

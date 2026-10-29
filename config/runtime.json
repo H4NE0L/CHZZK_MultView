@@ -14,6 +14,8 @@
     "src/shared/session-store.js",
     "src/shared/messages.js",
     "src/shared/followings-store.js",
+    "src/shared/favorites-backup.js",
+    "src/shared/favorites-backup-ui.js",
     "src/shared/group-manager.js",
     "src/viewer/audio.js",
     "src/shared/important-chat.js",
@@ -38,6 +40,8 @@
     "src/shared/favorites-store.js",
     "src/shared/session-store.js",
     "src/shared/followings-store.js",
+    "src/shared/favorites-backup.js",
+    "src/shared/favorites-backup-ui.js",
     "src/shared/group-manager.js",
     "src/popup/popup.js"
   ]
