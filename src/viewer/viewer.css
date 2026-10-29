@@ -2450,7 +2450,6 @@ select:hover {
 .important-chat-panel { margin:8px 8px 0; border:1px solid #34373d; border-radius:6px; box-sizing:border-box; }
 .ic-toggle { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:34px; flex:0 0 34px; padding:0 10px; margin:0; border:0; background:transparent; color:#cbd1da; font-size:12px; font-weight:600; cursor:pointer; text-align:left; }
 .ic-toggle:hover { background:#ffffff08; color:#fff; }
-.ic-chevron { font-size:16px; line-height:1; }
 .important-chat-panel[data-collapsed="true"] { height:36px; }
 .important-chat-panel[data-collapsed="true"] .ic-body,.important-chat-panel[data-collapsed="true"] .ic-resizer { display:none; }
 .important-chat-panel .ic-body { padding-top:6px; }
@@ -2459,3 +2458,10 @@ select:hover {
 .settings-panel .settings-gear { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border:0; border-radius:4px; background:transparent; color:#b9c1cc; cursor:pointer; }
 .settings-panel .settings-gear:hover { color:#fff; background:#ffffff12; }
 .settings-gear svg { display:block; width:18px; height:18px; }
+
+.important-chat-panel { border-color:#00dc9b; }
+.ic-heading { display:flex; align-items:center; flex:0 0 34px; min-height:34px; padding-right:4px; }
+.ic-heading .ic-toggle { flex:1; min-width:0; height:34px; }
+.ic-header-settings { display:inline-flex; flex:none; align-items:center; justify-content:center; width:28px; height:28px; padding:0; margin:0; border:0; border-radius:4px; background:transparent; color:#a9c8bf; cursor:pointer; }
+.ic-header-settings:hover { background:#00dc9b18; color:#00dc9b; }
+.ic-header-settings svg { display:block; width:18px; height:18px; }

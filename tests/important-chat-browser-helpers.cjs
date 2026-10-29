@@ -6,6 +6,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await panel.evaluate(el=>el.tagName),'SECTION');
  assert.equal(await panel.locator('.ic-toggle').getAttribute('aria-expanded'),'false');
  assert.equal(await panel.locator('.ic-list').isVisible(),false,'collection starts collapsed');
+ await panel.locator('.ic-header-settings').click();await settings.waitFor();assert.equal(await panel.locator('.ic-toggle').getAttribute('aria-expanded'),'false');await settings.locator('.ic-settings-close').click();
  await panel.locator('.ic-toggle').click();assert(await panel.locator('.ic-list').isVisible());
  assert.equal(await settings.isVisible(),false);
  assert.equal(await settings.locator('.ic-clear').isVisible(),false);
@@ -13,7 +14,10 @@ module.exports=async function checkImportantChat(page){
  const handle=await page.locator('.chat-frame').elementHandle(),frame=await handle.contentFrame();await handle.dispose();
  await frame.waitForFunction(()=>!!globalThis.CZChatCollector);
  await frame.evaluate(()=>{let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}const toolbar=document.createElement('div');toolbar.className='native-toolbar-test';toolbar.innerHTML='<h2 class="_title_native_12">채팅</h2><button class="native-font-svg-minus"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button><span class="native-font-value">100%</span><button class="native-font-svg-plus"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10"/></svg></button><div id="native-action-wrap" style="display:flex;position:absolute;top:0;transform:translateY(-6px)"><button id="native-prediction">승부예측</button><button id="native-chat-menu" style="position:absolute;top:0;right:0;transform:translateY(-4px)">⋮</button></div>';window.__nativeTitle=toolbar.querySelector('h2').firstChild;const portal=document.createElement('div');portal.id='native-overlay-root';document.body.appendChild(portal);const shell=document.createElement('section');shell.id='native-width-shell';shell.style.cssText='height:100%;width:500px;min-width:500px;display:flex;flex-direction:column';host.before(shell);const foreign=document.createElement('div');foreign.className='live_chatting_header__foreign';foreign.innerHTML='<strong>배지 채팅 모아보기</strong><button class="foreign-filter">필터 펴기</button>';shell.append(foreign,toolbar,host);});
- await frame.locator('#cz-chat-settings').waitFor();
+ await frame.locator('#cz-chat-channel').waitFor();
+ assert.equal(await frame.locator('#cz-chat-settings').count(),0,'collection settings is outside native chat');
+ assert.equal(await panel.locator('.ic-chevron').count(),0);
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
  await frame.waitForFunction(()=>document.querySelector('#native-width-shell').getBoundingClientRect().width<=innerWidth);
  assert(await frame.evaluate(()=>document.querySelector('.cz-chat-only').getBoundingClientRect().right<=innerWidth+1),'native chat fits the iframe despite a fixed/minimum-width shell');
  assert.equal(await page.locator('.ic-settings-open').count(),0);
@@ -22,9 +26,9 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.native-font-value').isVisible(),false);
  assert.equal(await frame.locator('.native-toolbar-test').getByText('채팅',{exact:true}).isVisible(),false);
  assert.equal(await frame.locator('.native-toolbar-test').getByRole('button',{name:'+',exact:true}).count(),0);
- assert(await frame.locator('#cz-chat-settings').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'custom settings precedes native settings');
+ assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'channel link precedes native settings');
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
- const centers=await frame.evaluate(()=>['cz-chat-channel','cz-chat-settings','native-chat-menu'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return r.y+r.height/2;}));
+ const centers=await frame.evaluate(()=>['cz-chat-channel','native-chat-menu'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return r.y+r.height/2;}));
  assert(Math.max(...centers)-Math.min(...centers)<1,'header controls share the same vertical center despite native absolute positioning');
  const headerCenter=await frame.locator('.cz-native-chat-header').evaluate(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2;});
  assert(centers.every(center=>Math.abs(center-headerCenter)<1),'icons are centered within the header itself');
@@ -37,7 +41,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.foreign-filter').isVisible(),true);
  assert.equal(await frame.locator('.live_chatting_header__foreign strong').textContent(),'배지 채팅 모아보기');
  await frame.evaluate(()=>{const clone=document.querySelector('.cz-native-chat-header').cloneNode(true);clone.classList.add('foreign-clone');clone.querySelector('.cz-channel-name').textContent='다른 확장 수집 목록';document.querySelector('.cz-native-chat-header').before(clone);});
- await frame.waitForFunction(()=>!document.querySelector('.foreign-clone #cz-chat-settings'));
+ await frame.waitForFunction(()=>!document.querySelector('.foreign-clone #cz-chat-channel'));
  assert.equal(await frame.locator('.foreign-clone.cz-native-chat-header').count(),0);
  assert.equal(await frame.locator('.foreign-clone').textContent().then(text=>text.includes('다른 확장 수집 목록')),true);
  const splitPanelBox=await panel.boundingBox(),splitFrameBox=await page.locator('.chat-frame').boundingBox();
@@ -55,7 +59,7 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).textAlign),'left');
  // Simulate site rules that would turn ordinary inline SVGs into filled/clipped shapes.
  await frame.addStyleTag({content:'svg{width:80px!important;height:2px!important;fill:red!important;stroke:none!important;transform:scale(.1)!important}svg path,svg circle{fill:red!important;stroke:none!important}'});
- for(const id of ['cz-chat-settings','cz-chat-channel']){
+ for(const id of ['cz-chat-channel']){
    assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
    const icon=frame.locator('#'+id+' svg');
    assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),20);
@@ -64,8 +68,8 @@ module.exports=async function checkImportantChat(page){
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
 
- assert.equal(await frame.locator('#cz-chat-settings').evaluate(el=>el.getBoundingClientRect().width),32);
- assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='cz-chat-settings'));
+ assert.equal(await panel.locator('.ic-header-settings').evaluate(el=>el.getBoundingClientRect().width),28);
+ assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'));
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('href'),'https://chzzk.naver.com/live/aaaaaa');
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('target'),'_blank');
  assert(await page.locator('#shortcutsEnabled').evaluate(el=>el.closest('.settings-feature').querySelector('p').id===el.getAttribute('aria-describedby')));
@@ -97,7 +101,7 @@ module.exports=async function checkImportantChat(page){
  assert((await page.locator('.chat-frame').boundingBox()).height<originalFrameHeight,'resizing the collection reduces the actual iframe viewport');
  assert.equal(await frame.locator('#cz-important-chat-space').count(),0);
  const grown=(await panel.boundingBox()).height;await separator.press('ArrowUp');assert((await panel.boundingBox()).height<grown);
- const openSettings=async()=>{if(!await settings.evaluate(el=>el.open)){await frame.locator('#cz-chat-settings').click();await settings.waitFor({state:'visible'});}};
+ const openSettings=async()=>{if(!await settings.evaluate(el=>el.open)){await panel.locator('.ic-header-settings').click();await settings.waitFor({state:'visible'});}};
  const closeSettings=async()=>{if(await settings.isVisible())await settings.locator('.ic-settings-close').click();};
  const setEnabled=async value=>{await closeSettings();await page.locator('#settingsManager > summary').click();await page.locator('#importantChatEnabled').setChecked(value);await page.locator('#settingsManager > summary').click();};
  const add=async(name,text,role='',id='')=>frame.evaluate(({name,text,role,id})=>{

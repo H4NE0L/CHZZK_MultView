@@ -189,7 +189,7 @@ globalThis.CZChatLayout = (() => {
       box.classList.toggle('cz-chat-input-idle',empty && !box.contains(doc.activeElement));
     });
   }
-  let presentation={name:'',height:0},onSettings=()=>{},onHeader=null,nativeMenuOpen=false;
+  let presentation={name:'',height:0},onHeader=null,nativeMenuOpen=false;
   const boundRoots=new WeakSet();
   function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
   const managedHeaders=new WeakSet();
@@ -273,10 +273,9 @@ globalThis.CZChatLayout = (() => {
       if(value.children.length || !/^\d+\s*%$/.test(value.textContent.trim()))continue;
       for(const adjacent of [value.previousElementSibling,value.nextElementSibling])if(adjacent?.matches('button') && adjacent!==native)adjacent.style.setProperty('display','none','important');
     }
-    let button=header.querySelector('#cz-chat-settings');
-    if(!button){button=document.createElement('button');button.id='cz-chat-settings';button.type='button';button.title='주요 채팅 설정';button.setAttribute('aria-label','주요 채팅 설정');mountHeaderIcon(button,'<path fill-rule="evenodd" d="M12.71 6.05 L14.88 6.69 L14.88 9.31 L12.71 9.95 L12.71 9.95 L13.79 11.93 L11.93 13.79 L9.95 12.71 L9.95 12.71 L9.31 14.88 L6.69 14.88 L6.05 12.71 L6.05 12.71 L4.07 13.79 L2.21 11.93 L3.29 9.95 L3.29 9.95 L1.12 9.31 L1.12 6.69 L3.29 6.05 L3.29 6.05 L2.21 4.07 L4.07 2.21 L6.05 3.29 L6.05 3.29 L6.69 1.12 L9.31 1.12 L9.95 3.29 L9.95 3.29 L11.93 2.21 L13.79 4.07 L12.71 6.05 Z M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5Z"/>');button.onclick=()=>onSettings();if(native)native.before(button);else header.appendChild(button);}
+    header.querySelector('#cz-chat-settings')?.remove();
     let channel=header.querySelector('#cz-chat-channel');
-    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M10 1h5v5h-1.5V3.56L7.53 9.53 6.47 8.47l5.97-5.97H10V1ZM2.5 3H7v1.5H2.5v9h9V9H13v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 1 13.5v-9A1.5 1.5 0 0 1 2.5 3Z"/>');button.before(channel);}
+    if(!channel){channel=document.createElement('a');channel.id='cz-chat-channel';channel.target='_blank';channel.rel='noopener noreferrer';channel.title='현재 채널 열기';channel.setAttribute('aria-label','현재 채널 열기');mountHeaderIcon(channel,'<path d="M10 1h5v5h-1.5V3.56L7.53 9.53 6.47 8.47l5.97-5.97H10V1ZM2.5 3H7v1.5H2.5v9h9V9H13v4.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 1 13.5v-9A1.5 1.5 0 0 1 2.5 3Z"/>');if(native)native.before(channel);else header.appendChild(channel);}
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
     if(native){
       native.classList.add('cz-native-settings');
@@ -320,7 +319,7 @@ globalThis.CZChatLayout = (() => {
     return true;
   }
   function start(options={}) {
-    onSettings=options.onSettings||onSettings;onHeader=options.onHeader||onHeader;
+    onHeader=options.onHeader||onHeader;
     const apply = () => {
       document.querySelectorAll('video').forEach(v => { v.muted = true; v.volume = 0; try { v.pause(); } catch (_) {} });
       prepare();
