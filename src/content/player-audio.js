@@ -10,13 +10,13 @@
     const recoveries = [];
     const matches = (video) => desired && Math.abs(video.volume - desired.volume) < 1e-5 && video.muted === desired.muted;
     function apply(video) {
-      if (disposed || !video || !desired) return;
+      if (disposed || !video || (video.ended || video.error) || !desired) return;
       if (desired.muted && !video.muted) video.muted = true;
       if (Math.abs(video.volume - desired.volume) > 1e-5) video.volume = desired.volume;
       if (video.muted !== desired.muted) video.muted = desired.muted;
     }
     function recover() {
-      if (disposed || timer) return;
+      if (disposed || timer || findVideo()?.ended || findVideo()?.error) return;
       const now = Date.now();
       while (recoveries.length && now - recoveries[0] >= 1e3) recoveries.shift();
       const delay = recoveries.length >= 4 ? Math.max(50, 1e3 - (now - recoveries[0])) : 30;
@@ -68,6 +68,9 @@
       bound.add(video);
       apply(video);
     }
+    for (const type of ["loadedmetadata", "playing"]) document.addEventListener(type, (event) => {
+      if (event.target === findVideo() && bound.has(event.target)) apply(event.target);
+    }, true);
     const controls = '[class*="volume" i],[class*="sound" i],[class*="mute" i],[aria-label*="음소거"],[aria-label*="볼륨"],[aria-label*="소리"],[aria-label*="mute" i],[aria-label*="volume" i],[title*="음소거"],[title*="볼륨"],[title*="소리"]';
     function gesture(event) {
       if (!event.isTrusted) return;
@@ -96,8 +99,10 @@
       pointer = null;
       intentUntil = 0;
     }, true);
-    window.addEventListener("storage", () => {
+    window.addEventListener("storage", (event) => {
       clearIntent();
+      if (typeof event.key !== "string" || !/(?:volume|muted?|sound)/i.test(event.key)) return;
+      event.stopImmediatePropagation();
       recover();
     }, true);
     window.addEventListener("pagehide", () => {

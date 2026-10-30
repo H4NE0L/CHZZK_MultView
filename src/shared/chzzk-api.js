@@ -28,7 +28,7 @@
       return [fav.category, duration].filter(Boolean).join(" · ");
     }
     async function fetchLiveInfo(uid, { throwOnError = false } = {}) {
-      const offline = { online: false, openAt: null, category: "", viewerCount: null };
+      const offline = { online: false, openAt: null, category: "", viewerCount: null, liveTitle: "" };
       try {
         const response = await fetch(`https://api.chzzk.naver.com/service/v3.3/channels/${encodeURIComponent(uid)}/live-detail`, {
           credentials: "include",
@@ -46,7 +46,7 @@
           return offline;
         }
         if (content.status !== "OPEN") return offline;
-        return { online: true, openAt: parseOpenDate(content.openDate), category: String(content.liveCategoryValue || content.liveCategory || "").trim(), viewerCount: normalizeViewerCount(content.concurrentUserCount) };
+        return { online: true, liveTitle: String(content.liveTitle || "").trim(), openAt: parseOpenDate(content.openDate), category: String(content.liveCategoryValue || content.liveCategory || "").trim(), viewerCount: normalizeViewerCount(content.concurrentUserCount) };
       } catch (error) {
         if (throwOnError) throw error;
         return offline;
@@ -134,7 +134,7 @@
       }
       const old = new Map(previous.map((f) => [f.uid, f]));
       return parallelMap([...channels.values()], async (channel) => {
-        if (channel.openLive === false) return { ...channel, online: false, openAt: null, category: "", viewerCount: null };
+        if (channel.openLive === false) return { ...channel, online: false, openAt: null, category: "", viewerCount: null, liveTitle: "" };
         try {
           return { ...channel, ...await fetchLiveInfo(channel.uid, { throwOnError: true }) };
         } catch (_) {

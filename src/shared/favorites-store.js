@@ -24,6 +24,7 @@
       online: f.online === true,
       openAt: Number(f.openAt) > 0 ? Number(f.openAt) : null,
       category: String(f.category || "").trim(),
+      liveTitle: String(f.liveTitle || "").trim(),
       viewerCount: normalizeViewerCount(f.viewerCount),
       order: Number.isFinite(Number(f.order)) && Number(f.order) > 0 ? Number(f.order) : null
     });
@@ -132,7 +133,7 @@
         const info = updates[f.uid];
         if (!info) return { ...f };
         const next = { ...f };
-        for (const key of ["online", "openAt", "category", "viewerCount", "name", "title"]) {
+        for (const key of ["online", "openAt", "category", "viewerCount", "name", "title", "liveTitle"]) {
           if (Object.hasOwn(info, key)) next[key] = info[key];
         }
         return next;

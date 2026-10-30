@@ -27,7 +27,7 @@
         }
       }
       const name = profile?.nickname ?? message.nickname, text = message.content ?? message.msg ?? message.message;
-      const time = valid(message.messageTime ?? message.msgTime ?? message.ctime ?? message.createdAt);
+      const time = valid(message.messageTime ?? message.msgTime ?? message.ctime ?? message.createdAt ?? message.createTime);
       if (typeof name !== "string" || typeof text !== "string" || !text.trim() || text.length > 16e3 || time === null) return;
       const key = keyFor(name, text), old = entries.get(key);
       entries.set(key, old && old !== time ? -1 : time);
@@ -68,7 +68,15 @@
       } catch (_) {
         return;
       }
-      const body = packet?.bdy ?? packet?.body;
+      let body = packet?.bdy ?? packet?.body;
+      if (typeof body === "string") {
+        if (body.length > 1024 * 1024) return;
+        try {
+          body = JSON.parse(body);
+        } catch (_) {
+          return;
+        }
+      }
       const messages = Array.isArray(body) ? body : body?.messageList ?? body?.messages ?? (body?.profile ? [body] : []);
       if (!Array.isArray(messages)) return;
       messages.slice(-200).forEach(sourceTimes.add);

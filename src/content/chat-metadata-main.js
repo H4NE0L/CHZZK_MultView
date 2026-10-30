@@ -27,7 +27,7 @@
         }
       }
       const name = profile?.nickname ?? message.nickname, text = message.content ?? message.msg ?? message.message;
-      const time = valid(message.messageTime ?? message.msgTime ?? message.ctime ?? message.createdAt);
+      const time = valid(message.messageTime ?? message.msgTime ?? message.ctime ?? message.createdAt ?? message.createTime);
       if (typeof name !== "string" || typeof text !== "string" || !text.trim() || text.length > 16e3 || time === null) return;
       const key = keyFor(name, text), old = entries.get(key);
       entries.set(key, old && old !== time ? -1 : time);

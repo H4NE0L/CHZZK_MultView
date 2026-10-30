@@ -376,12 +376,13 @@
         mainBtn.classList.toggle("is-main", selected);
       }
     }
-    function syncSelection() {
+    function syncSelection({ audio: audio2 = true, chrome: chrome2 = true } = {}) {
       for (const channel of context.state.channels) {
         const tile = tileMap.get(channel.uid);
         if (!tile) continue;
         updateTileMainUI(channel.uid);
-        sendTileVolume(channel.uid);
+        if (audio2) sendTileVolume(channel.uid);
+        if (!chrome2) continue;
         const iframe = tile.querySelector("iframe");
         try {
           CZMessages.postToPlayer(iframe, {
@@ -422,11 +423,11 @@
       if (!tileMap.has(channel.uid)) return { supported: false, note: "화면에 표시 중인 방송이 아닙니다." };
       return { supported: true, note: "" };
     }
-    function requestSync(uid, deltaSeconds, reset = false) {
+    function requestSync(uid, deltaSeconds, reset = false, latest = false) {
       const iframe = tileMap.get(uid)?.querySelector("iframe");
       if (!iframe?.contentWindow) return;
       const requestId = ++syncRequestSeq;
-      syncPending.set(requestId, { uid, reset });
+      syncPending.set(requestId, { uid, reset, latest });
       setTimeout(() => {
         if (syncPending.delete(requestId)) showNotice("싱크 조정 응답이 없습니다. 방송이 아직 로딩 중일 수 있습니다.");
       }, 2500);
@@ -435,7 +436,8 @@
           source: "chzzk-multiview",
           type: "SYNC_SEEK",
           requestId,
-          delta: deltaSeconds
+          delta: deltaSeconds,
+          latest
         });
       } catch (_) {
         syncPending.delete(requestId);
@@ -447,6 +449,11 @@
       scheduleSyncRender();
     }
     function adjustSync(uid, deltaSeconds) {
+      if (deltaSeconds === "latest") {
+        const channel = context.state.channels.find((c) => c.uid === uid);
+        if (channel && syncState(channel).supported) requestSync(uid, 0, false, true);
+        return;
+      }
       if (!Number.isFinite(deltaSeconds) || deltaSeconds === 0) return;
       requestSync(uid, deltaSeconds, false);
     }
@@ -482,7 +489,7 @@
       if (typeof data.delay === "number" && Number.isFinite(data.delay)) {
         syncDelays.set(data.uid, { delay: data.delay, canSeek: true, t: Date.now() });
       }
-      if (data.clamped) {
+      if (data.clamped && !pending.latest) {
         const forward = Number(data.requested) > 0;
         showNotice(applied === 0 ? forward ? "더 이상 앞으로 당길 수 없습니다. (라이브에 가장 가깝습니다)" : "더 이상 뒤로 돌릴 수 없습니다." : "한계에 도달하여 일부만 적용되었습니다.");
       }
@@ -536,6 +543,7 @@
             <button type="button" data-step="-0.1" title="0.1초 뒤로 당기기"${dis}>-0.1</button>
             <button type="button" data-step="0.1" title="0.1초 앞으로 밀기"${dis}>+0.1</button>
             <button type="button" data-step="0.5" title="0.5초 앞으로 밀기"${dis}>+0.5</button>
+            <button type="button" data-latest title="재생 가능한 최신 지점으로 이동"${dis}>최신으로</button>
             <button type="button" data-reset title="이 방송의 싱크 조정을 초기화"${dis}>초기화</button>
           </div>
         </div>`;
@@ -1445,10 +1453,12 @@
     const dialog = panel.querySelector(".ic-dialog"), $ = (selector) => panel.querySelector(selector) || dialog.querySelector(selector), handle = $(".ic-resizer");
     chatPanel.appendChild(dialog);
     const renderer = create($(".ic-list"));
+    $(".ic-toggle").title = "접혀 있어도 주요 채팅은 계속 수집됩니다";
     $(".ic-toggle").onclick = () => {
       expanded = !expanded;
       panel.dataset.collapsed = String(!expanded);
       $(".ic-toggle").setAttribute("aria-expanded", String(expanded));
+      render();
       resize();
       if (expanded) $(".ic-list").scrollTop = $(".ic-list").scrollHeight;
     };
@@ -1588,7 +1598,8 @@
       if (scope.isDisposed) return;
       panel.hidden = ready && !filter.enabled;
       present();
-      renderer.render(model.items);
+      panel.dataset.collectedCount = String(model.items.length);
+      if (expanded && !panel.hidden) renderer.render(model.items);
       diagnostics();
     }
     function controls() {
@@ -1761,7 +1772,7 @@
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
     }
-    function applyLayout() {
+    function applyLayout({ audio: audio2 = true } = {}) {
       const { videoGrid, state } = context;
       if (!videoGrid) return;
       videoGrid.classList.remove("layout-grid", "layout-2x2", "layout-3x3", "layout-main-sub");
@@ -1806,7 +1817,7 @@
             tile.style.gridRow = String(index);
           }
         }
-        sendTileVolume(channel.uid);
+        if (audio2) sendTileVolume(channel.uid);
         applyTileLock(tile, state.screenLocked === true);
       });
       if (state.layout === "main-sub") {
@@ -1913,6 +1924,7 @@
               <div class="sync-summary">
                 <div class="sync-summary-head">
                   <strong>싱크 조정 현황</strong>
+                  <button id="syncLatestAll" type="button" class="manager-clear">전체 최신으로</button>
                   <button id="syncResetAll" type="button" class="manager-clear" disabled>전체 초기화</button>
                 </div>
                 <div id="syncSummaryList" class="sync-summary-list"></div>
@@ -1926,10 +1938,9 @@
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
                 <div class="master-volume-top">
-                  <button type="button" id="masterMuteBtn" class="tile-mute-btn" title="전체 음소거"></button>
                   <label for="masterVolume">전체 볼륨 <output id="masterVolumeValue">100%</output></label>
                 </div>
-                <input id="masterVolume" type="range" min="0" max="100" value="100" step="1">
+                <div class="volume-slider-line"><button type="button" id="masterMuteBtn" class="tile-mute-btn" title="전체 음소거"></button><input id="masterVolume" type="range" min="0" max="100" value="100" step="1"></div>
                 <p class="volume-help">확장프로그램 전체 음량입니다. 아래 방송별 볼륨에 곱해져 적용되며, 방송별 설정값은 바뀌지 않습니다.</p>
               </div>
               <label class="main-only-check" for="mainOnlyCheck">
@@ -1944,7 +1955,7 @@
           </details>
           <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
             <button type="button" class="layout-toggle-btn" data-layout="grid">그리드</button>
-            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드 뷰</button>
+            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드</button>
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
@@ -1965,11 +1976,11 @@
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
               <div class="settings-feature">
-                <label class="settings-option"><span>통나무 수집 보조 (실험)</span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
               </div>
               <div class="settings-feature">
-                <label class="settings-option"><span>채팅 타임스탬프 (임시 보류)</span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <label class="settings-option"><span>채팅 타임스탬프 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>
               </div>
               <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
@@ -2150,12 +2161,14 @@
     ui.querySelector("#volumeManager").addEventListener("toggle", (e) => {
       if (e.target.open) ui.querySelector("#syncManager")?.removeAttribute("open");
     });
+    ui.querySelector("#syncLatestAll").addEventListener("click", () => context.state.channels.forEach((channel) => adjustSync(channel.uid, "latest")));
     ui.querySelector("#syncResetAll").addEventListener("click", resetAllSync);
     ui.querySelector("#syncList").addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       const uid = btn?.closest(".sync-row")?.dataset.uid;
       if (!btn || !uid || btn.disabled) return;
-      if (btn.dataset.step) adjustSync(uid, Number(btn.dataset.step));
+      if (btn.dataset.latest !== void 0) adjustSync(uid, "latest");
+      else if (btn.dataset.step) adjustSync(uid, Number(btn.dataset.step));
       else if (btn.dataset.reset !== void 0) resetSync(uid);
     });
     ui.querySelector("#uidInput").addEventListener("keydown", (e) => {
@@ -2499,27 +2512,25 @@
         showNotice("녹화를 중지하고 결과를 확인한 뒤 방송을 삭제하세요.");
         return;
       }
+      if (!state.channels.some((channel) => channel.uid === uid)) return;
+      const selectedChanged = state.selectedUid === uid;
       const tile = tileMap.get(uid);
-      if (tile) {
-        const iframe = tile.querySelector("iframe");
-        if (iframe) iframe.src = "about:blank";
-        mediaTools2.detach(uid);
-        tile.remove();
-      }
       tileMap.delete(uid);
-      clearSyncState(uid);
       state.channels = state.channels.filter((c) => c.uid !== uid);
-      if (state.selectedUid === uid) {
+      const iframe = tile?.querySelector("iframe");
+      if (iframe) iframe.dataset.playerReady = "false";
+      mediaTools2.detach(uid);
+      clearSyncState(uid);
+      tile?.remove();
+      if (selectedChanged) {
         state.selectedUid = state.channels[0]?.uid || null;
-        if (state.selectedUid) {
-          if (state.mainOnly) makeMainAudible();
-        }
+        if (state.selectedUid && state.mainOnly) makeMainAudible();
       }
-      refreshChannelManager();
-      syncSelection();
-      applyLayout();
-      context.reconcileAudio();
-      updateChat();
+      applyLayout({ audio: false });
+      if (selectedChanged) {
+        syncSelection({ audio: state.mainOnly, chrome: false });
+        updateChat();
+      }
       saveState();
     }
     function clearAll() {
@@ -2639,6 +2650,17 @@
     }, register, save, saveSoon };
   }
 
+  // src/shared/favorite-item.js
+  var escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  function favoriteDetails(favorite) {
+    const name = escape(favorite.name || favorite.title || favorite.uid);
+    if (!favorite.online) return `<span class="favorite-details favorite-offline"><span class="favorite-primary"><span class="favorite-name favorite-list-name" title="${name}">${name}</span><span class="favorite-offline-label">오프라인</span></span></span>`;
+    const title = escape(favorite.online ? favorite.liveTitle || "방송 제목 확인 중" : "방송 종료");
+    const category = escape(favorite.online ? favorite.category || "카테고리 없음" : "오프라인");
+    const duration = escape(CZFavoritesStore.favoriteDuration(favorite));
+    return `<span class="favorite-details"><span class="favorite-primary"><span class="favorite-name favorite-list-name" title="${name}">${name}</span><span class="favorite-title" title="${title}">${title}</span></span><span class="favorite-secondary"><span class="favorite-category favorite-list-category" title="${category}">${category}</span><span class="favorite-meta favorite-list-meta" title="방송 시간 (hh:mm:ss)">${duration}</span></span></span>`;
+  }
+
   // src/viewer/controllers/favorites.js
   function create6(context) {
     const { scope, showNotice, refreshChannelManager, escapeHtml } = context;
@@ -2689,7 +2711,7 @@
         <div class="favorite-list-group-items">
           ${items.map((f) => `<div class="favorite-list-row ${f.online ? "online" : "offline"}" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? "online" : ""}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || "-" : "-")}">${escapeHtml(f.online ? f.category || "-" : "-")}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수"><svg class="viewer-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="4" r="3"/><path d="M2 15v-2a6 6 0 0 1 12 0v2z"/></svg><span class="favorite-list-viewer-count">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span></span><span class="favorite-online-badge ${f.online ? "online" : "offline"}">${f.online ? "ONLINE" : "OFFLINE"}</span></button>
+            <button class="favorite-list-add" title="방송 추가">${favoriteDetails(f)}<span class="favorite-online-badge ${f.online ? "online" : "offline"}">${f.online ? "ONLINE" : "OFFLINE"}</span></button>
           </div>`).join("") || '<div class="favorite-list-empty">표시할 방송이 없습니다.</div>'}
         </div>
       </details>`;
@@ -2895,11 +2917,10 @@
       list.innerHTML = state.channels.map((c) => `
       <div class="tile-volume-row" data-uid="${escapeHtml(c.uid)}">
         <div class="tile-volume-top">
-          <button type="button" class="tile-mute-btn" title="음소거"></button>
           <span class="tile-volume-name">${escapeHtml(displayChannelName(c))}</span>
           <output></output>
         </div>
-        <input type="range" min="0" max="100" step="1" value="100">
+        <div class="volume-slider-line"><button type="button" class="tile-mute-btn" title="음소거"></button><input type="range" min="0" max="100" step="1" value="100"></div>
       </div>`).join("");
       list.querySelectorAll(".tile-volume-row").forEach((row) => {
         const uid = row.dataset.uid;

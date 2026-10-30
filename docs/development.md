@@ -39,7 +39,7 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 1. 기존 설치 폴더에서 테스트 브랜치를 받고 빌드한 dist를 기존 설치 폴더에 반영한 뒤 확장을 다시 로드합니다. 일반 CHZZK 페이지에는 진입 버튼만 표시되고, 클릭 후 페이지 안에서 멀티뷰가 열리는지 확인합니다.
 2. 팝업에서 방송 2개를 열어 주소가 `chrome-extension://…/src/viewer/viewer.html`인지, 방송·로그인·채팅이 정상인지 확인합니다.
 3. 팝업의 새 탭·새 창 버튼으로 각각 반복해서 열 때 기존 멀티뷰와 별개로 새 탭·새 창이 생성되는지 확인합니다. 최신 창의 상태를 바꾼 뒤 이전 창을 조작·종료하고 다시 열어 최신 창의 방송·배치·전체 볼륨이 복원되는지 확인합니다.
-4. 레이드 뷰·메인 방송·개별/전체 볼륨·음소거·채팅 위치·화면 잠금을 바꾸고 새로고침해 타일이 10%·음소거로 시작하고 나머지 설정은 복원되는지 확인합니다. 자동 재생이 브라우저에서 차단되면 플레이어를 눌러 재생합니다.
+4. 레이드·메인 방송·개별/전체 볼륨·음소거·채팅 위치·화면 잠금을 바꾸고 새로고침해 타일이 10%·음소거로 시작하고 나머지 설정은 복원되는지 확인합니다. 자동 재생이 브라우저에서 차단되면 플레이어를 눌러 재생합니다.
 5. 치지직 플레이어에서 소리를 켠 뒤 다른 타일을 삭제하고, 남은 방송의 소리와 플레이어가 유지되는지 확인합니다.
 6. 팔로잉 박스 위치·접기, 실제 로그인 계정의 팔로잉 전체 조회, 검색·온라인 표시를 확인합니다. 그룹 추가·편집에서 체크 선택과 그룹 순서를 확인합니다. 방송 이름이 채팅 시청자 이름으로 바뀌지 않는지, 기존 오염된 이름이 즐겨찾기 새로고침으로 복구되는지 확인합니다.
 7. S 촬영·영역 자르기·복사·저장, R 녹화·결과 창의 형식/구간 저장·종료 시 임시 데이터 삭제를 확인합니다. 실제 방송의 음성 녹음과 브라우저별 MP4 지원도 확인합니다.
@@ -47,7 +47,7 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 
 ## 저장소와 배포 파일
 
-GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.0.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
+GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.1.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
 
 완료된 단계별 계획 문서와 이전 Python 패키징 진입점은 정리했습니다. 이전 문서는 Git 이력에 남아 있습니다. 검사·측정 스크립트, vendor 라이선스, 개인 백업은 유지합니다. 파일 수 감소를 실행 메모리 감소로 해석하지 않습니다.
 
@@ -80,3 +80,9 @@ npm run clean -- --branches
 ## 설치 파일 게시
 
 검사를 마치고 main에 커밋·push한 뒤 `npm run publish:install`을 실행합니다. 기존 HTTPS Git 인증을 사용하며 API 토큰을 따로 읽지 않습니다. main 커밋의 깨끗한 소스로 재빌드하고 별도 임시 Git index에서 설치 트리를 만들어 release에 게시합니다. 기본 작업 트리·개인 백업은 변경하지 않습니다. 갱신 전 main 기준과 release의 기존 SHA를 확인해 오래된 배포가 덮어쓰지 않도록 합니다. `-- --dry-run`으로 원격 게시 없이 트리를 점검할 수 있습니다.
+
+## 즐겨찾기 UI
+
+`shared/favorite-item.js`와 `shared/favorite-item.css`를 팝업과 viewer에서 공용으로 사용합니다. CSS는 양쪽 산출물 마지막에 합칩니다. `name/title`은 기존 스트리머 이름이며 API의 방송 제목은 `liveTitle`로 분리합니다. 방송 종료 시 liveTitle은 비웁니다. 시청자 수 데이터는 유지하되 즐겨찾기 UI에서는 표시하지 않습니다. 오프라인은 이름·상태 한 줄이며, 온라인 제목·런타임은 같은 열에서 시작하는 11px 글씨입니다. 채팅 헤더 CSS와 자기 통나무 잔액 DOM 판독은 `content/chat/header-style.js`·`power-balance.js`에 분리합니다.
+
+API 조사와 타임스탬프 참고 구현 비교: [chzzk-api-research.md](chzzk-api-research.md). 채팅 잔액 조회 수명 관리는 `src/content/chat/power-api.js`에서 담당합니다.

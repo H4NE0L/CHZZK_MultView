@@ -2481,3 +2481,46 @@ select:hover {
 .power-diagnostic-rows { overflow-wrap:anywhere; }
 
 .mv-root[data-chat-timestamps="false"] .ic-message time { display:none; }
+#favoriteManager .favorite-manager-panel { width:min(440px,calc(100vw - 24px)); }
+.important-chat-panel { background:#1b1d20; border-color:#60656d; }
+.ic-heading { min-height:40px; flex-basis:40px; padding:4px 6px 4px 2px; background:#303338; border-bottom:1px solid #50555d; box-sizing:border-box; gap:4px; }
+.ic-heading .ic-toggle { height:32px; min-height:32px; padding:0 10px; color:#e1e4e8; font-size:12px; font-weight:700; }
+.ic-header-settings { width:32px; height:32px; border-radius:4px; }
+.ic-header-settings svg { width:20px; height:20px; }
+.important-chat-panel .ic-body { padding:10px 8px 6px; background:#1b1d20; }
+.important-chat-panel[data-collapsed="true"] { height:42px; }
+.important-chat-panel[data-collapsed="true"] .ic-heading { border-bottom:0; }
+.ic-message { padding:6px 4px; }
+
+.volume-slider-line { display:flex; align-items:center; gap:8px; min-width:0; }
+.volume-slider-line .tile-mute-btn { flex:0 0 32px; width:32px; height:32px; }
+.volume-slider-line input[type="range"] { flex:1 1 0; min-width:0; width:0; }
+.sync-btns { grid-template-columns:repeat(4,minmax(0,1fr)) repeat(2,minmax(0,1.5fr)); gap:4px; }
+
+.ic-header-settings { color:#c5c9d0; }
+.ic-header-settings:hover { background:#ffffff12; color:#fff; }
+.important-chat-panel .ic-resizer:hover, .important-chat-panel .ic-resizer:focus-visible { background:#747b85; outline:1px solid #a2a8b0; }
+
+.settings-experimental { display:inline-block; margin-left:4px; padding:0 4px; border:1px solid #555b64; border-radius:4px; color:#c9cdd3; font-size:10px; font-weight:400; line-height:16px; vertical-align:middle; white-space:nowrap; }
+/* Shared favorite typography, rows and spacing; following rows remain compact. */
+.favorite-list-row, .favorite-row { border-radius:6px; }
+.favorite-list-row { display:grid; grid-template-columns:8px minmax(0,1fr); align-items:center; gap:10px; min-height:66px; padding:10px 12px; }
+.favorite-list-row .favorite-list-add { height:auto; min-height:0; display:block; width:100%; min-width:0; padding:0; margin:0; text-align:left; }
+.favorite-row .favorite-main { display:grid; grid-template-columns:8px minmax(0,1fr); align-items:center; gap:10px; width:100%; min-height:66px; padding:10px 12px; text-align:left; }
+.favorite-details { display:grid; grid-template-rows:auto auto; gap:6px; width:100%; min-width:0; }
+.favorite-primary { display:grid; grid-template-columns:minmax(86px,34%) minmax(0,1fr); align-items:center; gap:10px; min-width:0; }
+.favorite-secondary { display:grid; grid-template-columns:minmax(86px,34%) minmax(0,1fr); align-items:center; gap:10px; min-width:0; }
+.favorite-details .favorite-name, .favorite-details .favorite-title { display:block; min-width:0; width:auto; max-width:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.favorite-details .favorite-name { font-size:14px; font-weight:700; line-height:20px; color:#f4f6f9; }
+.favorite-details .favorite-title { font-size:11px; font-weight:400; line-height:16px; color:#d3d9e2; }
+.favorite-row .favorite-details .favorite-category, .favorite-list-row .favorite-details .favorite-category { display:block; flex:1 1 auto; width:auto; min-width:0; max-width:none; margin:0; padding:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:400; line-height:16px; color:#00e6a0; }
+.favorite-row .favorite-details .favorite-meta, .favorite-list-row .favorite-details .favorite-meta { display:block; flex:0 0 auto; width:auto; margin:0; padding:0; white-space:nowrap; font-size:11px; font-weight:700; line-height:16px; font-variant-numeric:tabular-nums; text-align:left; color:#fff; }
+.favorite-row.offline .favorite-title, .favorite-row.offline .favorite-category, .favorite-list-row.offline .favorite-title, .favorite-list-row.offline .favorite-category { color:#aeb7c5; }
+.favorite-details ~ .online-badge, .favorite-details ~ .offline-badge, .favorite-list-row .favorite-online-badge { display:none; }
+.favorite-list-row:hover, .favorite-row:hover { background-color:#242b2c; }
+
+.favorite-offline { grid-template-rows:auto; }
+.favorite-offline-label { font-size:11px; line-height:16px; color:#aeb7c5; white-space:nowrap; }
+.favorite-row.offline .favorite-main, .favorite-list-row.offline { min-height:40px; padding-top:8px; padding-bottom:8px; }
+
+.favorite-row.offline { padding-top:0; padding-bottom:0; }
