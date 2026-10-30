@@ -20,17 +20,17 @@ export const sync = {create(context) {
     return { supported: true, note: "" };
   }
 
-  function requestSync(uid, deltaSeconds, reset = false) {
+  function requestSync(uid, deltaSeconds, reset = false, latest = false) {
     const iframe = tileMap.get(uid)?.querySelector("iframe");
     if (!iframe?.contentWindow) return;
     const requestId = ++syncRequestSeq;
-    syncPending.set(requestId, { uid, reset });
+    syncPending.set(requestId, { uid, reset, latest });
     setTimeout(() => {
       if (syncPending.delete(requestId)) showNotice("싱크 조정 응답이 없습니다. 방송이 아직 로딩 중일 수 있습니다.");
     }, 2500);
     try {
       CZMessages.postToPlayer(iframe, {
-        source: "chzzk-multiview", type: "SYNC_SEEK", requestId, delta: deltaSeconds
+        source: "chzzk-multiview", type: "SYNC_SEEK", requestId, delta: deltaSeconds, latest
       });
     } catch (_) {
       syncPending.delete(requestId);
@@ -43,6 +43,11 @@ export const sync = {create(context) {
     scheduleSyncRender();
   }
   function adjustSync(uid, deltaSeconds) {
+    if(deltaSeconds==='latest'){
+      const channel=context.state.channels.find(c=>c.uid===uid);
+      if(channel && syncState(channel).supported)requestSync(uid,0,false,true);
+      return;
+    }
     if (!Number.isFinite(deltaSeconds) || deltaSeconds === 0) return;
     requestSync(uid, deltaSeconds, false);
   }
@@ -87,7 +92,7 @@ export const sync = {create(context) {
       syncDelays.set(data.uid, { delay: data.delay, canSeek: true, t: Date.now() });
     }
 
-    if (data.clamped) {
+    if (data.clamped && !pending.latest) {
       const forward = Number(data.requested) > 0;
       showNotice(applied === 0
         ? (forward ? "더 이상 앞으로 당길 수 없습니다. (라이브에 가장 가깝습니다)" : "더 이상 뒤로 돌릴 수 없습니다.")
@@ -153,6 +158,7 @@ export const sync = {create(context) {
             <button type="button" data-step="-0.1" title="0.1초 뒤로 당기기"${dis}>-0.1</button>
             <button type="button" data-step="0.1" title="0.1초 앞으로 밀기"${dis}>+0.1</button>
             <button type="button" data-step="0.5" title="0.5초 앞으로 밀기"${dis}>+0.5</button>
+            <button type="button" data-latest title="재생 가능한 최신 지점으로 이동"${dis}>최신으로</button>
             <button type="button" data-reset title="이 방송의 싱크 조정을 초기화"${dis}>초기화</button>
           </div>
         </div>`;

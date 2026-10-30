@@ -20,7 +20,7 @@ module.exports=async function checkImportantChat(page){
  await frame.locator('#cz-chat-channel').waitFor();
  assert.equal(await frame.locator('#cz-chat-settings').count(),0,'collection settings is outside native chat');
  assert.equal(await panel.locator('.ic-chevron').count(),0);
- assert.equal(await panel.evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(0, 220, 155)');
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(96, 101, 109)');
  await frame.waitForFunction(()=>document.querySelector('#native-width-shell').getBoundingClientRect().width<=innerWidth);
  assert(await frame.evaluate(()=>document.querySelector('.cz-chat-only').getBoundingClientRect().right<=innerWidth+1),'native chat fits the iframe despite a fixed/minimum-width shell');
  assert.equal(await page.locator('.ic-settings-open').count(),0);
@@ -73,15 +73,15 @@ module.exports=async function checkImportantChat(page){
 
  assert.equal(await frame.locator('.cz-native-chat-header .native-font-svg-minus').isVisible(),false);
  assert.equal(await frame.locator('.cz-native-chat-header .native-font-svg-plus').isVisible(),false);
- assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
+ assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).fontSize),'13px');
  assert.equal(await frame.locator('.cz-channel-name').evaluate(el=>getComputedStyle(el).textAlign),'left');
  // Simulate site rules that would turn ordinary inline SVGs into filled/clipped shapes.
  await frame.addStyleTag({content:'svg{width:80px!important;height:2px!important;fill:red!important;stroke:none!important;transform:scale(.1)!important}svg path,svg circle{fill:red!important;stroke:none!important}'});
  for(const id of ['cz-chat-channel']){
    assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
    const icon=frame.locator('#'+id+' svg');
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),20);
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),20);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),24);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),24);
    assert.notEqual(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }

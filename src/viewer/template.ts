@@ -34,6 +34,7 @@ export const html = `
               <div class="sync-summary">
                 <div class="sync-summary-head">
                   <strong>싱크 조정 현황</strong>
+                  <button id="syncLatestAll" type="button" class="manager-clear">전체 최신으로</button>
                   <button id="syncResetAll" type="button" class="manager-clear" disabled>전체 초기화</button>
                 </div>
                 <div id="syncSummaryList" class="sync-summary-list"></div>
@@ -47,10 +48,9 @@ export const html = `
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
                 <div class="master-volume-top">
-                  <button type="button" id="masterMuteBtn" class="tile-mute-btn" title="전체 음소거"></button>
                   <label for="masterVolume">전체 볼륨 <output id="masterVolumeValue">100%</output></label>
                 </div>
-                <input id="masterVolume" type="range" min="0" max="100" value="100" step="1">
+                <div class="volume-slider-line"><button type="button" id="masterMuteBtn" class="tile-mute-btn" title="전체 음소거"></button><input id="masterVolume" type="range" min="0" max="100" value="100" step="1"></div>
                 <p class="volume-help">확장프로그램 전체 음량입니다. 아래 방송별 볼륨에 곱해져 적용되며, 방송별 설정값은 바뀌지 않습니다.</p>
               </div>
               <label class="main-only-check" for="mainOnlyCheck">
@@ -86,11 +86,11 @@ export const html = `
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
               <div class="settings-feature">
-                <label class="settings-option"><span>통나무 수집 보조 (실험)</span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
               </div>
               <div class="settings-feature">
-                <label class="settings-option"><span>채팅 타임스탬프 (임시 보류)</span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <label class="settings-option"><span>채팅 타임스탬프 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>
               </div>
               <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>

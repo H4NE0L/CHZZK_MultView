@@ -229,7 +229,7 @@ globalThis.CZChatLayout = (() => {
     // Keep CHZZK's SVG/path rules outside extension-owned icons.
     const icon=document.createElement('span');icon.setAttribute('aria-hidden','true');host.appendChild(icon);
     const shadow=icon.attachShadow({mode:'open'});
-    shadow.innerHTML='<style>:host{display:block!important;width:20px!important;height:20px!important;flex:none!important;line-height:0!important}svg{display:block;width:20px;height:20px;min-width:20px;max-width:20px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
+    shadow.innerHTML='<style>:host{display:block!important;width:24px!important;height:24px!important;flex:none!important;line-height:0!important}svg{display:block;width:24px;height:24px;min-width:24px;max-width:24px;overflow:visible;fill:currentColor;stroke:none;shape-rendering:geometricPrecision;transform:none;filter:none;opacity:1}</style><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 16 16" aria-hidden="true" focusable="false">'+content+'</svg>';
   }
   function overlayRects(){
     return [...document.querySelectorAll('[role="dialog"],[role="menu"],[aria-modal="true"],[class^="_layer_"],[class*=" _layer_"],[class*="layer_popup"],.cz-native-chat-header div,.cz-native-chat-header ul')].filter(el=>{

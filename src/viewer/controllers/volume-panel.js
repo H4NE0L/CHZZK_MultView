@@ -37,11 +37,10 @@ export function create(context) {
     list.innerHTML = state.channels.map(c => `
       <div class="tile-volume-row" data-uid="${escapeHtml(c.uid)}">
         <div class="tile-volume-top">
-          <button type="button" class="tile-mute-btn" title="음소거"></button>
           <span class="tile-volume-name">${escapeHtml(displayChannelName(c))}</span>
           <output></output>
         </div>
-        <input type="range" min="0" max="100" step="1" value="100">
+        <div class="volume-slider-line"><button type="button" class="tile-mute-btn" title="음소거"></button><input type="range" min="0" max="100" step="1" value="100"></div>
       </div>`).join("");
 
     list.querySelectorAll(".tile-volume-row").forEach(row => {

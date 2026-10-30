@@ -150,7 +150,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     return Number.isFinite(delay) ? Math.max(0, delay) : null;
   }
 
-  function seekBy(delta) {
+  function seekBy(delta, latest = false) {
     const video = findVideo();
     if (!video) return { ok: false, reason: "no-video" };
     const range = seekRange(video);
@@ -158,6 +158,7 @@ import {create as createPowerRewards} from './power-rewards.js';
 
     const [start, end] = range;
     const now = video.currentTime;
+    if(latest)delta=Math.max(0,end-SYNC_EDGE_MARGIN-now);
     const upper = Math.max(now, end - SYNC_EDGE_MARGIN);
     const lower = Math.min(now, start + SYNC_START_MARGIN);
     let target = Math.min(Math.max(now + delta, lower), upper);
@@ -309,7 +310,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     if (event.data.type === "ENTER_THEATER" && !chatMode && !powerRewards?.enabled) { preventFrameScrollbars(); scheduleTheater(); }
     if (event.data.type === "SYNC_SEEK" && frameUid && !chatMode) {
       const delta = Number(event.data.delta);
-      const result = Number.isFinite(delta) ? seekBy(delta) : { ok: false, reason: "bad-delta" };
+      const result = Number.isFinite(delta) ? seekBy(delta, event.data.latest===true) : { ok: false, reason: "bad-delta" };
       window.parent.postMessage({
         source: "chzzk-multiview", type: "SYNC_RESULT", uid: frameUid,
         requestId: event.data.requestId, ...result

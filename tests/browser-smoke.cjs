@@ -19,17 +19,24 @@ async function checkCompactFavorites(page, prefix) {
     return count.left - name.right;
   }, nameClass);
   assert(countGap >= 0 && countGap <= 12, 'count must sit beside the group name');
-  const row = group.locator(`.${prefix}-row`).first();
+  for(const offline of await group.locator(`.${prefix}-row.offline`).all()){
+    assert.equal(await offline.locator('.favorite-offline-label').textContent(),'오프라인');
+    assert.equal(await offline.locator('.favorite-secondary,.favorite-title').count(),0);
+    assert(await offline.evaluate(el=>el.getBoundingClientRect().height<=44),'offline favorites use one compact line');
+  }
+  const row = group.locator(`.${prefix}-row:not(.offline)`).first();
+  if(!await row.count())return;
   const fields=await row.evaluate(el=>['.favorite-name','.favorite-title','.favorite-category','.favorite-meta'].map(selector=>{const node=el.querySelector(selector),r=node.getBoundingClientRect();return {text:node.textContent,top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width};}));
   assert(Math.max(fields[0].top,fields[1].top)<Math.min(fields[0].bottom,fields[1].bottom),'name and broadcast title share the first line');
   assert(Math.max(fields[2].top,fields[3].top)<Math.min(fields[2].bottom,fields[3].bottom),'category and duration share the second line');
   assert(fields[2].top>=fields[0].bottom,'metadata is below the identity line');
   assert(fields[0].right<=fields[1].left && fields[2].right<=fields[3].left,'columns do not overlap');
   assert.equal(await row.locator('.favorite-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
-  for(const part of ['category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).fontSize),'11px');
+  for(const part of ['title','category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).fontSize),'11px');
   assert(await row.locator('.favorite-details').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'two-line content fits the panel');
   for(const part of ['name','title','category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
-  assert.equal(await row.locator('.favorite-meta').evaluate(el=>getComputedStyle(el).textAlign),'right');
+  assert.equal(await row.locator('.favorite-meta').evaluate(el=>getComputedStyle(el).textAlign),'left');
+  assert(Math.abs(fields[1].left-fields[3].left)<1,'duration starts below broadcast title');
   assert.equal(await row.locator('.favorite-viewers,.favorite-list-viewers').count(),0,'viewer counts are removed from the new favorite format');
   assert(fields[3].text==='--'||/^\d{2,}:\d{2}:\d{2}$/.test(fields[3].text));
   const origins=await row.evaluate(el=>{const nodes=[el.querySelector('.favorite-name'),el.querySelector('.favorite-title')],before=nodes.map(n=>n.getBoundingClientRect().left),old=nodes.map(n=>n.textContent);nodes[0].textContent='아주 긴 이름으로 바꾸어도';nodes[1].textContent='제목 변경';const after=nodes.map(n=>n.getBoundingClientRect().left);nodes.forEach((n,i)=>n.textContent=old[i]);return {before,after};});
@@ -195,6 +202,16 @@ async function run() {
     console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
     await main.locator('body').click({position:{x:5,y:5}});
     await require('./audio-isolation-browser-helpers.cjs')(main);
+    const livePlayer=await (await main.locator('.video-tile iframe').first().elementHandle()).contentFrame();
+    const audioBefore=await livePlayer.evaluate(()=>{const video=document.querySelector('video');let current=5;Object.defineProperty(video,'currentTime',{configurable:true,get:()=>current,set:v=>{current=v;}});Object.defineProperty(video,'seekable',{configurable:true,value:{length:1,start:()=>0,end:()=>30}});return {muted:video.muted,volume:video.volume};});
+    await main.locator('#syncManager').evaluate(el=>el.open=true);
+    await main.locator('.sync-row [data-latest]').first().click();
+    await livePlayer.waitForFunction(()=>Math.abs(document.querySelector('video').currentTime-29.7)<0.001);
+    assert.deepEqual(await livePlayer.evaluate(()=>{const video=document.querySelector('video');const result={muted:video.muted,volume:video.volume};delete video.currentTime;delete video.seekable;return result;}),audioBefore,'latest sync preserves audio');
+    await main.locator('#syncManager').evaluate(el=>el.open=false);
+    await main.locator('#volumeManager').evaluate(el=>el.open=true);
+    for(const line of await main.locator('.volume-slider-line').all())assert(await line.evaluate(el=>{const button=el.querySelector('button').getBoundingClientRect(),range=el.querySelector('input').getBoundingClientRect();return button.right<=range.left && Math.abs((button.top+button.bottom-range.top-range.bottom)/2)<1;}),'mute button sits left of slider, centered on the same line');
+    await main.locator('#volumeManager').evaluate(el=>el.open=false);
     await require('./important-chat-browser-helpers.cjs')(main);
 
     await main.waitForFunction(() => [...document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.tile-streamer-name')].every(el => el.textContent === '테스트 방송'));

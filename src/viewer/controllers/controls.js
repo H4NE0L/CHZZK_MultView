@@ -24,12 +24,14 @@ export function bind(context) {
     ui.querySelector("#volumeManager").addEventListener("toggle", e => {
       if (e.target.open) ui.querySelector("#syncManager")?.removeAttribute("open");
     });
+    ui.querySelector("#syncLatestAll").addEventListener("click",()=>context.state.channels.forEach(channel=>adjustSync(channel.uid,"latest")));
     ui.querySelector("#syncResetAll").addEventListener("click", resetAllSync);
     ui.querySelector("#syncList").addEventListener("click", e => {
       const btn = e.target.closest("button");
       const uid = btn?.closest(".sync-row")?.dataset.uid;
       if (!btn || !uid || btn.disabled) return;
-      if (btn.dataset.step) adjustSync(uid, Number(btn.dataset.step));
+      if (btn.dataset.latest !== undefined) adjustSync(uid,"latest");
+      else if (btn.dataset.step) adjustSync(uid, Number(btn.dataset.step));
       else if (btn.dataset.reset !== undefined) resetSync(uid);
     });
 
