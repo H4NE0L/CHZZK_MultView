@@ -17,6 +17,7 @@
     "src/popup/styles/03-favorites.css",
     "src/popup/styles/04-actions.css",
     "src/popup/styles/05-layout-overrides.css",
-    "src/shared/favorite-item.css"
+    "src/shared/favorite-item.css",
+    "src/popup/styles/06-compact-favorites.css"
   ]
 }

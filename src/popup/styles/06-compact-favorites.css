@@ -1,0 +1,6 @@
+/* Popup density: preserve shared columns/type while removing nested padding. */
+.favorite-row { padding:0 4px; }
+.favorite-row .favorite-main { min-height:46px; padding:4px 8px; gap:8px; }
+.favorite-row .favorite-details { gap:2px; }
+.favorite-row .favorite-primary, .favorite-row .favorite-secondary { gap:8px; }
+.favorite-row.offline .favorite-main { min-height:28px; padding-top:4px; padding-bottom:4px; }

@@ -80,8 +80,8 @@ module.exports=async function checkImportantChat(page){
  for(const id of ['cz-chat-channel']){
    assert(await frame.locator('#'+id).evaluate(el=>!!el.firstElementChild?.shadowRoot));
    const icon=frame.locator('#'+id+' svg');
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),24);
-   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),24);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().width),20);
+   assert.equal(await icon.evaluate(el=>el.getBoundingClientRect().height),20);
    assert.notEqual(await icon.evaluate(el=>getComputedStyle(el).fill),'none');
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
