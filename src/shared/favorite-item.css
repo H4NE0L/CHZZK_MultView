@@ -1,0 +1,16 @@
+/* Shared favorite typography, rows and spacing; following rows remain compact. */
+.favorite-list-row, .favorite-row { border-radius:6px; }
+.favorite-list-row { display:grid; grid-template-columns:8px minmax(0,1fr); align-items:center; gap:10px; min-height:66px; padding:10px 12px; }
+.favorite-list-row .favorite-list-add { display:block; width:100%; min-width:0; padding:0; margin:0; text-align:left; }
+.favorite-row .favorite-main { display:grid; grid-template-columns:8px minmax(0,1fr); align-items:center; gap:10px; width:100%; min-height:66px; padding:10px 12px; text-align:left; }
+.favorite-details { display:grid; grid-template-rows:auto auto; gap:6px; width:100%; min-width:0; }
+.favorite-primary { display:grid; grid-template-columns:minmax(86px,34%) minmax(0,1fr); align-items:center; gap:10px; min-width:0; }
+.favorite-secondary { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+.favorite-details .favorite-name, .favorite-details .favorite-title { display:block; min-width:0; width:auto; max-width:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.favorite-details .favorite-name { font-size:14px; font-weight:700; line-height:20px; color:#f4f6f9; }
+.favorite-details .favorite-title { font-size:12px; font-weight:400; line-height:18px; color:#d3d9e2; }
+.favorite-row .favorite-details .favorite-category, .favorite-list-row .favorite-details .favorite-category { display:block; flex:1 1 auto; width:auto; min-width:0; max-width:none; margin:0; padding:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:400; line-height:16px; color:#00e6a0; }
+.favorite-row .favorite-details .favorite-meta, .favorite-list-row .favorite-details .favorite-meta { display:block; flex:0 0 auto; width:auto; margin:0; padding:0; white-space:nowrap; font-size:11px; font-weight:600; line-height:16px; font-variant-numeric:tabular-nums; text-align:right; color:#c3cbd6; }
+.favorite-row.offline .favorite-title, .favorite-row.offline .favorite-category, .favorite-list-row.offline .favorite-title, .favorite-list-row.offline .favorite-category { color:#aeb7c5; }
+.favorite-details ~ .online-badge, .favorite-details ~ .offline-badge, .favorite-list-row .favorite-online-badge { display:none; }
+.favorite-list-row:hover, .favorite-row:hover { background-color:#242b2c; }

@@ -1,3 +1,4 @@
+import {favoriteDetails} from '../../shared/favorite-item.js';
 export function create(context) {
   const {scope,showNotice,refreshChannelManager,escapeHtml}=context;
   const addToListFromFavorite=favorite=>context.addFavorite(favorite);
@@ -55,7 +56,7 @@ export function create(context) {
         <div class="favorite-list-group-items">
           ${items.map(f => `<div class="favorite-list-row ${f.online ? 'online' : 'offline'}" data-uid="${escapeHtml(f.uid)}">
             <span class="favorite-status-dot ${f.online ? 'online' : ''}"></span>
-            <button class="favorite-list-add" title="방송 추가"><span class="favorite-list-text"><span class="favorite-list-identity"><span class="favorite-list-name" title="${escapeHtml(f.name || f.title || f.uid)}">${escapeHtml(f.name || f.title || f.uid)}</span><span class="favorite-list-category" title="${escapeHtml(f.online ? f.category || '-' : '-')}">${escapeHtml(f.online ? f.category || '-' : '-')}</span></span><span class="favorite-list-meta" title="방송 시간 (hh:mm:ss)">${escapeHtml(favoriteDuration(f))}</span><span class="favorite-list-viewers" title="현재 시청자 수"><svg class="viewer-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="4" r="3"/><path d="M2 15v-2a6 6 0 0 1 12 0v2z"/></svg><span class="favorite-list-viewer-count">${escapeHtml(CZFavoritesStore.favoriteViewerText(f))}</span></span></span><span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
+            <button class="favorite-list-add" title="방송 추가">${favoriteDetails(f)}<span class="favorite-online-badge ${f.online ? 'online':'offline'}">${f.online ? 'ONLINE':'OFFLINE'}</span></button>
           </div>`).join('') || '<div class="favorite-list-empty">표시할 방송이 없습니다.</div>'}
         </div>
       </details>`;

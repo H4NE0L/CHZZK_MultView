@@ -20,50 +20,21 @@ async function checkCompactFavorites(page, prefix) {
   }, nameClass);
   assert(countGap >= 0 && countGap <= 12, 'count must sit beside the group name');
   const row = group.locator(`.${prefix}-row`).first();
-  if (await row.evaluate(el => el.classList.contains('offline'))) {
-    for (const part of ['category', 'meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).display), 'none');
-    assert(await row.locator(`.${prefix}-name`).isVisible());
-    assert(await row.locator(prefix === 'favorite' ? '.favorite-status' : '.favorite-status-dot').isVisible());
-    return;
-  }
-  const fields = await row.evaluate((el, p) => ['identity', 'meta', 'viewers', 'name', 'category'].map(part => {
-    const field = el.querySelector(`.${p}-${part}`), box = field.getBoundingClientRect();
-    return {text: field.textContent, top: box.top, bottom: box.bottom, left: box.left, right: box.right};
-  }), prefix);
-  assert(Math.max(...fields.slice(0,3).map(f => f.top)) < Math.min(...fields.slice(0,3).map(f => f.bottom)), 'three columns share one row');
-  assert(Math.max(fields[3].top, fields[4].top) < Math.min(fields[3].bottom, fields[4].bottom) && fields[3].right <= fields[4].left, 'category sits beside streamer name');
-  assert(Math.abs(fields[4].left - fields[3].right - 4) <= 1, 'category has a 4px gap beside name');
-  assert(Math.abs(fields[2].left - fields[1].right - 12) <= 1, 'duration and viewers have a 12px gap');
-  const dotGap = await row.evaluate((el, p) => { const dot = el.querySelector(p === 'favorite' ? '.favorite-status' : '.favorite-status-dot').getBoundingClientRect(); const name = el.querySelector(`.${p}-name`).getBoundingClientRect(); return name.left - dot.right; }, prefix);
-  assert(Math.abs(dotGap - 8) <= 1, 'dot and name have an 8px gap');
-  assert.equal(await row.locator(`.${prefix}-name`).evaluate(el => getComputedStyle(el).fontSize), '14px');
-  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).fontSize), '10px');
-  for (const part of ['meta', 'viewers']) assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).fontSize), '12px');
-  assert(fields[0].right <= fields[1].left && fields[1].right <= fields[2].left, 'duration column precedes viewers');
-  for (const part of ['viewers', 'meta']) {
-    assert(await row.locator(`.${prefix}-${part}`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'viewer and duration columns must fit their content');
-    assert.equal(await row.locator(`.${prefix}-${part}`).evaluate(el => getComputedStyle(el).whiteSpace), 'nowrap');
-  }
-  assert(await row.locator(`.${prefix}-text`).evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'favorite columns must fit the panel');
-  assert.equal(await row.locator(`.${prefix}-viewers .viewer-icon`).count(), 1);
-  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).color), 'rgb(0, 220, 155)');
-  assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).color), 'rgb(255, 116, 116)');
-  assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).textAlign), 'left');
-  assert.equal(await row.locator(`.${prefix}-meta`).evaluate(el => getComputedStyle(el).fontWeight), '700');
-  assert.equal(await row.locator(`.${prefix}-category`).evaluate(el => getComputedStyle(el).paddingLeft), '0px');
-  assert.equal(await row.locator(`.${prefix}-viewers`).evaluate(el => getComputedStyle(el).textAlign), 'right');
-  const origins = await row.evaluate((el,p) => {
-    const fields=['name','category','meta','viewers'].map(part => el.querySelector(`.${p}-${part}`));
-    const before=fields.map(f => f.getBoundingClientRect().left), original=fields.slice(0,2).map(f=>f.textContent);
-    fields[0].textContent='아주 긴 방송인 이름 길이 변경'; fields[1].textContent='짧음';
-    const after=fields.map(f => f.getBoundingClientRect().left);
-    fields.slice(0,2).forEach((f,i)=>f.textContent=original[i]);
-    return {before,after};
-  },prefix);
-  assert.deepEqual(origins.before,origins.after,'information column origins must not depend on text length');
-  const badge = row.locator('.online-badge, .offline-badge, .favorite-online-badge');
-  assert.equal(await badge.evaluate(el => getComputedStyle(el).display), 'none');
-  assert(fields[1].text === '--' || /^\d{2,}:\d{2}:\d{2}$/.test(fields[1].text));
+  const fields=await row.evaluate(el=>['.favorite-name','.favorite-title','.favorite-category','.favorite-meta'].map(selector=>{const node=el.querySelector(selector),r=node.getBoundingClientRect();return {text:node.textContent,top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width};}));
+  assert(Math.max(fields[0].top,fields[1].top)<Math.min(fields[0].bottom,fields[1].bottom),'name and broadcast title share the first line');
+  assert(Math.max(fields[2].top,fields[3].top)<Math.min(fields[2].bottom,fields[3].bottom),'category and duration share the second line');
+  assert(fields[2].top>=fields[0].bottom,'metadata is below the identity line');
+  assert(fields[0].right<=fields[1].left && fields[2].right<=fields[3].left,'columns do not overlap');
+  assert.equal(await row.locator('.favorite-name').evaluate(el=>getComputedStyle(el).fontSize),'14px');
+  for(const part of ['category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).fontSize),'11px');
+  assert(await row.locator('.favorite-details').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'two-line content fits the panel');
+  for(const part of ['name','title','category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
+  assert.equal(await row.locator('.favorite-meta').evaluate(el=>getComputedStyle(el).textAlign),'right');
+  assert.equal(await row.locator('.favorite-viewers,.favorite-list-viewers').count(),0,'viewer counts are removed from the new favorite format');
+  assert(fields[3].text==='--'||/^\d{2,}:\d{2}:\d{2}$/.test(fields[3].text));
+  const origins=await row.evaluate(el=>{const nodes=[el.querySelector('.favorite-name'),el.querySelector('.favorite-title')],before=nodes.map(n=>n.getBoundingClientRect().left),old=nodes.map(n=>n.textContent);nodes[0].textContent='아주 긴 이름으로 바꾸어도';nodes[1].textContent='제목 변경';const after=nodes.map(n=>n.getBoundingClientRect().left);nodes.forEach((n,i)=>n.textContent=old[i]);return {before,after};});
+  assert.deepEqual(origins.before,origins.after,'name/title starts remain aligned for different text lengths');
+
 }
 
 async function run() {
@@ -158,7 +129,7 @@ async function run() {
         if (url.pathname.endsWith('/live-detail') && liveGate) { notifyLiveGate?.(); await liveGate; }
         if (liveStatus === 'ERROR') return route.fulfill({status: 503, body: 'unavailable'});
         if (liveStatus === 'CLOSE' && url.pathname.endsWith('/live-detail')) return route.fulfill({json:{code:200,content:null}});
-        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
+        return route.fulfill({json: {code: 200, content: {status: liveStatus, openDate: '2026-10-11 09:00:00', liveCategoryValue: '게임', liveTitle: '실제 방송 제목', concurrentUserCount: liveViewers, channel: {channelName: '테스트 방송'}}}});
       }
       return route.fulfill({contentType: 'text/html', body: '<!doctype html><html><head><title>테스트 방송 - 방송 제목 - CHZZK</title></head><body><video muted></video><span class="nickname">채팅 시청자 오염 이름</span><aside style="width:260px;height:500px" class="live_chat"><div class="live_chatting_input_box" style="height:96px"><input placeholder="채팅"></div><ul><li>메시지</li></ul></aside></body></html>'});
     });
@@ -352,7 +323,7 @@ async function run() {
     await main.locator('#favoriteRefresh').click();
     await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-online-badge.online').waitFor({state: 'attached'});
     await checkCompactFavorites(main, 'favorite-list');
-    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-list-viewers').textContent(), '1,234');
+    assert.equal(await main.locator('.favorite-list-row[data-uid="bbbbbb"] .favorite-title').textContent(), '실제 방송 제목');
     assert((await main.locator('.mv-notice').textContent()).includes('현재 화면의 온라인 상태를 갱신'));
     assert.equal(writes, writesBeforeFailure);
     assert.deepEqual(storage, storedBeforeFailure, 'expired context must not overwrite the shared store');
@@ -424,7 +395,7 @@ async function run() {
     liveViewers = 1234567;
     await popup.evaluate(() => window.__statusPolls[0]());
     await checkCompactFavorites(popup, 'favorite');
-    console.log('PASS: one-second elapsed time, 30-second status polling, offline-only names and inline category, content-sized time/viewer columns and viewer icon.');
+    console.log('PASS: two-line favorites share popup/viewer layout, live title, category and one-second duration with stable column origins.');
     // Real foreign-origin iframe helpers must report native-player changes.
     await main.evaluate(() => document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.mv-toolbar details').forEach(el => el.open = false));
     const liveFrames = main.frames().filter(frame => /^\/live\/(aaaaaa|bbbbbb)$/.test(new URL(frame.url()).pathname));

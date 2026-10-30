@@ -11,7 +11,7 @@ export const sourceTimes=globalThis.__CZChatSourceTimesV1 ||= (()=>{
   if(!message||typeof message!=='object')return;
   let profile=message.profile;if(typeof profile==='string' && profile.length<=16000){try{profile=JSON.parse(profile);}catch(_){return;}}
   const name=profile?.nickname??message.nickname,text=message.content??message.msg??message.message;
-  const time=valid(message.messageTime??message.msgTime??message.ctime??message.createdAt);
+  const time=valid(message.messageTime??message.msgTime??message.ctime??message.createdAt??message.createTime);
   if(typeof name!=='string'||typeof text!=='string'||!text.trim()||text.length>16000||time===null)return;
   const key=keyFor(name,text),old=entries.get(key);
   // Identical messages with distinct source times cannot be safely assigned by text.

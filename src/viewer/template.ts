@@ -65,7 +65,7 @@ export const html = `
           </details>
           <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
             <button type="button" class="layout-toggle-btn" data-layout="grid">그리드</button>
-            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드 뷰</button>
+            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드</button>
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
           <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>

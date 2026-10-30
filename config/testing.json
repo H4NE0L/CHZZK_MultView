@@ -74,5 +74,9 @@
   "src/content/power-rewards.js": [
     "CZPowerRewards",
     null
+  ],
+  "src/content/chat/power-api.js": [
+    "CZPowerApi",
+    null
   ]
 }

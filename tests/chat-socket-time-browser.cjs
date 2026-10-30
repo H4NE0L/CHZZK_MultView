@@ -24,8 +24,13 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.waitForTimeout(100);assert.equal(await page.locator('[data-cz-message-time]').count(),0,'ambiguous identical messages need source ID');
   await page.evaluate(()=>__row('원본 작성 시각','m2'));await page.waitForFunction(()=>document.querySelector('[data-cz-message-time]')?.getAttribute('data-cz-message-time')==='2026-10-29T12:36:36.000Z');
   await page.evaluate(()=>{__row('원본 작성 시각','m2').querySelector('._nickname_test_1').textContent='다른 작성자';});await page.waitForFunction(()=>!document.querySelector('[data-cz-message-time]'));
+  await page.evaluate(()=>{
+   __socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({cmd:93101,bdy:JSON.stringify([{createTime:1793277496000,profile:{nickname:'작성자'},content:'문자열 본문 작성 시각'}])})}));
+   __row('문자열 본문 작성 시각');
+  });
+  await page.waitForFunction(()=>document.querySelector('[data-cz-message-time]')?.getAttribute('data-cz-message-time')==='2026-10-29T12:38:16.000Z');
   await page.evaluate(()=>{for(let i=0;i<2300;i++)__receive([{msgTime:1793277296000,profile:{nickname:'작성자'},msg:'메시지 '+i}]);});
-  assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),2048);assert.equal(await page.evaluate(()=>window.__sent||0),0);assert.equal(await page.evaluate(()=>__nativeReads),2303);
+  assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),2048);assert.equal(await page.evaluate(()=>window.__sent||0),0);assert.equal(await page.evaluate(()=>__nativeReads),2304);
   await page.evaluate(()=>{document.documentElement.setAttribute('data-cz-timestamps-enabled','false');document.dispatchEvent(new Event('cz-chat-timestamps-config'));__receive([{msgTime:1793277296000,profile:{nickname:'작성자'},msg:'OFF 후 무시'}]);});
   assert.equal(await page.evaluate(()=>__CZChatSourceTimesV1.size),0,'OFF clears the index and removes socket data listeners');
   await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));

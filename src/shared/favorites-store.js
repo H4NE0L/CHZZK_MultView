@@ -24,6 +24,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
     online: f.online === true,
     openAt: Number(f.openAt) > 0 ? Number(f.openAt) : null,
     category: String(f.category || '').trim(),
+    liveTitle: String(f.liveTitle || '').trim(),
     viewerCount: normalizeViewerCount(f.viewerCount),
     order: Number.isFinite(Number(f.order)) && Number(f.order) > 0 ? Number(f.order) : null
   });
@@ -123,7 +124,7 @@ globalThis.CZFavoritesStore = globalThis.CZFavoritesStore || (() => {
       if (!info) return {...f};
       // Metadata updates must never change membership, group or global order.
       const next = {...f};
-      for (const key of ['online', 'openAt', 'category', 'viewerCount', 'name', 'title']) {
+      for (const key of ['online', 'openAt', 'category', 'viewerCount', 'name', 'title', 'liveTitle']) {
         if (Object.hasOwn(info, key)) next[key] = info[key];
       }
       return next;

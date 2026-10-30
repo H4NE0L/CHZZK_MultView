@@ -8,7 +8,8 @@ import {sourceTimes} from '../shared/chat/source-times.js';
  function receive(event){
   if(disposed || !enabled || typeof event.data!=='string' || event.data.length>1024*1024)return;
   let packet;try{packet=JSON.parse(event.data);}catch(_){return;}
-  const body=packet?.bdy??packet?.body;
+  let body=packet?.bdy??packet?.body;
+  if(typeof body==='string'){if(body.length>1024*1024)return;try{body=JSON.parse(body);}catch(_){return;}}
   const messages=Array.isArray(body)?body:body?.messageList??body?.messages??(body?.profile?[body]:[]);
   if(!Array.isArray(messages))return;
   messages.slice(-200).forEach(sourceTimes.add);

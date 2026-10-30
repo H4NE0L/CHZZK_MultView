@@ -122,7 +122,7 @@ test('KST timestamps and elapsed-time text match existing behavior', () => {
 test('live-info request retains headers, credentials and category/date extraction', async () => {
   let request;
   const {store} = fixture({}, async (...args) => { request = args; return {ok: true, json: async () => ({code: 200, content: {status: 'OPEN', openDate: '2026-10-11 09:00:00', liveCategoryValue: ' 게임 ', concurrentUserCount: 1234}})}; });
-  assert.deepEqual(plain(await store.fetchLiveInfo('a/b')), {online: true, openAt: Date.UTC(2026,9,11), category: '게임', viewerCount: 1234});
+  assert.deepEqual(plain(await store.fetchLiveInfo('a/b')), {online: true, openAt: Date.UTC(2026,9,11), category: '게임', viewerCount: 1234, liveTitle: ''});
   assert(request[0].includes('a%2Fb'));
   assert.equal(request[1].credentials, 'include');
   assert.equal(request[1].headers['Front-Client-Product-Type'], 'web');
@@ -130,7 +130,7 @@ test('live-info request retains headers, credentials and category/date extractio
 
 test('network errors, HTTP errors and closed streams become offline', async () => {
   const responses = [async () => {throw Error('offline');}, async () => ({ok: false}), async () => ({ok: true, json: async () => ({code: 200, content: {status: 'CLOSE'}})})];
-  for (const fetch of responses) assert.deepEqual(plain(await fixture({}, fetch).store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null});
+  for (const fetch of responses) assert.deepEqual(plain(await fixture({}, fetch).store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null, liveTitle: ''});
 });
 
 test('reinjecting the shared adapter preserves its identity and subscriptions', () => {
@@ -147,7 +147,7 @@ test('strict live refresh distinguishes a failed request from an offline broadca
   for (const fetch of [async () => {throw Error('network denied');}, async () => ({ok: false, status: 403})]) {
     const {store} = fixture({}, fetch);
     await assert.rejects(store.fetchLiveInfo('aaaaaa', {throwOnError: true}));
-    assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null});
+    assert.deepEqual(plain(await store.fetchLiveInfo('aaaaaa')), {online: false, openAt: null, category: '', viewerCount: null, liveTitle: ''});
   }
 });
 
@@ -223,4 +223,12 @@ test('default group is optional; ungrouped favorites survive removal, editing an
  state=f.store.setGroupMembers(state.favorites,[],null,'새 그룹',state.favorites);
  state=f.store.setGroupMembers(state.favorites,state.groups,'새 그룹','새 그룹',[]);
  assert.equal(state.favorites.length,1);assert.deepEqual(plain(state.favorites[0].groups),[]);
+});
+
+test('broadcast title is separate from streamer identity and clears when a live ends',async()=>{
+ let status='OPEN';const f=fixture({},async()=>({ok:true,json:async()=>({code:200,content:{status,liveTitle:'<새 방송 제목>',liveCategoryValue:'게임'}})}));
+ let state=f.store.snapshot([{uid:'aaaaaa',name:'방송인',title:'방송인',groups:['그룹']}],['그룹']);
+ state.favorites=f.store.mergeInfo(state.favorites,{aaaaaa:await f.store.fetchLiveInfo('aaaaaa')});
+ assert.equal(state.favorites[0].liveTitle,'<새 방송 제목>');assert.equal(state.favorites[0].name,'방송인');assert.equal(state.favorites[0].title,'방송인');
+ status='CLOSE';state.favorites=f.store.mergeInfo(state.favorites,{aaaaaa:await f.store.fetchLiveInfo('aaaaaa')});assert.equal(state.favorites[0].liveTitle,'');assert.deepEqual(plain(state.favorites[0].groups),['그룹']);
 });

@@ -1,3 +1,6 @@
+import {create as createPowerApi} from './chat/power-api.js';
+import {readPowerBalance} from './chat/power-balance.js';
+import {headerStyles} from './chat/header-style.js';
 globalThis.CZChatLayout = (() => {
   function findReplayChatRoot(doc) {
     const markers = Array.from(doc.querySelectorAll("body *")).filter(el => {
@@ -189,6 +192,7 @@ globalThis.CZChatLayout = (() => {
       box.classList.toggle('cz-chat-input-idle',empty && !box.contains(doc.activeElement));
     });
   }
+  let lastPowerBalance=null,powerChannel='',powerReader=null,powerApiFresh=false;
   let presentation={name:'',height:0},onHeader=null,nativeMenuOpen=false;
   const boundRoots=new WeakSet();
   function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
@@ -217,7 +221,7 @@ globalThis.CZChatLayout = (() => {
     for(const header of document.querySelectorAll('.cz-native-chat-header')){
       if(managedHeaders.has(header))continue;
       header.classList.remove('cz-native-chat-header');
-      header.querySelectorAll('#cz-chat-settings,#cz-chat-channel').forEach(el=>el.remove());
+      header.querySelectorAll('#cz-chat-settings,#cz-chat-channel,#cz-chat-power,.cz-native-menu-icon').forEach(el=>el.remove());
       header.querySelectorAll('.cz-channel-name,.cz-native-settings').forEach(el=>el.classList.remove('cz-channel-name','cz-native-settings'));
     }
   }
@@ -236,6 +240,15 @@ globalThis.CZChatLayout = (() => {
   }
   function overlayOpen(){return overlayRects().length>0;}
   function reportHeader(header){if(!onHeader)return;const rects=overlayRects();onHeader(Math.round(header.getBoundingClientRect().bottom),nativeMenuOpen||rects.length>0,rects);}
+  function updatePowerBalance(header,balance,title){
+    let badge=header.querySelector('#cz-chat-power');
+    if(!badge){badge=document.createElement('span');badge.id='cz-chat-power';badge.innerHTML='<span class="cz-power-label">통나무</span><span class="cz-power-value">—</span>';title.after(badge);}
+    const known=balance!==null||lastPowerBalance!==null;
+    const amount=lastPowerBalance?.source==='api'?lastPowerBalance.value:balance??lastPowerBalance?.value;
+    const text=known?amount.toLocaleString('ko-KR'):'—',value=badge.querySelector('.cz-power-value');
+    if(value.textContent!==text)value.textContent=text;
+    badge.dataset.known=String(known);badge.dataset.fresh=String(powerApiFresh||balance!==null);badge.title=powerApiFresh?`내 통나무 파워 ${text} · 30초마다 갱신`:balance!==null&&lastPowerBalance?.source!=='api'?`내 통나무 파워 ${text}`:known?`마지막 확인 잔액 ${text} · API 재조회 또는 프로필 확인 시 갱신됩니다`:'잔액 조회 중 · 로그인 상태와 원본 프로필을 확인해 주세요';badge.setAttribute('aria-label',badge.title);
+  }
   function nativeHeader(root){
     const header=findHeader(root);
     if(!header)return;
@@ -246,6 +259,10 @@ globalThis.CZChatLayout = (() => {
       root.addEventListener('click',event=>{const control=event.target.closest?.('button,[role=button]');if(control?.id==='cz-chat-settings' || event.target.closest?.('#cz-chat-channel'))return;const current=root.querySelector('.cz-native-chat-header');nativeMenuOpen=!!(control && current?.contains(control) && !nativeMenuOpen);if(current)reportHeader(current);});
       root.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;const current=root.querySelector('.cz-native-chat-header');if(current)reportHeader(current);}});
     }
+    const channelKey=location.pathname.replace(/\/chat\/?$/,'');
+    if(channelKey!==powerChannel){powerChannel=channelKey;lastPowerBalance=null;powerApiFresh=false;}
+    const balance=readPowerBalance(document);if(balance!==null && !powerApiFresh)lastPowerBalance={value:balance,source:'profile'};
+    const currentTitle=header.querySelector('.cz-channel-name');if(currentTitle)updatePowerBalance(header,balance,currentTitle);
     if(nativeMenuOpen || overlayOpen()){reportHeader(header);return;}
     let title=header.querySelector('.cz-channel-name');
     if(!title){
@@ -256,6 +273,8 @@ globalThis.CZChatLayout = (() => {
       title=document.createElement('strong');title.className='cz-channel-name';header.prepend(title);
     }
     if(title.textContent!==presentation.name)title.textContent=presentation.name;
+    title.title=presentation.name;
+    updatePowerBalance(header,balance,title);
     header.querySelectorAll('[class*="font_size"],[class*="fontSize"],[class*="font-size"],[class*="header_font"],[class*="zoom"],[aria-label*="글씨"],[aria-label*="글자"],[title*="글씨"],[title*="글자"]').forEach(el=>el.style.setProperty('display','none','important'));
     for(const el of header.querySelectorAll('*')){
       if(el===title || el.contains(title) || el.closest('#cz-chat-settings'))continue;
@@ -279,6 +298,9 @@ globalThis.CZChatLayout = (() => {
     channel.href=location.origin+location.pathname.replace(/\/chat\/?$/,'');
     if(native){
       native.classList.add('cz-native-settings');
+      if(!native.getAttribute('aria-label'))native.setAttribute('aria-label','치지직 채팅 설정');
+      if(!native.querySelector('.cz-native-menu-icon')){const icon=document.createElement('span');icon.className='cz-native-menu-icon';mountHeaderIcon(icon,'<circle cx="8" cy="3" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="8" cy="13" r="1.25"/>');native.appendChild(icon);}
+
       let wrapper=native.parentElement;
       while(wrapper && wrapper!==header){
         wrapper.classList.add('cz-native-action-wrapper');wrapper=wrapper.parentElement;
@@ -336,9 +358,7 @@ globalThis.CZChatLayout = (() => {
     root.classList.add('cz-chat-only');
     if(!document.getElementById('cz-chat-chrome')){
       const style=document.createElement('style');style.id='cz-chat-chrome';
-      style.textContent='.cz-chat-only{border:0!important;border-radius:0!important}.cz-native-chat-header{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:4px!important;padding:0 8px!important;flex-shrink:0;min-height:36px;box-sizing:border-box}.cz-channel-name{position:static!important;transform:none!important;flex:1 1 0!important;width:auto!important;max-width:none!important;font-size:14px!important;font-weight:700!important;line-height:20px!important;color:#f5f7fa!important;text-align:left!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;margin:0 auto 0 0!important;padding:0!important;order:-1!important}#cz-chat-settings,#cz-chat-channel,.cz-native-settings{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 28px!important;width:28px!important;height:28px!important;min-width:28px!important;margin:0!important;padding:0!important;border:0!important;border-radius:4px!important;background:transparent!important;color:#c6ccd5!important;cursor:pointer;box-sizing:border-box!important}#cz-chat-settings svg,#cz-chat-channel svg{display:block!important;width:16px!important;height:16px!important;flex:none!important}#cz-chat-settings:hover,#cz-chat-channel:hover{color:#fff!important;background:#ffffff12!important}';
-      style.textContent+='.cz-native-chat-header{align-items:center!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{position:static!important;inset:auto!important;transform:none!important;align-self:center!important;line-height:0!important;vertical-align:middle!important;float:none!important}.cz-native-settings svg{position:static!important;inset:auto!important;display:block!important;width:18px!important;height:18px!important;margin:0!important;transform:none!important}';
-      style.textContent+='.cz-native-chat-time{display:inline!important;margin-right:6px!important;color:#89929f!important;font-size:10px!important;font-weight:400!important;line-height:inherit!important;white-space:nowrap!important}.cz-native-chat-header{height:40px!important;min-height:40px!important;padding:0 8px!important}.cz-native-chat-header #cz-chat-channel,.cz-native-chat-header #cz-chat-settings,.cz-native-chat-header .cz-native-settings{width:32px!important;min-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;flex:0 0 32px!important;box-sizing:border-box!important}.cz-native-chat-header #cz-chat-channel:before,.cz-native-chat-header #cz-chat-channel:after,.cz-native-chat-header #cz-chat-settings:before,.cz-native-chat-header #cz-chat-settings:after,.cz-native-settings:before,.cz-native-settings:after{content:none!important}.cz-native-settings{font-size:20px!important;line-height:1!important}.cz-native-settings svg{width:20px!important;height:20px!important}.cz-native-action-wrapper{position:relative!important;inset:auto!important;transform:none!important;align-self:center!important;align-items:center!important;min-height:32px!important;margin-top:0!important;margin-bottom:0!important}';
+      style.textContent=headerStyles;
       (document.head||document.documentElement).appendChild(style);
     }
     nativeHeader(root);stampMessages(root);
@@ -352,6 +372,11 @@ globalThis.CZChatLayout = (() => {
       prepare();
     };
     apply();
+    if(!powerReader){
+      const getUid=()=>location.pathname.match(/^\/live\/([-\w]+)(?:\/chat)?\/?$/)?.[1]||null;
+      powerReader=createPowerApi({getUid,onValue:amount=>{powerApiFresh=true;lastPowerBalance={value:amount,source:'api'};prepare();},onUnavailable:()=>{powerApiFresh=false;prepare();}});
+      powerReader.start();
+    }
     let scheduled=false;
     const report=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;const header=document.querySelector('.cz-native-chat-header');if(header)reportHeader(header);});};
     window.addEventListener('resize',report);document.addEventListener('scroll',report,true);

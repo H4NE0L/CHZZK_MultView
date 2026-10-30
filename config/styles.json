@@ -7,13 +7,16 @@
     "src/viewer/styles/05-layout-tiles.css",
     "src/viewer/styles/06-chat.css",
     "src/viewer/styles/07-sync-responsive.css",
-    "src/viewer/styles/08-feature-overrides.css"
+    "src/viewer/styles/08-feature-overrides.css",
+    "src/viewer/styles/09-ui-polish.css",
+    "src/shared/favorite-item.css"
   ],
   "src/popup/popup.css": [
     "src/popup/styles/01-base-form.css",
     "src/popup/styles/02-broadcast-list.css",
     "src/popup/styles/03-favorites.css",
     "src/popup/styles/04-actions.css",
-    "src/popup/styles/05-layout-overrides.css"
+    "src/popup/styles/05-layout-overrides.css",
+    "src/shared/favorite-item.css"
   ]
 }

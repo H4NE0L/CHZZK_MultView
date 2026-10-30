@@ -1,0 +1,10 @@
+#favoriteManager .favorite-manager-panel { width:min(440px,calc(100vw - 24px)); }
+.important-chat-panel { background:#101315; }
+.ic-heading { min-height:40px; flex-basis:40px; padding:4px 6px 4px 2px; background:#192621; border-bottom:1px solid #355346; box-sizing:border-box; gap:4px; }
+.ic-heading .ic-toggle { height:32px; min-height:32px; padding:0 10px; color:#d6f3e6; font-size:12px; font-weight:700; }
+.ic-header-settings { width:32px; height:32px; border-radius:4px; }
+.ic-header-settings svg { width:20px; height:20px; }
+.important-chat-panel .ic-body { padding:10px 8px 6px; background:#101315; }
+.important-chat-panel[data-collapsed="true"] { height:42px; }
+.important-chat-panel[data-collapsed="true"] .ic-heading { border-bottom:0; }
+.ic-message { padding:6px 4px; }

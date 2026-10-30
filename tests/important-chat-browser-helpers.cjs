@@ -31,6 +31,21 @@ module.exports=async function checkImportantChat(page){
  assert.equal(await frame.locator('.native-toolbar-test').getByRole('button',{name:'+',exact:true}).count(),0);
  assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'),'channel link precedes native settings');
  assert.equal(await frame.locator('.cz-channel-name').textContent(),'테스트 방송');
+ assert.equal(await frame.locator('#cz-chat-power .cz-power-value').textContent(),'—');
+ await frame.evaluate(()=>{const profile=document.createElement('div');profile.id='native-profile-check';profile.setAttribute('role','dialog');profile.style.cssText='position:fixed;top:60px;left:10px;width:260px;height:160px;background:#202328';profile.innerHTML='<p>사용 중인 프로필</p><button><span>내 통나무 파워</span><strong id="profile-balance">300</strong></button>';document.querySelector('#native-overlay-root').appendChild(profile);CZChatLayout.setPresentation({name:'테스트 방송'});});
+ await frame.waitForFunction(()=>document.querySelector('#cz-chat-power .cz-power-value').textContent==='300');
+ await frame.evaluate(()=>{document.querySelector('#profile-balance').textContent='1,234';CZChatLayout.setPresentation({name:'테스트 방송'});});
+ await frame.waitForFunction(()=>document.querySelector('#cz-chat-power .cz-power-value').textContent==='1,234');
+ await frame.evaluate(()=>{document.querySelector('#profile-balance').textContent='0';CZChatLayout.setPresentation({name:'테스트 방송'});});
+ await frame.waitForFunction(()=>document.querySelector('#cz-chat-power .cz-power-value').textContent==='0');
+ await frame.evaluate(()=>{document.querySelector('#profile-balance').textContent='300';CZChatLayout.setPresentation({name:'테스트 방송'});document.querySelector('#native-profile-check').remove();const row=document.createElement('div');row.dataset.chatMessage='';row.id='fake-power-message';row.textContent='내 통나무 파워 9999';document.querySelector('aside.live_chat').appendChild(row);CZChatLayout.setPresentation({name:'테스트 방송'});});
+ assert.equal(await frame.locator('#cz-chat-power .cz-power-value').textContent(),'300','profile value is retained, never replaced by a chat number');
+ assert.equal(await frame.locator('#cz-chat-power').getAttribute('data-fresh'),'false');
+ await frame.evaluate(()=>{document.querySelector('#fake-power-message').remove();CZChatLayout.setPresentation({name:'아주 긴 스트리머 이름도 아이콘 영역을 침범하면 안 됩니다'});});
+ const headerFit=await frame.locator('.cz-native-chat-header').evaluate(header=>{const title=header.querySelector('.cz-channel-name'),link=header.querySelector('#cz-chat-channel'),power=header.querySelector('#cz-chat-power'),settings=header.querySelector('.cz-native-settings');const bounds=header.getBoundingClientRect(),name=title.getBoundingClientRect(),points=power.getBoundingClientRect(),open=link.getBoundingClientRect(),menu=settings.getBoundingClientRect();return {fits:name.left>=bounds.left && name.right<=points.left && points.right<=open.left && menu.right<=bounds.right,open:[open.width,open.height],menu:[menu.width,menu.height]};});
+ assert(headerFit.fits,'long names leave separate non-overlapping balance/link/settings areas');assert.deepEqual(headerFit.open,[32,32]);assert.deepEqual(headerFit.menu,[32,32]);
+ await frame.evaluate(()=>CZChatLayout.setPresentation({name:'테스트 방송'}));
+
  const centers=await frame.evaluate(()=>['cz-chat-channel','native-chat-menu'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return r.y+r.height/2;}));
  assert(Math.max(...centers)-Math.min(...centers)<1,'header controls share the same vertical center despite native absolute positioning');
  const headerCenter=await frame.locator('.cz-native-chat-header').evaluate(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2;});
@@ -71,7 +86,7 @@ module.exports=async function checkImportantChat(page){
    assert.equal(await icon.locator('path').first().evaluate(el=>getComputedStyle(el).stroke),'none');
  }
 
- assert.equal(await panel.locator('.ic-header-settings').evaluate(el=>el.getBoundingClientRect().width),28);
+ assert.equal(await panel.locator('.ic-header-settings').evaluate(el=>el.getBoundingClientRect().width),32);
  assert(await frame.locator('#cz-chat-channel').evaluate(el=>el.nextElementSibling.id==='native-chat-menu'));
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('href'),'https://chzzk.naver.com/live/aaaaaa');
  assert.equal(await frame.locator('#cz-chat-channel').getAttribute('target'),'_blank');
