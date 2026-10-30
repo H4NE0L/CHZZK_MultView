@@ -13,3 +13,14 @@ test('layout coalesces resize work, reads current layout and cancels pending fra
  layout.resizeFixedAspectGrid();scope.dispose();assert.equal(frames.size,0);assert.equal(scope.size,0);
  layout.resizeFixedAspectGrid();assert.equal(frames.size,0);
 });
+
+test('removal layout can resize retained players without rebroadcasting audio',()=>{
+ const context=vm.createContext({console,requestAnimationFrame:()=>1,cancelAnimationFrame(){}});
+ for(const file of ['src/shared/runtime/scope.js','src/viewer/layout.js'])vm.runInContext(require('./support/modules.cjs').read(file,'utf8'),context);
+ const classList={remove(){},add(){},toggle(){}},tile={style:{},classList},tiles=new Map([['a',tile]]),sent=[];
+ const grid={classList,style:{setProperty(){},removeProperty(){}},getBoundingClientRect:()=>({width:800,height:600})};
+ const state={layout:'grid',channels:[{uid:'a'}],selectedUid:'a'},scope=new context.CZRuntime.ResourceScope();
+ const layout=context.CZLayout.create({state,videoGrid:grid,ui:null,scope,tileMap:tiles,createTile(){},sendTileVolume:uid=>sent.push(uid),applyTileLock(){},refreshChannelManager(){},refreshVolumeManager(){}});
+ layout.applyLayout({audio:false});assert.deepEqual(sent,[]);assert.equal(tiles.get('a'),tile);
+ layout.applyLayout();assert.deepEqual(sent,['a']);scope.dispose();
+});

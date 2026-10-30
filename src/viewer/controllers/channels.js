@@ -104,30 +104,32 @@ export function create(context) {
   function removeChannel(uid) {
     const state=context.state;
     if (mediaTools.isRecording(uid)) { showNotice("녹화를 중지하고 결과를 확인한 뒤 방송을 삭제하세요."); return; }
+    if(!state.channels.some(channel=>channel.uid===uid))return;
+    const selectedChanged=state.selectedUid===uid;
     const tile = tileMap.get(uid);
-    if (tile) {
-      const iframe = tile.querySelector("iframe");
-      if (iframe) iframe.src = "about:blank";
-      mediaTools.detach(uid);
-      tile.remove();
-    }
-
+    // Reject queued messages before frame teardown; removing the frame itself
+    // releases playback without starting a second about:blank navigation.
     tileMap.delete(uid);
-    clearSyncState(uid);
     state.channels = state.channels.filter(c => c.uid !== uid);
+    const iframe=tile?.querySelector("iframe");
+    if(iframe)iframe.dataset.playerReady='false';
+    mediaTools.detach(uid);
+    clearSyncState(uid);
+    tile?.remove();
 
-    if (state.selectedUid === uid) {
+    if (selectedChanged) {
       state.selectedUid = state.channels[0]?.uid || null;
-      if (state.selectedUid) {
-        if (state.mainOnly) makeMainAudible();
-      }
+      if (state.selectedUid && state.mainOnly) makeMainAudible();
     }
 
-    refreshChannelManager();
-    syncSelection();
-    applyLayout();
-    context.reconcileAudio();
-    updateChat();
+    applyLayout({audio:false});
+    if(selectedChanged){
+      syncSelection({audio:state.mainOnly,chrome:false});
+      updateChat();
+    }
+    // applyLayout refreshes the list/volume UI without reloading surviving
+    // players or rebroadcasting hide-chat and volume commands to every tile.
+
     saveState();
   }
 

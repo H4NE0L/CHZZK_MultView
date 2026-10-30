@@ -10,7 +10,7 @@
 .favorite-details .favorite-name { font-size:14px; font-weight:700; line-height:20px; color:#f4f6f9; }
 .favorite-details .favorite-title { font-size:11px; font-weight:400; line-height:16px; color:#d3d9e2; }
 .favorite-row .favorite-details .favorite-category, .favorite-list-row .favorite-details .favorite-category { display:block; flex:1 1 auto; width:auto; min-width:0; max-width:none; margin:0; padding:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:400; line-height:16px; color:#00e6a0; }
-.favorite-row .favorite-details .favorite-meta, .favorite-list-row .favorite-details .favorite-meta { display:block; flex:0 0 auto; width:auto; margin:0; padding:0; white-space:nowrap; font-size:11px; font-weight:600; line-height:16px; font-variant-numeric:tabular-nums; text-align:left; color:#c3cbd6; }
+.favorite-row .favorite-details .favorite-meta, .favorite-list-row .favorite-details .favorite-meta { display:block; flex:0 0 auto; width:auto; margin:0; padding:0; white-space:nowrap; font-size:11px; font-weight:700; line-height:16px; font-variant-numeric:tabular-nums; text-align:left; color:#fff; }
 .favorite-row.offline .favorite-title, .favorite-row.offline .favorite-category, .favorite-list-row.offline .favorite-title, .favorite-list-row.offline .favorite-category { color:#aeb7c5; }
 .favorite-details ~ .online-badge, .favorite-details ~ .offline-badge, .favorite-list-row .favorite-online-badge { display:none; }
 .favorite-list-row:hover, .favorite-row:hover { background-color:#242b2c; }

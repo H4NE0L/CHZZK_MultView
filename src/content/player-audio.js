@@ -5,13 +5,13 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   const recoveries=[];
   const matches=video=>desired && Math.abs(video.volume-desired.volume)<0.00001 && video.muted===desired.muted;
   function apply(video){
-    if(disposed || !video || !desired)return;
+    if(disposed || !video || (video.ended || video.error) || !desired)return;
     if(desired.muted && !video.muted)video.muted=true;
     if(Math.abs(video.volume-desired.volume)>0.00001)video.volume=desired.volume;
     if(video.muted!==desired.muted)video.muted=desired.muted;
   }
   function recover(){
-    if(disposed || timer)return;
+    if(disposed || timer || findVideo()?.ended || findVideo()?.error)return;
     const now=Date.now();while(recoveries.length && now-recoveries[0]>=1000)recoveries.shift();
     // Coalesce hydration events and bound preference fights with the host player.
     const delay=recoveries.length>=4?Math.max(50,1000-(now-recoveries[0])):30;
@@ -44,6 +44,11 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
     if(matches(video))report(video,'command');else recover();
   },true);
   function bind(video){bound.add(video);apply(video);}
+  // A live stream may restart using the same video element after ending/error.
+  // Restore its own preference once playback becomes available again.
+  for(const type of ['loadedmetadata','playing'])document.addEventListener(type,event=>{
+    if(event.target===findVideo() && bound.has(event.target))apply(event.target);
+  },true);
   const controls='[class*="volume" i],[class*="sound" i],[class*="mute" i],[aria-label*="음소거"],[aria-label*="볼륨"],[aria-label*="소리"],[aria-label*="mute" i],[aria-label*="volume" i],[title*="음소거"],[title*="볼륨"],[title*="소리"]';
   function gesture(event){
     if(!event.isTrusted)return;
@@ -64,7 +69,13 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   document.addEventListener('pointercancel',()=>{pointer=null;intentUntil=0;},true);
   // A shared-origin preference echo is never a native audio gesture, even
   // when it arrives just after a click in this frame. Capture precedes site listeners.
-  window.addEventListener('storage',()=>{clearIntent();recover();},true);
+  window.addEventListener('storage',event=>{
+    // Native players share origin storage across tiles. An ending/unloaded
+    // sibling must not overwrite this player's independent audio preference.
+    clearIntent();
+    if(typeof event.key!=='string' || !/(?:volume|muted?|sound)/i.test(event.key))return;
+    event.stopImmediatePropagation();recover();
+  },true);
   window.addEventListener('pagehide',()=>{disposed=true;clearIntent();clearTimeout(timer);timer=null;});
   return {bind,setMuted,setVolume};
 }};

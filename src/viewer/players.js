@@ -228,13 +228,14 @@ export const players = {create(context) {
     }
   }
 
-  function syncSelection() {
+  function syncSelection({audio=true,chrome=true} = {}) {
     for (const channel of context.state.channels) {
       const tile = tileMap.get(channel.uid);
       if (!tile) continue;
 
       updateTileMainUI(channel.uid);
-      sendTileVolume(channel.uid);
+      if(audio)sendTileVolume(channel.uid);
+      if(!chrome)continue;
       const iframe = tile.querySelector("iframe");
       try {
         CZMessages.postToPlayer(iframe, {

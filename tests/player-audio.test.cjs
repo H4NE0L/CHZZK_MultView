@@ -5,7 +5,7 @@ function fixture(){
  const ctx=vm.createContext({Date,setTimeout:fn=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),document:{addEventListener(type,fn){events[type]=fn;}},window:{addEventListener(type,fn){windowEvents[type]=fn;}}});
  vm.runInContext(fs.readFileSync('src/content/player-audio.js','utf8'),ctx);
  const audio=ctx.CZPlayerAudio.create({findVideo:()=>video,report:(v,reason,operation)=>reports.push({reason,operation,volume:v.volume,muted:v.muted})});const bind=audio.bind;audio.bind=v=>{v.volumechange=()=>events.volumechange({target:v,stopImmediatePropagation(){}});bind(v);};audio.bind(video);
- return {audio,reports,events,windowEvents,get video(){return video;},set video(v){video=v;},flush(){for(const [id,fn]of [...timers]){timers.delete(id);fn();}}};
+ return {audio,reports,events,windowEvents,timers,get video(){return video;},set video(v){video=v;},flush(){for(const [id,fn]of [...timers]){timers.delete(id);fn();}}};
 }
 test('site initialization and zero-volume preference echoes cannot overwrite desired audio',()=>{
  const f=fixture();f.audio.setVolume(.3,false);f.video.volume=0;f.video.muted=true;f.video.volumechange();
@@ -49,9 +49,24 @@ test('ended media and shared storage echoes cannot become user mute edits',()=>{
  const f=fixture();f.audio.setVolume(.4,false);
  f.events.click({isTrusted:true,target:{closest:()=>true}});
  f.video.ended=true;f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
- assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);assert(!f.reports.some(r=>r.reason==='player'));
+ assert.equal(f.video.volume,0);assert.equal(f.video.muted,true);assert.equal(f.timers.size,0,'ended media does not repeatedly fight native teardown');assert(!f.reports.some(r=>r.reason==='player'));
  f.video.ended=false;f.events.click({isTrusted:true,target:{closest:()=>true}});
- f.windowEvents.storage();f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
+ let stopped=false;f.windowEvents.storage({key:'player-volume',stopImmediatePropagation(){stopped=true;}});assert(stopped);f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
  assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);assert(!f.reports.some(r=>r.reason==='player'));
  f.windowEvents.pagehide();assert.equal(f.audio.setVolume(0,true),false);
+});
+
+test('audio preference storage echoes are blocked without hiding unrelated storage or clear events',()=>{
+ const f=fixture();f.audio.setVolume(.3,false);let blocked=0;
+ for(const key of ['player-volume','muted','playerSound'])f.windowEvents.storage({key,stopImmediatePropagation(){blocked++;}});
+ assert.equal(blocked,3);
+ for(const key of ['login-session','theme',null])f.windowEvents.storage({key,stopImmediatePropagation(){blocked++;}});
+ assert.equal(blocked,3);f.windowEvents.pagehide();assert.equal(f.timers.size,0);
+});
+
+test('failed video teardown is not repeatedly corrected and replacement media gets remembered audio',()=>{
+ const f=fixture();f.audio.setVolume(.4,false);f.video.error={code:4};f.video.volume=0;f.video.muted=true;f.video.volumechange();f.flush();
+ assert.equal(f.timers.size,0);assert.equal(f.video.volume,0);assert(!f.reports.some(r=>r.reason==='player'));
+ f.video.error=null;f.events.playing({target:f.video});assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);
+ f.video={volume:0,muted:true};f.audio.bind(f.video);assert.equal(f.video.volume,.4);assert.equal(f.video.muted,false);
 });

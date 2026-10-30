@@ -26,7 +26,7 @@ export function create(context: LayoutContext) {
     });
   }
 
-  function applyLayout() {
+  function applyLayout({audio=true}: {audio?: boolean} = {}) {
     const {videoGrid,state}=context;
     if (!videoGrid) return;
 
@@ -87,7 +87,7 @@ export function create(context: LayoutContext) {
         }
       }
 
-      sendTileVolume(channel.uid);
+      if(audio)sendTileVolume(channel.uid);
       applyTileLock(tile, state.screenLocked === true);
     });
 

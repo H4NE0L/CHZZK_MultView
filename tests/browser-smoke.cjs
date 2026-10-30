@@ -36,6 +36,7 @@ async function checkCompactFavorites(page, prefix) {
   assert(await row.locator('.favorite-details').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'two-line content fits the panel');
   for(const part of ['name','title','category','meta'])assert.equal(await row.locator('.favorite-'+part).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
   assert.equal(await row.locator('.favorite-meta').evaluate(el=>getComputedStyle(el).textAlign),'left');
+  assert.deepEqual(await row.locator('.favorite-meta').evaluate(el=>({color:getComputedStyle(el).color,weight:getComputedStyle(el).fontWeight})),{color:'rgb(255, 255, 255)',weight:'700'});
   assert(Math.abs(fields[1].left-fields[3].left)<1,'duration starts below broadcast title');
   assert.equal(await row.locator('.favorite-viewers,.favorite-list-viewers').count(),0,'viewer counts are removed from the new favorite format');
   assert(fields[3].text==='--'||/^\d{2,}:\d{2}:\d{2}$/.test(fields[3].text));

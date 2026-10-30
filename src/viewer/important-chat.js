@@ -11,7 +11,8 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
   const renderer=createRenderer($('.ic-list'));
-  $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
+  $('.ic-toggle').title='접혀 있어도 주요 채팅은 계속 수집됩니다';
+  $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));render();resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
   for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함']]){
     const label=document.createElement('label');label.className='ic-option';label.dataset.role=key;
     const text=document.createElement('span');text.textContent=title;
@@ -60,7 +61,11 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     if(scope.isDisposed)return;
     panel.hidden=ready && !filter.enabled;
     present();
-    renderer.render(model.items);diagnostics();
+    // Collapse affects presentation only: receive() keeps the bounded model
+    // collecting while hidden; expand flushes the current snapshot once.
+    panel.dataset.collectedCount=String(model.items.length);
+    if(expanded && !panel.hidden)renderer.render(model.items);
+    diagnostics();
   }
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);

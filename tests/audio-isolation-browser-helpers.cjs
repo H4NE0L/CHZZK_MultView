@@ -29,9 +29,13 @@ module.exports=async function checkAudioIsolation(page){
  const endingHandle=await page.locator('.video-tile[data-uid="audiotest"] iframe').elementHandle(),ending=await endingHandle.contentFrame();await endingHandle.dispose();
  await ending.waitForFunction(()=>!!document.querySelector('video'));
  await ending.evaluate(()=>{const video=document.querySelector('video');Object.defineProperty(video,'ended',{get:()=>true});video.pause();video.volume=0;video.muted=true;});
- await frame.evaluate(()=>{window.dispatchEvent(new StorageEvent('storage',{key:'player-volume',newValue:'0'}));document.querySelector('video').volume=0;document.querySelector('video').muted=true;});
+ await frame.evaluate(()=>{window.__nativeAudioStorage=0;window.__otherStorage=0;window.addEventListener('storage',event=>{if(event.key==='player-volume'){window.__nativeAudioStorage++;document.querySelector('video').muted=true;}if(event.key==='theme-test')window.__otherStorage++;});window.dispatchEvent(new StorageEvent('storage',{key:'theme-test',newValue:'dark'}));window.dispatchEvent(new StorageEvent('storage',{key:'player-volume',newValue:'0'}));document.querySelector('video').volume=0;document.querySelector('video').muted=true;});
 
+ await frame.evaluate(()=>{window.__removalCommands=[];window.addEventListener('message',event=>{if(['SET_VOLUME','SET_CHAT_VISIBLE'].includes(event.data?.type))window.__removalCommands.push(event.data.type);});});
  await page.locator('.video-tile[data-uid="audiotest"] .remove-btn').click();await playing();assert(!frame.isDetached());
+ assert.equal(await frame.evaluate(()=>window.__nativeAudioStorage),0,'sibling preference changes cannot reach native audio storage handlers');
+ assert.equal(await frame.evaluate(()=>window.__otherStorage),1,'unrelated native storage events still work');
+ assert.deepEqual(await frame.evaluate(()=>window.__removalCommands),[],'unrelated tile removal sends no volume or chat reset commands to surviving player');
  await page.locator('#volumeManager > summary').click();
  await page.locator('#masterMuteBtn').click();
  await frame.waitForFunction(()=>document.querySelector('video').volume===0 && document.querySelector('video').muted);
