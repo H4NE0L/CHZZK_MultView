@@ -9,7 +9,8 @@
     "src/viewer/styles/07-sync-responsive.css",
     "src/viewer/styles/08-feature-overrides.css",
     "src/viewer/styles/09-ui-polish.css",
-    "src/shared/favorite-item.css"
+    "src/shared/favorite-item.css",
+    "src/viewer/styles/10-compact-favorites.css"
   ],
   "src/popup/popup.css": [
     "src/popup/styles/01-base-form.css",

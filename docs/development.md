@@ -86,3 +86,5 @@ npm run clean -- --branches
 `shared/favorite-item.js`와 `shared/favorite-item.css`를 팝업과 viewer에서 공용으로 사용합니다. CSS는 양쪽 산출물 마지막에 합칩니다. `name/title`은 기존 스트리머 이름이며 API의 방송 제목은 `liveTitle`로 분리합니다. 방송 종료 시 liveTitle은 비웁니다. 시청자 수 데이터는 유지하되 즐겨찾기 UI에서는 표시하지 않습니다. 오프라인은 이름·상태 한 줄이며, 온라인 제목·런타임은 같은 열에서 시작하는 11px 글씨입니다. 채팅 헤더 CSS와 자기 통나무 잔액 DOM 판독은 `content/chat/header-style.js`·`power-balance.js`에 분리합니다.
 
 API 조사와 타임스탬프 참고 구현 비교: [chzzk-api-research.md](chzzk-api-research.md). 채팅 잔액 조회 수명 관리는 `src/content/chat/power-api.js`에서 담당합니다.
+
+즐겨찾기 밀도는 팝업 `06-compact-favorites.css`, 멀티뷰 `10-compact-favorites.css`에서 공용 스타일 뒤에 적용합니다. 양쪽 온라인/오프라인 행은 48px/30px이며 멀티뷰 목록은 최대 400px, 작은 창에서는 가용 높이에 맞춥니다.
