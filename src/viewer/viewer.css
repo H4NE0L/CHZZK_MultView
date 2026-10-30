@@ -2524,3 +2524,10 @@ select:hover {
 .favorite-row.offline .favorite-main, .favorite-list-row.offline { min-height:40px; padding-top:8px; padding-bottom:8px; }
 
 .favorite-row.offline { padding-top:0; padding-bottom:0; }
+/* Dense viewer favorites, matching popup rows while retaining viewer width. */
+#favoriteManager .favorite-manager-panel { max-height:min(580px,calc(100dvh - 72px)); }
+#favoriteManager .favorite-list { height:min(400px,max(0px,calc(100dvh - 150px))); max-height:400px; }
+#favoriteManager .favorite-list-row { min-height:48px; padding:4px 12px; gap:8px; }
+#favoriteManager .favorite-details { gap:2px; }
+#favoriteManager .favorite-primary, #favoriteManager .favorite-secondary { gap:8px; }
+#favoriteManager .favorite-list-row.offline { min-height:30px; padding-top:4px; padding-bottom:4px; }
