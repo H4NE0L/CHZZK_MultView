@@ -1,6 +1,6 @@
 {
   "name": "chzzk-control-room",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "치지직 통합관제실 development tools",
   "engines": {

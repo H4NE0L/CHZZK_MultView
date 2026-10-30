@@ -27,7 +27,7 @@ test('CHZZK has an explicit top-level launcher while frame controls remain isola
   assert.equal(manifest.content_scripts[2].world,'MAIN');
   assert.equal(manifest.content_scripts[2].run_at,'document_start');
   assert(!manifest.content_scripts[0].js.some(file => file.includes('/viewer/')));
-  assert.equal(manifest.version,'3.0.0');
+  assert.equal(manifest.version,require('../package.json').version);
   assert(manifest.content_security_policy.extension_pages.includes("script-src 'self'"));
   assert(manifest.content_security_policy.extension_pages.includes('frame-src https://chzzk.naver.com'));
 });

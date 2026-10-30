@@ -2,7 +2,7 @@
 
 여러 CHZZK 방송을 한 화면에서 시청하는 브라우저 확장 프로그램입니다.
 
-**v3.0.0 · Chrome 119 이상 권장**
+**v3.0.1 · Chrome 119 이상 권장**
 
 ## 주요 기능
 
@@ -14,7 +14,7 @@
 
 ## 설치 및 업데이트
 
-1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.0.0.zip)** 후 압축을 풉니다.
+1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.0.1.zip)** 후 압축을 풉니다.
 2. `chrome://extensions`에서 **개발자 모드 → 압축해제된 확장 프로그램을 로드**를 선택합니다.
 3. 압축을 푼 폴더 중 `manifest.json`이 있는 폴더를 지정합니다.
 
@@ -42,12 +42,8 @@ GitHub **main은 개발 소스**, **release는 빌드된 설치 파일**입니�
 ## 설정과 제한
 
 - **설정 내보내기 / 불러오기**는 전체 설정 최상단에 있습니다. 선택한 프로젝트 폴더의 `.backup`에 저장합니다. [백업·복원 안내](docs/settings-backup.md)
-- **채팅 타임스탬프는 임시 보류·기본 OFF**입니다. 설정에서 ON/OFF할 수 있으며 켜도 원본 작성 시각이 확인되는 메시지만 표시합니다.
+- **채팅 타임스탬프는 실험 기능·기본 OFF**입니다. 설정에서 ON/OFF할 수 있으며 켜도 원본 작성 시각이 확인되는 메시지만 표시합니다.
 - **통나무 수집 보조는 실험 기능·기본 OFF**입니다. 모든 채널의 실제 적립·보너스 지급은 보장하지 않으며 메모리 사용이 늘 수 있습니다. [점검 안내](docs/power-diagnostics.md)
 - 스크린샷은 최대 12장·128MiB, 녹화는 방송당 256MiB까지 보관합니다. 결과 창을 닫기 전에 저장하세요. 코덱 지원은 브라우저에 따라 다릅니다.
-
-## 최근 변경
-
-v3.0.0: 기능별 코드·임시 자원 관리 정리, 설정 백업/복원, 기본 그룹 강제 조건 제거, 타일 삭제 후 음량 복구 보완. 타임스탬프는 기본 OFF로 전환했습니다.
 
 [전체 변경 이력](CHANGELOG.md) · [개발·로컬 정리 안내](docs/development.md) · [즐겨찾기 복구](docs/favorites-backup.md)

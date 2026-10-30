@@ -47,7 +47,7 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 
 ## 저장소와 배포 파일
 
-GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.0.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
+GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.1.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
 
 완료된 단계별 계획 문서와 이전 Python 패키징 진입점은 정리했습니다. 이전 문서는 Git 이력에 남아 있습니다. 검사·측정 스크립트, vendor 라이선스, 개인 백업은 유지합니다. 파일 수 감소를 실행 메모리 감소로 해석하지 않습니다.
 
