@@ -52,6 +52,17 @@
       "all_frames": true,
       "world": "MAIN",
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chzzk.naver.com/live/*",
+        "https://chzzk.naver.com/video/*"
+      ],
+      "js": [
+        "src/content/player-audio-early.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
     }
   ],
   "icons": {

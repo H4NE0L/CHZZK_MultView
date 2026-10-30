@@ -4,7 +4,7 @@ function fixture(){
  let video={volume:1,muted:true,addEventListener(type,fn){this[type]=fn;}};
  const ctx=vm.createContext({Date,setTimeout:fn=>{timers.set(++seq,fn);return seq;},clearTimeout:id=>timers.delete(id),document:{addEventListener(type,fn){events[type]=fn;}},window:{addEventListener(type,fn){windowEvents[type]=fn;}}});
  vm.runInContext(fs.readFileSync('src/content/player-audio.js','utf8'),ctx);
- const audio=ctx.CZPlayerAudio.create({findVideo:()=>video,report:(v,reason,operation)=>reports.push({reason,operation,volume:v.volume,muted:v.muted})});const bind=audio.bind;audio.bind=v=>{v.volumechange=()=>events.volumechange({target:v,stopImmediatePropagation(){}});bind(v);};audio.bind(video);
+ const audio=ctx.CZPlayerAudio.create({findVideo:()=>video,report:(v,reason,operation)=>reports.push({reason,operation,volume:v.volume,muted:v.muted})});const bind=audio.bind;audio.bind=v=>{v.volumechange=()=>(windowEvents.volumechange||events.volumechange)({target:v,stopImmediatePropagation(){}});bind(v);};audio.bind(video);
  return {audio,reports,events,windowEvents,timers,get video(){return video;},set video(v){video=v;},flush(){for(const [id,fn]of [...timers]){timers.delete(id);fn();}}};
 }
 test('site initialization and zero-volume preference echoes cannot overwrite desired audio',()=>{

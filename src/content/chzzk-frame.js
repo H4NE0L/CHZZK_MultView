@@ -294,7 +294,7 @@ import {create as createPowerRewards} from './power-rewards.js';
       clearInterval(theaterTimer);theaterTimer=null;powerRewards.configure(event.data.enabled);
       if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}
     }
-    if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:result.diagnostics}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
+    if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:{...result.diagnostics,audio:audio.snapshot()}}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
     if(event.data.type==='CHAT_TIMESTAMP_CONFIG' && chatMode)configureTimestamps(event.data.enabled);
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
     if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
