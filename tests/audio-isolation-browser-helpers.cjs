@@ -28,6 +28,7 @@ module.exports=async function checkAudioIsolation(page){
  await page.locator('.video-tile[data-uid="audiotest"]').waitFor();await playing();
  const endingHandle=await page.locator('.video-tile[data-uid="audiotest"] iframe').elementHandle(),ending=await endingHandle.contentFrame();await endingHandle.dispose();
  await ending.waitForFunction(()=>!!document.querySelector('video'));
+ await ending.evaluate(()=>{window.__teardownCalls=[];const video=document.querySelector('video'),pause=video.pause.bind(video),load=video.load.bind(video);video.pause=()=>{__teardownCalls.push('pause');return pause();};video.load=()=>{__teardownCalls.push('load');return load();};});
  await ending.evaluate(()=>{const video=document.querySelector('video');Object.defineProperty(video,'ended',{get:()=>true});video.pause();video.volume=0;video.muted=true;});
  await frame.evaluate(()=>{window.__nativeAudioStorage=0;window.__otherStorage=0;window.addEventListener('storage',event=>{if(event.key==='player-volume'){window.__nativeAudioStorage++;document.querySelector('video').muted=true;}if(event.key==='theme-test')window.__otherStorage++;});window.dispatchEvent(new StorageEvent('storage',{key:'theme-test',newValue:'dark'}));window.dispatchEvent(new StorageEvent('storage',{key:'player-volume',newValue:'0'}));document.querySelector('video').volume=0;document.querySelector('video').muted=true;});
 
@@ -35,6 +36,8 @@ module.exports=async function checkAudioIsolation(page){
  await page.locator('.video-tile[data-uid="audiotest"] .remove-btn').click();await playing();assert(!frame.isDetached());
  assert.equal(await frame.evaluate(()=>window.__nativeAudioStorage),0,'sibling preference changes cannot reach native audio storage handlers');
  assert.equal(await frame.evaluate(()=>window.__otherStorage),1,'unrelated native storage events still work');
+ await page.locator('.video-tile[data-uid="audiotest"]').waitFor({state:'detached'});
+ const teardown=await page.evaluate(()=>globalThis.__CZPlayerLifecycleV1.history.find(entry=>entry.uid==='audiotest'));assert.equal(teardown.status,'acknowledged','frame acknowledges media shutdown before detaching');assert.equal(teardown.details.before.actual.ended,true);
  assert.deepEqual(await frame.evaluate(()=>window.__removalCommands),[],'unrelated tile removal sends no volume or chat reset commands to surviving player');
  await page.locator('#volumeManager > summary').click();
  await page.locator('#masterMuteBtn').click();

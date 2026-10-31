@@ -19,7 +19,9 @@ test('manifest and HTML references point to packaged local resources', () => {
 test('CHZZK has an explicit top-level launcher while frame controls remain isolated', () => {
   assert(manifest.permissions.includes('scripting'));
   assert(manifest.permissions.includes('declarativeNetRequestWithHostAccess'));
-  assert.equal(manifest.content_scripts.length,4);
+  assert.equal(manifest.content_scripts.length,5);
+  assert.equal(manifest.content_scripts[4].world,'MAIN');
+  assert.equal(manifest.content_scripts[4].run_at,'document_start');
   assert.equal(manifest.content_scripts[3].run_at,'document_start');
   assert.deepEqual(manifest.content_scripts[3].js,['src/content/player-audio-early.js']);
   assert(!manifest.content_scripts[1].all_frames);

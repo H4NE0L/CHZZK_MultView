@@ -70,9 +70,14 @@ import {create as createPowerRewards} from './power-rewards.js';
 
   function bindObserver() {
     if (videoObserver || !document.documentElement) return;
-    videoObserver = new MutationObserver(() => {
-      // Re-bind whenever CHZZK replaces its player element.
-      document.querySelectorAll("video").forEach(bindVideo);
+    videoObserver = new MutationObserver(records => {
+      // Native chat can mutate hundreds of times a second. Inspect added
+      // subtrees only instead of searching the complete page for every chat.
+      for(const record of records)for(const node of record.addedNodes){
+        if(node.nodeType!==1)continue;
+        if(node.matches('video'))bindVideo(node);
+        else node.querySelectorAll('video').forEach(bindVideo);
+      }
     });
     videoObserver.observe(document.documentElement, { childList: true, subtree: true });
     document.querySelectorAll("video").forEach(bindVideo);
@@ -197,7 +202,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   }
 
   const media = CZMediaFrame.create({chatOnly:chatMode,uid:frameUid,findVideo,seekRange,seekBy,send:data => window.parent.postMessage({source:'chzzk-multiview',...data},PARENT_ORIGIN)});
-  setInterval(reportSyncState, 1000);
+  const syncTimer=setInterval(reportSyncState, 1000);
 
   const powerRewards=chatMode?null:createPowerRewards({findVideo});
   let theaterApplied = false;
@@ -288,8 +293,20 @@ import {create as createPowerRewards} from './power-rewards.js';
   bindObserver();
   if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
+  let disposing=false;
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
+    if(disposing)return;
+    if(event.data.type==='PLAYER_DISPOSE'){
+      disposing=true;const before=audio.snapshot();videoObserver?.disconnect();uiObserver?.disconnect();clearInterval(syncTimer);clearInterval(theaterTimer);audio.dispose();powerRewards?.dispose();media?.dispose();
+      const mediaReleased=Promise.all([...document.querySelectorAll('video,audio')].map(element=>new Promise(resolve=>{
+        let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);element.removeEventListener('emptied',finish);resolve();};
+        const timer=setTimeout(finish,120);element.addEventListener('emptied',finish,{once:true});
+        try{const empty=element.networkState===0;element.pause();element.srcObject=null;element.removeAttribute('src');element.querySelectorAll('source').forEach(source=>source.remove());element.load();if(empty)finish();}catch(_){finish();}
+      })));
+      const reply=result=>window.parent.postMessage({source:'chzzk-multiview',type:'PLAYER_DISPOSED',uid:frameUid,requestId:event.data.requestId,details:{before,audio:result?.audio||null,error:result?.error||null}},PARENT_ORIGIN);
+      Promise.all([mediaReleased,chrome.runtime.sendMessage({type:'PLAYER_AUDIO_TEARDOWN'}).catch(error=>({error:String(error)}))]).then(([,result])=>reply(result));return;
+    }
     if(event.data.type==='POWER_REWARDS_CONFIG' && powerRewards){
       clearInterval(theaterTimer);theaterTimer=null;powerRewards.configure(event.data.enabled);
       if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}

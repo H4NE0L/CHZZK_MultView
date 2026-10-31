@@ -1,3 +1,4 @@
+import {releasePlayer} from '../player-lifecycle.js';
 import {requestedChannels} from '../models/channel-input';
 export function create(context) {
   const {tileMap,session,showNotice,saveState,applyLayout,updateChat,refreshChannelManager,syncSelection,updateLayoutToggle,
@@ -112,10 +113,11 @@ export function create(context) {
     tileMap.delete(uid);
     state.channels = state.channels.filter(c => c.uid !== uid);
     const iframe=tile?.querySelector("iframe");
-    if(iframe)iframe.dataset.playerReady='false';
+    if(tile)tile.style.display='none';
+    const released=releasePlayer(iframe,context.scope,uid);
     mediaTools.detach(uid);
     clearSyncState(uid);
-    tile?.remove();
+    released.then(()=>tile?.remove());
 
     if (selectedChanged) {
       state.selectedUid = state.channels[0]?.uid || null;
@@ -138,9 +140,9 @@ export function create(context) {
     if(mediaTools.hasRecordings()){showNotice("녹화를 중지한 뒤 전체 삭제하세요.");return;}
     for (const [uid,tile] of tileMap) {
       const iframe = tile.querySelector("iframe");
-      if (iframe) iframe.src = "about:blank";
+      tile.style.display='none';
+      releasePlayer(iframe,context.scope,uid).then(()=>tile.remove());
       mediaTools.detach(uid);
-      tile.remove();
     }
     tileMap.clear();
     clearAllSyncState();

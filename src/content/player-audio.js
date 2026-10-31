@@ -39,7 +39,8 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
   const bound=new WeakSet(),early=globalThis.CZPlayerAudioEarly;
   const onVolumeChange=event=>{
     const video=event.target;
-    if(disposed || video!==findVideo() || !bound.has(video) || !desired)return;
+    if(disposed){event.stopImmediatePropagation();return;}
+    if(video!==findVideo() || !bound.has(video) || !desired)return;
     if(!video.ended && !matches(video) && Date.now()<intentUntil){
       const operation=intentKind==='mute' && (video.muted!==desired.muted || video.volume===0 || desired.muted)?'mute':'volume';
       desired={volume:video.volume,muted:video.muted};publish(video,'player',operation);
@@ -85,10 +86,11 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
     event.stopImmediatePropagation();recover();
   };
   if(early)early.storage=onStorage;else window.addEventListener('storage',onStorage,true);
-  window.addEventListener('pagehide',()=>{disposed=true;clearIntent();clearTimeout(timer);timer=null;});
+  function dispose(){disposed=true;clearIntent();clearTimeout(timer);timer=null;}
+  window.addEventListener('pagehide',dispose);
   function snapshot(){
     const video=findVideo();
     return {revision:'early-window-capture-1',earlyCapture:!!early,desired:desired?{...desired}:null,actual:video?{volume:video.volume,muted:video.muted,paused:video.paused,ended:video.ended,readyState:video.readyState,errorCode:video.error?.code||null}:null,counts:{...counts},recoveryPending:timer!==null};
   }
-  return {bind,setMuted,setVolume,snapshot};
+  return {bind,setMuted,setVolume,snapshot,dispose};
 }};

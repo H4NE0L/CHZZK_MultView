@@ -78,5 +78,9 @@
   "src/content/chat/power-api.js": [
     "CZPowerApi",
     null
+  ],
+  "src/viewer/player-lifecycle.js": [
+    "CZPlayerLifecycle",
+    null
   ]
 }

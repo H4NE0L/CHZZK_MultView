@@ -9,7 +9,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].every(frame=>frame.dataset.ready==='true'));
   await page.evaluate(()=>__power.open());await page.waitForFunction(()=>[...document.querySelectorAll('.power-diagnostic-rows p')].every(row=>row.textContent.includes('점검 수집됨')));
   assert.equal(await page.locator('.power-diagnostic-rows p').count(),2);assert((await page.locator('.power-diagnostic-help').textContent()).includes('실제 적립 성공을 보장하지 않습니다'));
-  await page.locator('.power-diagnostic-copy').click();await page.waitForFunction(()=>!!window.__copied);assert.equal(await page.evaluate(()=>__copied.channels.length),2);assert.deepEqual(await page.evaluate(()=>__copied.tabAudio),{muted:true,reason:'extension'});
+  await page.locator('.power-diagnostic-copy').click();await page.waitForFunction(()=>!!window.__copied);assert.equal(await page.evaluate(()=>__copied.channels.length),2);assert.equal(await page.evaluate(()=>typeof __copied.browser.userAgent),'string');assert.deepEqual(await page.evaluate(()=>__copied.tabAudio),{muted:true,reason:'extension',audible:null});
   await page.locator('.power-diagnostic-close').click();assert.equal(await page.locator('dialog').isVisible(),false);
   console.log('PASS: on-demand power diagnostics queries every live tile, excludes replay, copies results and closes.');
  }finally{await browser.close();}

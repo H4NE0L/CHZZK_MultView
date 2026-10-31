@@ -1,3 +1,4 @@
+import {releasePlayer} from './player-lifecycle.js';
 import type {ViewerSession, SessionChannel} from '../shared/contracts/session';
 import type {ResourceScope} from '../shared/runtime/scope';
 interface LayoutContext {
@@ -51,11 +52,12 @@ export function create(context: LayoutContext) {
     for (const [uid, tile] of Array.from(tileMap.entries())) {
       if (visibleUids.has(uid)) continue;
       const iframe = tile.querySelector("iframe");
-      if (iframe) iframe.src = "about:blank";
+      tile.style.display="none";
+      const released=releasePlayer(iframe,scope,uid);
       const hiddenChannel = state.channels.find(c => c.uid === uid);
       if (hiddenChannel) hiddenChannel.muted = true;
       context.onRemove?.(uid);
-      tile.remove();
+      released.then(()=>tile.remove());
       tileMap.delete(uid);
     }
 
