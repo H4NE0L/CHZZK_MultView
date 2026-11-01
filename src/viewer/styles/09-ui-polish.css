@@ -54,3 +54,8 @@
 .mv-root[data-rewind-bar="false"] .media-transport { display:none!important; }
 .tile-offline-refresh { width:max-content; max-width:calc(100% - 16px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:absolute; top:44px; left:50%; transform:translateX(-50%); z-index:30; padding:8px 12px; border:1px solid #00dc9b; border-radius:4px; background:#07513d; color:#fffafa; font-size:12px; cursor:pointer; }
 .tile-offline-refresh[hidden] { display:none!important; }
+
+.tile-offline-refresh { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.tile-offline-refresh:disabled .tile-refresh-icon { animation:tile-refresh-spin .8s linear infinite; }
+@keyframes tile-refresh-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .tile-offline-refresh:disabled .tile-refresh-icon { animation:none; } }

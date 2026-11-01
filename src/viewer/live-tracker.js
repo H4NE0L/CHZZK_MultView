@@ -8,11 +8,11 @@ export function createLiveTracker({scope,tileMap,isRecording=()=>false,notify=()
    const info=await CZChzzkApi.fetchLiveInfo(entry.channel.sourceId||entry.channel.uid,{throwOnError:true});if(!alive(entry))return;
    if(info.online){
     if(entry.online===false||manual){
-     if(isRecording(entry.channel.uid)){entry.button.textContent='녹화 종료 후 다시 연결';return;}
+     if(isRecording(entry.channel.uid)){entry.button.title='녹화 종료 후 새로고침할 수 있습니다.';return;}
      const frame=entry.tile.querySelector('iframe');if(frame){frame.dataset.playerReady='false';frame.src=entry.channel.url;}
     }
     entry.button.hidden=true;entry.online=true;
-   }else{entry.online=false;entry.button.hidden=false;entry.button.textContent='↻ OFFLINE · 방송 상태 새로고침';entry.button.title='30초마다 확인합니다. 클릭하면 즉시 재확인합니다.';}
+   }else{entry.online=false;entry.button.hidden=false;entry.button.innerHTML='<svg class="tile-refresh-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.5 8a7 7 0 0 1 12-2L20 9M4 15l2.5 3a7 7 0 0 0 12-2"/></svg><span>새로고침</span>';entry.button.title='30초마다 확인합니다. 클릭하면 즉시 재확인합니다.';}
   }catch(error){if(alive(entry)){entry.button.title='방송 상태 확인 실패 · 클릭하여 다시 시도';if(manual)notify('방송 상태 확인 실패: '+error.message);}}
   finally{entry.busy=false;if(alive(entry))entry.button.disabled=false;}
  }

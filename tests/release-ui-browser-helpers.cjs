@@ -5,7 +5,9 @@ module.exports=async page=>{
  assert.deepEqual(await page.locator('[data-settings-tab]').allTextContents(),['편의기능','멀티뷰','플레이어','채팅']);
  await page.locator('[data-settings-tab=multiview]').click();assert(await page.locator('#shortcutsEnabled').isVisible());assert.equal(await page.locator('#powerRewardsEnabled').isVisible(),false);
  await page.locator('[data-settings-tab=player]').click();assert(await page.locator('#recordingProfile').isVisible());assert.equal(await page.locator('#importantChatEnabled').isVisible(),false);
+ for(const target of page.frames().filter(frame=>frame.url().includes('chzzk.naver.com/live/'))){await target.evaluate(()=>{window.__optionEvents=[];window.addEventListener('message',event=>{if(['PLAYER_OPTIONS','POWER_REWARDS_CONFIG','ENTER_THEATER'].includes(event.data?.type))__optionEvents.push(event.data.type);});});}
  await page.locator('#rewindBarEnabled').uncheck();assert.equal(await page.locator('.media-transport').first().isVisible(),false);await page.locator('#rewindBarEnabled').check();
+ for(const target of page.frames().filter(frame=>frame.url().includes('chzzk.naver.com/live/')))assert.deepEqual(await target.evaluate(()=>__optionEvents),[],'rewind visibility must not reconfigure the native player');
  await page.locator('#autoWideEnabled').uncheck();assert.equal((await page.evaluate(()=>chrome.storage.local.get('chzzkMultiviewV09'))).chzzkMultiviewV09.autoWide,false);await page.locator('#autoWideEnabled').check();
  await page.locator('[data-settings-tab=chat]').click();assert(await page.locator('#settingsChatSide').isVisible());await page.locator('#settingsChatSide').selectOption('left');assert(await page.locator('.mv-root').evaluate(el=>el.classList.contains('chat-left')));await page.locator('#settingsChatSide').selectOption('right');
  await page.locator('[data-settings-tab=convenience]').click();assert(await page.locator('#powerRewardsEnabled').isVisible());

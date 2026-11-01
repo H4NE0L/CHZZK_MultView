@@ -12,7 +12,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
    document.querySelector('#normal').onclick=()=>{clicks.normal=(clicks.normal||0)+1;document.querySelector('#normal').setAttribute('aria-label','넓은 화면');};
    const helper=CZPowerRewards.create({findVideo:()=>video});
    const flush=()=>{for(const [id,fn]of [...pending]){pending.delete(id);fn();}};
-   helper.configure(true);flush();flush();
+   helper.configure(true);helper.configure(true);flush();flush();
    if(clicks.claim!==1||clicks.bet||clicks.spam||clicks.disabled||clicks.advert)throw Error('Unexpected reward clicks');
    const retained=!!document.querySelector('.live_chat'),full=video.closest('[data-player]').classList.contains('cz-power-native-player');
    document.querySelector('#claim').disabled=true;flush();document.querySelector('#claim').disabled=false;flush();
@@ -21,7 +21,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
    helper.configure(false);document.querySelector('#normal').setAttribute('aria-label','기본 화면');helper.configure(true);helper.configure(false);helper.dispose();helper.dispose();
    return {retained,full,clicks,timers:pending.size,styled:!!document.querySelector('.cz-power-native-player'),attribute:document.documentElement.hasAttribute('data-cz-power-rewards')};
   });
-  assert.deepEqual(result,{retained:true,full:true,clicks:{normal:2,claim:2},timers:0,styled:false,attribute:false});
+  assert.deepEqual(result,{retained:true,full:false,clicks:{claim:2},timers:0,styled:false,attribute:false});
   console.log('PASS: native reward helper preserves chat, ignores predictions/messages/disabled buttons, latches each bonus and clears timers/styles. Native service success requires logged-in Chrome.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

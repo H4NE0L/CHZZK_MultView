@@ -27,7 +27,7 @@ export function bind(context: SettingsContext) {
   scope.listen(element('#openChatSettingsBtn'),'click',()=>{settings.open=false;context.openChatSettings();});
   scope.listen(element('#settingsLayoutBtn'),'click',()=>{const next=context.state.layout==='grid'?'main-sub':'grid';root.querySelector<HTMLButtonElement>(`.layout-toggle-btn[data-layout="${next}"]`)?.click();});
   scope.listen(element('#settingsScreenLockBtn'),'click',()=>element<HTMLButtonElement>('#screenLockBtn').click());
-  for(const [selector,key] of [['#rewindBarEnabled','rewindBar'],['#autoWideEnabled','autoWide']] as const){const input=element<HTMLInputElement>(selector);input.checked=context.state[key]!==false;scope.listen(input,'change',()=>{context.state[key]=input.checked;context.syncShortcuts();context.save();});}
+  for(const [selector,key] of [['#rewindBarEnabled','rewindBar'],['#autoWideEnabled','autoWide']] as const){const input=element<HTMLInputElement>(selector);input.checked=context.state[key]!==false;scope.listen(input,'change',()=>{context.state[key]=input.checked;if(key==='rewindBar')root.dataset.rewindBar=String(input.checked);else context.syncShortcuts();context.save();});}
   const chatOpen=element<HTMLInputElement>('#settingsChatOpenEnabled'),chatSide=element<HTMLSelectElement>('#settingsChatSide');
   const syncChat=()=>{chatOpen.checked=context.state.chatOpen!==false;chatSide.value=context.state.chatSide;};syncChat();
   scope.listen(settings,'toggle',syncChat);

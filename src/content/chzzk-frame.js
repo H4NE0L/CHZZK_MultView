@@ -64,7 +64,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   function bindVideo(video) {
     if (!video || video.dataset.chzzkMvBound === "1") return;
     video.dataset.chzzkMvBound = "1";
-    if(!chatMode)audio.bind(video);
+    if(!chatMode){audio.bind(video);for(const event of ['loadeddata','playing'])video.addEventListener(event,scheduleTheater);}
     if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 
@@ -75,6 +75,8 @@ import {create as createPowerRewards} from './power-rewards.js';
       // subtrees only instead of searching the complete page for every chat.
       for(const record of records)for(const node of record.addedNodes){
         if(node.nodeType!==1)continue;
+        const controls='.pzp-pc__viewmode-button,button[aria-label*="넓은"],button[title*="넓은"],video';
+        if(autoWide&&!theaterApplied&&(node.matches(controls)||node.querySelector(controls)))scheduleTheater();
         if(node.matches('video'))bindVideo(node);
         else node.querySelectorAll('video').forEach(bindVideo);
       }
@@ -208,31 +210,35 @@ import {create as createPowerRewards} from './power-rewards.js';
   let theaterApplied = false,autoWide=true;
   let theaterTimer = null;
 
+  function theaterLabel(el){return [el.getAttribute('aria-label'),el.getAttribute('title'),el.getAttribute('data-tooltip'),el.textContent,el.querySelector('svg title')?.textContent,...String(el.getAttribute('aria-describedby')||'').split(/\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent)].filter(Boolean).join(' ').trim();}
   function getTheaterButton() {
     const buttons = Array.from(document.querySelectorAll(
       '.pzp-pc__viewmode-button, button, [role="button"]'
     ));
 
+    const native=document.querySelector('.pzp-pc__viewmode-button');if(native)return native;
     return buttons.find(el => {
-      const text = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""} ${el.textContent || ""}`.trim();
-      return /넓은 화면|극장|theater|cinema/i.test(text);
+      if(el.closest('[data-chat-message],[class*="chatting_message"],[class*="live_chatting_list_item"]'))return false;
+      const text = theaterLabel(el);
+      return /넓은\s*화면|극장|theater|cinema/i.test(text)||el.matches('.pzp-pc__viewmode-button');
     }) || null;
   }
 
   function isWideModeButton(button) {
-    if (!button) return false;
-    const text = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("title") || ""} ${button.textContent || ""}`.trim();
+    if (!button||button.disabled||button.getAttribute('aria-disabled')==='true') return false;
+    const text = theaterLabel(button);
     // When the control says "넓은 화면", that is the action to ENTER
     // wide/theater mode. Controls labelled "기본 화면"/"일반 화면" are
     // the action to EXIT it and must never be clicked by this automation.
     if (/기본 화면|일반 화면|원래 화면|나가기|exit/i.test(text)) return false;
-    return /넓은 화면|극장|theater|cinema/i.test(text);
+    if(button.getAttribute('aria-pressed')==='true'||button.closest('.pzp-pc--viewmode-wide,[data-viewmode="wide"]'))return false;
+    return /넓은\s*화면|극장|theater|cinema/i.test(text)||!!button.closest('.pzp-pc--viewmode-normal,[data-viewmode="normal"]');
   }
 
   function pressTheaterShortcut() {
     if (chatMode || !autoWide || theaterApplied) return false;
     const video = findVideo();
-    if (!video) return false;
+    if (!video || video.ended || video.readyState<2) return false;
 
     const button = getTheaterButton();
     if (!button) return false;
@@ -240,10 +246,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     // Only click a button that explicitly represents entering wide mode.
     // Never use synthetic T/Alt+T fallback: an untrusted key can be handled
     // inconsistently and may toggle the player back and forth.
-    if (!isWideModeButton(button)) {
-      theaterApplied = true;
-      return false;
-    }
+    if (!isWideModeButton(button)) return false;
 
     try {
       button.click();
@@ -255,7 +258,8 @@ import {create as createPowerRewards} from './power-rewards.js';
   }
 
   function scheduleTheater() {
-    if (chatMode || !autoWide || powerRewards?.enabled || theaterApplied || theaterTimer) return;
+    if (chatMode || !autoWide || theaterApplied || theaterTimer) return;
+    const video=findVideo();if(!video||video.ended||video.readyState<2||!getTheaterButton())return;
 
     let tries = 0;
     theaterTimer = setInterval(() => {
@@ -273,7 +277,7 @@ import {create as createPowerRewards} from './power-rewards.js';
         // The player can render its controls a little later than the video.
         // Keep polling briefly, but never click a control that means EXIT.
         const button = getTheaterButton();
-        if (button && !isWideModeButton(button)) {
+        if (button && /기본\s*화면|일반\s*화면|원래\s*화면|exit/i.test(theaterLabel(button))) {
           theaterApplied = true;
           clearInterval(theaterTimer);
           theaterTimer = null;
@@ -307,10 +311,9 @@ import {create as createPowerRewards} from './power-rewards.js';
       const reply=result=>window.parent.postMessage({source:'chzzk-multiview',type:'PLAYER_DISPOSED',uid:frameUid,requestId:event.data.requestId,details:{before,audio:result?.audio||null,error:result?.error||null}},PARENT_ORIGIN);
       Promise.all([mediaReleased,chrome.runtime.sendMessage({type:'PLAYER_AUDIO_TEARDOWN'}).catch(error=>({error:String(error)}))]).then(([,result])=>reply(result));return;
     }
-    if(event.data.type==='PLAYER_OPTIONS'&&!chatMode){autoWide=event.data.autoWide!==false;if(!autoWide){clearInterval(theaterTimer);theaterTimer=null;}else scheduleTheater();}
+    if(event.data.type==='PLAYER_OPTIONS'&&!chatMode){const next=event.data.autoWide!==false;if(next!==autoWide){autoWide=next;if(!autoWide){clearInterval(theaterTimer);theaterTimer=null;}else{theaterApplied=false;scheduleTheater();}}}
     if(event.data.type==='POWER_REWARDS_CONFIG' && powerRewards){
-      clearInterval(theaterTimer);theaterTimer=null;powerRewards.configure(event.data.enabled);
-      if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}
+      powerRewards.configure(event.data.enabled);
     }
     if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:{...result.diagnostics,audio:audio.snapshot()}}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
     if(event.data.type==='CHAT_TIMESTAMP_CONFIG' && chatMode)configureTimestamps(event.data.enabled);
@@ -325,7 +328,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
     if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);
     if (event.data.type === "SET_VOLUME") setVolume(event.data.volume, typeof event.data.muted === "boolean" ? event.data.muted : null);
-    if (event.data.type === "ENTER_THEATER" && !chatMode && !powerRewards?.enabled) { preventFrameScrollbars(); scheduleTheater(); }
+    if (event.data.type === "ENTER_THEATER" && !chatMode) { preventFrameScrollbars(); scheduleTheater(); }
     if (event.data.type === "SYNC_SEEK" && frameUid && !chatMode) {
       const delta = Number(event.data.delta);
       const result = Number.isFinite(delta) ? seekBy(delta, event.data.latest===true) : { ok: false, reason: "bad-delta" };
