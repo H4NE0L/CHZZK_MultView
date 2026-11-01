@@ -27,6 +27,21 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.waitForFunction(()=>document.querySelector('.cz-native-chat-time')?.dateTime==='2026-10-29T12:34:56.000Z');
   await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본'}};row.setAttribute('data-item-index','prefix');});
   await page.waitForFunction(()=>!document.querySelector('.cz-native-chat-time'));
+  // Native row components may own the message in a descendant Fiber only.
+  for(const field of ['time','regTime','timestamp']){
+    await page.evaluate(field=>{const row=document.querySelector('#message');row.__reactProps$fixture={};row.__reactFiber$fixture={memoizedProps:{},child:{memoizedProps:{},child:{memoizedProps:{chatMessage:{messageTime:0,[field]:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}}}}};row.setAttribute('data-item-index',field);},field);
+    await page.waitForFunction(()=>document.querySelector('.cz-native-chat-time')?.dateTime==='2026-10-29T12:34:56.000Z');
+  }
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactFiber$fixture={memoizedProps:{},sibling:{memoizedProps:{chatMessage:{time:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}}}};row.setAttribute('data-item-index','sibling');});
+  await page.waitForFunction(()=>!document.querySelector('.cz-native-chat-time'));
+  for(const field of ['time','regTime','timestamp','playerMessageTime']){
+    await page.evaluate(field=>{const row=document.querySelector('#message');delete row.__reactFiber$fixture;row.__reactProps$fixture={chatMessage:{[field]:12345,profile:{nickname:'작성자'},content:'원본 본문'}};row.setAttribute('data-item-index','elapsed-'+field);},field);
+    await page.waitForTimeout(90);assert.equal(await page.locator('.cz-native-chat-time').count(),0,'playback/relative time is never a wall-clock timestamp');
+  }
+  // Props may be installed after insertion without any further DOM mutation.
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={};row.setAttribute('data-item-index','late-props');setTimeout(()=>{row.__reactFiber$fixture={child:{memoizedProps:{chatMessage:{regTime:1793277396000,profile:{nickname:'작성자'},content:'원본 본문'}}}};},180);});
+  await page.waitForFunction(()=>document.querySelector('.cz-native-chat-time')?.dateTime==='2026-10-29T12:36:36.000Z');
+  await page.evaluate(()=>{delete document.querySelector('#message').__reactFiber$fixture;});
   await evaluate("document.documentElement.setAttribute('data-cz-timestamps-enabled','false');document.dispatchEvent(new Event('cz-chat-timestamps-config'));CZChatLayout.setTimestamps(false)");
   await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}};row.setAttribute('data-item-index','6');});
   await page.waitForTimeout(100);assert.equal(await page.locator('[data-cz-message-time],.cz-native-chat-time').count(),0,'OFF stops metadata reads and removes timestamps');

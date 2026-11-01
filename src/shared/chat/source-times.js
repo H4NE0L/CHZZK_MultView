@@ -1,3 +1,4 @@
+import {sourceEpoch} from './source-epoch.js';
 import {sourceContent} from './message-content.js';
 // MAIN-world bounded index: fingerprints and source time only, never raw messages.
 const keyFor=(author,text)=>{
@@ -7,12 +8,11 @@ const keyFor=(author,text)=>{
 };
 export const sourceTimes=globalThis.__CZChatSourceTimesV1 ||= (()=>{
  const entries=new Map(),byId=new Map(),listeners=new Set();
- const valid=value=>{const n=Number(value),ms=Number.isFinite(n)?n*(n<1e11?1000:1):Date.parse(value);return Number.isFinite(ms)&&ms>=946684800000&&ms<=Date.now()+60000?ms:null;};
  function add(message){
   if(!message||typeof message!=='object')return;
   let profile=message.profile;if(typeof profile==='string' && profile.length<=16000){try{profile=JSON.parse(profile);}catch(_){return;}}
   const name=profile?.nickname??message.nickname,text=message.content??message.msg??message.message;
-  const time=valid(message.messageTime??message.msgTime??message.ctime??message.createdAt??message.createTime);
+  const time=sourceEpoch(message);
   if(typeof name!=='string'||typeof text!=='string'||!text.trim()||text.length>16000||time===null)return;
   const key=keyFor(name,sourceContent(text,message.extras)),old=entries.get(key);
   // Identical messages with distinct source times cannot be safely assigned by text.

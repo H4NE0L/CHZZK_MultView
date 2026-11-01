@@ -28,3 +28,12 @@
 추가 비교: [kimcore/chzzk](https://github.com/kimcore/chzzk/tree/9208ad6901242c2854c44d6b13e219d7d023239d)의 `src/chat/chat.ts`는 최근/실시간 메시지와 msgTime/messageTime 처리를 보여 줍니다. 이 자료에서 통나무 수령 API는 확인하지 못했습니다.
 
 로그인 쿠키·토큰을 내보내거나 저장할 필요는 없습니다. 추가 점검 자료는 인증 헤더를 제외한 URL·메서드·필요한 응답 필드만으로 충분합니다.
+
+## Badge Moa Chat 추가 비교 (2026-11-02)
+
+사용자가 지정한 [badge-popup.js](https://github.com/lirpa62/Chzzk-Badge-Moa-Chat/blob/a3bb01a59f2d88a147d6a9dbe67143985a896533/badge-popup/main/badge-popup.js)는 조립용 진입점입니다. 실제 원본 채팅의 작성 시각 판독은 같은 커밋의 `inject.js` 내 `getChatMessage`, `readChatEpochMs`에서 처리합니다.
+
+- 행의 React props뿐 아니라 하위 Fiber의 `memoizedProps.chatMessage`에서도 시각을 읽습니다. 이 프로젝트도 행의 자식 체인 최대 32개를 확인하도록 독립적으로 보완했습니다. 형제 행은 탐색하지 않고 기존 작성자·본문/ID 검증과 전체 탐색 예산을 유지합니다.
+- 기존 시각 필드에 `time`, `regTime`, `timestamp`를 추가했습니다. 이 세 일반 필드는 epoch 밀리초인 값만 허용하며, `playerMessageTime`이나 상대 경과 시간은 배제합니다. 잘못된 우선 필드가 있어도 나머지 유효 필드를 확인합니다.
+- React 데이터가 DOM 삽입보다 늦게 붙는 상황에 대비해 행별 최대 4회만 재시도합니다. 대기 타이머는 최대 128개이며 OFF·종료 시 해제합니다. 현재 시각 대체나 상시 전체 검색은 추가하지 않습니다.
+- 참조 구현은 원본 채팅의 epoch 판독과 모아보기의 수집 시각 대체가 다른 경로에 존재합니다. 모아보기의 `Date.now()` 대체를 가져오지 않고 실제 작성 시각만 표시하는 기존 원칙을 유지합니다. 소스 코드는 복사하거나 포함하지 않았습니다.
