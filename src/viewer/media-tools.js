@@ -64,7 +64,7 @@ export const mediaTools = {create(context) {
     if(!button)return;
     button.classList.toggle('recording',!!record);
     button.innerHTML='<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg>'+ (record?`<span>${Math.floor((Date.now()-record.startedAt)/1000)}초</span>`:'');
-    button.title=record?'녹화 중지 (R)':'녹화 시작 (R)';
+    button.title=(record?'녹화 중지':'녹화 시작')+' · 단축키 R';
   }
   async function showNext() {
     if(scope.isDisposed || openingResult || !results.length)return;

@@ -30,7 +30,7 @@ export function create(context) {
       const buttons = [ui.querySelector("#screenLockBtn")].filter(Boolean);
       for (const btn of buttons) {
         btn.textContent = state.screenLocked ? "화면 잠금 해제" : "화면 잠금";
-        btn.title = state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금";
+        btn.title = (state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금")+" · 단축키 H";
         btn.classList.toggle("lock-active", state.screenLocked);
       }
     }
@@ -58,7 +58,7 @@ export function create(context) {
     const btn = ui.querySelector("#collapseBtn");
     if (!btn) return;
     btn.innerHTML = toolbarCollapsed ? ICON_CHEVRON_DOWN : ICON_CHEVRON_UP;
-    btn.title = toolbarCollapsed ? "멀티뷰 메뉴 펼치기" : "멀티뷰 메뉴 접기";
+    btn.title = (toolbarCollapsed ? "멀티뷰 메뉴 펼치기" : "멀티뷰 메뉴 접기")+" · 단축키 B";
     btn.setAttribute("aria-label", btn.title);
   }
 
@@ -90,7 +90,7 @@ export function create(context) {
     state.chatOpen = !!open;
     ui.classList.toggle("chat-closed", !state.chatOpen);
     const btn = ui.querySelector("#chatToggleBtn");
-    if (btn) btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
+    if (btn) {btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";btn.title=btn.textContent+" · 단축키 C";}
     updateChat();
     resizeFixedAspectGrid();
     saveState();

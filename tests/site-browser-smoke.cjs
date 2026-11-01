@@ -21,7 +21,7 @@ const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=
  });
  await page.route('https://chzzk.naver.com/**',route=>{
    const frame=new URL(route.request().url()).pathname.startsWith('/live/');
-   let body='<h1>CHZZK 원본 페이지</h1>';
+   let body='<div style="height:2400px"><h1>CHZZK 원본 페이지</h1></div>';
    if(frame)body=`<video autoplay muted></video><script>window.__earlyPreferenceCount=0;document.querySelector('video').addEventListener('volumechange',()=>window.__earlyPreferenceCount++);const canvas=document.createElement('canvas');canvas.width=1920;canvas.height=1080;const ctx=canvas.getContext('2d');setInterval(()=>{ctx.fillStyle='green';ctx.fillRect(0,0,1920,1080)},40);document.querySelector('video').srcObject=canvas.captureStream(25);</script>`+['src/shared/messages.js','src/shared/important-chat.js','src/content/chat-collector.js','src/content/chat-layout.js','src/content/media-frame.js','src/content/player-audio.js','src/content/chzzk-frame.js'].map(f=>'<script>'+read(f)+'</script>').join('');
    return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"></head><body>'+body+'</body></html>'});
  });
@@ -39,7 +39,10 @@ const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=
  assert.equal(await launchButton.evaluate(el=>getComputedStyle(el).opacity),'1');
  await launchButton.click();
  await page.locator('.mv-root').waitFor();
+ assert.deepEqual(await page.evaluate(()=>[document.documentElement,document.body].map(element=>getComputedStyle(element).overflow)),['hidden','hidden'],'site mode locks original page scrolling');
  await page.waitForFunction(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe')?.dataset.playerReady==='true');
+ for(const [selector,key]of [['#favoriteManager > summary','F'],['#volumeManager > summary','V'],['#screenLockBtn','H'],['#collapseBtn','B'],['#layoutToggle button','G'],['#chatToggleBtn','C'],['.tile-screenshot','S'],['.tile-record','R']])assert((await page.locator(selector).first().getAttribute('title')).includes('단축키 '+key));
+ await page.locator('#screenLockBtn').evaluate(el=>el.click());assert((await page.locator('#screenLockBtn').getAttribute('title')).includes('단축키 H'));await page.locator('#screenLockBtn').evaluate(el=>el.click());
  assert.equal(page.url(),'https://chzzk.naver.com/');
  assert.equal(await page.locator('.tile-volume-row input').inputValue(),'10');
  assert(await page.locator('.tile-volume-row .tile-mute-btn').evaluate(el=>el.classList.contains('is-muted')));

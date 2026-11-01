@@ -50,7 +50,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
   const {applyTileLock,setScreenLock,toggleScreenLock,toggleToolbar,updateToolbarToggleUI,setChatSide,toggleChatSide,setChatOpen,toggleChat,showNotice}=shell;
 
   function createUI(){
-    const mounted=mountView({rootId:ROOT_ID,siteMode:!!globalThis.CZ_SITE_VIEWER});if(!mounted)return;
+    const mounted=mountView({rootId:ROOT_ID,scope,siteMode:!!globalThis.CZ_SITE_VIEWER});if(!mounted)return;
     ({ui,videoGrid,chatPanel}=mounted);
     mediaTools.bindSettings();
     importantChat=CZImportantChatPanel.create({chatPanel,enabledControl:ui.querySelector('#importantChatEnabled'),getFrame:()=>chatFrame,getState:()=>state,notify:showNotice});

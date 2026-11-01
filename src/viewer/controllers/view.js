@@ -1,5 +1,6 @@
+import {lockPageScroll} from './site-scroll.js';
 import {html} from '../template';
-export function mount({rootId:ROOT_ID,siteMode}) {
+export function mount({rootId:ROOT_ID,siteMode,scope}) {
     if (document.getElementById(ROOT_ID)) {
       const existing = document.getElementById(ROOT_ID);
       existing.style.display = "block";
@@ -11,6 +12,7 @@ export function mount({rootId:ROOT_ID,siteMode}) {
     host.id = ROOT_ID;
     document.body.appendChild(host);
     if(siteMode){
+      scope.add(lockPageScroll(document));
       host.style.cssText='position:fixed;inset:0;z-index:2147483647';
       document.querySelectorAll('video').forEach(video=>{video.muted=true;video.pause();});
     }

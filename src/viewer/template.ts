@@ -3,7 +3,7 @@ export const html = `
         <div class="toolbar-left">
           <details id="followingManager" class="favorite-manager"><summary>팔로잉</summary><div class="favorite-manager-panel"><div id="followingList"></div></div></details>
           <details id="favoriteManager" class="favorite-manager">
-            <summary>즐겨찾기</summary>
+            <summary title="즐겨찾기 · 단축키 F" aria-keyshortcuts="F">즐겨찾기</summary>
             <div class="favorite-manager-panel">
               <div class="favorite-manager-tools">
                 <button id="favoriteManageGroups" type="button">그룹 관리</button>
@@ -44,7 +44,7 @@ export const html = `
             </div>
           </details>
           <details id="volumeManager" class="volume-manager">
-            <summary>볼륨</summary>
+            <summary title="볼륨 조절 · 단축키 V" aria-keyshortcuts="V">볼륨</summary>
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
                 <div class="master-volume-top">
@@ -64,11 +64,11 @@ export const html = `
             </div>
           </details>
           <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
-            <button type="button" class="layout-toggle-btn" data-layout="grid">그리드</button>
-            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드</button>
+            <button type="button" class="layout-toggle-btn" data-layout="grid" title="그리드 배치 · 단축키 G" aria-keyshortcuts="G">그리드</button>
+            <button type="button" class="layout-toggle-btn" data-layout="main-sub" title="레이드 배치 · 단축키 G" aria-keyshortcuts="G">레이드</button>
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
-          <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
+          <button id="chatToggleBtn" title="채팅 닫기/열기 · 단축키 C" aria-keyshortcuts="C">채팅 닫기</button>
           <details id="settingsManager" class="viewer-settings">
             <summary title="설정">⚙ 설정</summary>
             <div class="settings-panel"><strong>설정</strong>
@@ -100,8 +100,8 @@ export const html = `
       </header>
 
       <div id="centerControls" class="center-controls">
-        <button id="screenLockBtn" class="center-btn" type="button" title="플레이어 조작 잠금">화면 잠금</button>
-        <button id="collapseBtn" class="center-btn center-collapse" type="button" title="멀티뷰 메뉴 접기" aria-label="멀티뷰 메뉴 접기"></button>
+        <button id="screenLockBtn" class="center-btn" type="button" title="플레이어 조작 잠금 · 단축키 H" aria-keyshortcuts="H">화면 잠금</button>
+        <button id="collapseBtn" class="center-btn center-collapse" type="button" title="멀티뷰 메뉴 접기 · 단축키 B" aria-keyshortcuts="B" aria-label="멀티뷰 메뉴 접기"></button>
       </div>
 
       <section class="mv-body">

@@ -200,6 +200,7 @@ async function run() {
     await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
     await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
     await main.locator('#uidInput').fill('');await main.locator('#uidInput').press('f');assert.equal(await main.locator('#uidInput').inputValue(),'f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);await main.locator('#uidInput').fill('');
+    for(const [selector,key]of [['#favoriteManager > summary','F'],['#volumeManager > summary','V'],['#screenLockBtn','H'],['#collapseBtn','B'],['#layoutToggle button','G'],['#chatToggleBtn','C'],['.tile-screenshot','S'],['.tile-record','R']])assert((await main.locator(selector).first().getAttribute('title')).includes('단축키 '+key));
     console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
     await main.locator('body').click({position:{x:5,y:5}});
     await require('./audio-isolation-browser-helpers.cjs')(main);
