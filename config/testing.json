@@ -82,5 +82,9 @@
   "src/viewer/player-lifecycle.js": [
     "CZPlayerLifecycle",
     null
+  ],
+  "src/viewer/chat-colors.js": [
+    "CZChatColors",
+    null
   ]
 }

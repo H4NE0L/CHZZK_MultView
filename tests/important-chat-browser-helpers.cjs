@@ -290,7 +290,7 @@ module.exports=async function checkImportantChat(page){
 
  const imageUrl='https://ssl.pstatic.net/__cz_collected_chat_test.png';
  await page.route(imageUrl,route=>route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKf8AAAAASUVORK5CYII=','base64')}));
- await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
+ await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80" style="color:rgb(0,0,0)">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
  const emote=panel.locator('.ic-emote[alt="테스트 웃음"]');await emote.waitFor();
  await page.waitForFunction(()=>{const image=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-emote[alt="테스트 웃음"]');return image?.complete && image.naturalWidth>0;});
  await frame.evaluate(src=>{const row=document.createElement('div');row.dataset.chatMessage='';row.dataset.messageId='emote-only-render';row.innerHTML='<img alt="구독 배지" src="'+src+'"><span data-chat-nickname style="color:rgb(91, 154, 240)">지정 사용자</span><svg aria-label="인증마크" viewBox="0 0 16 16"><path d="M1 1L15 1L8 15Z" fill="#00e6a0"/></svg><button class="emote_button"><img src="'+src+'"></button>';document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
@@ -303,6 +303,7 @@ module.exports=async function checkImportantChat(page){
  const compact=panel.locator('.ic-message').filter({hasText:'이모티콘 이미지 표시'});
  assert.deepEqual(await compact.evaluate(el=>[...el.children].map(child=>child.tagName)),['TIME','STRONG','SPAN']);
  assert.equal(await compact.locator('.ic-author').textContent(),'지정 사용자');
+ assert.notEqual(await compact.locator('.ic-author').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)','native black nickname must be readable on the dark collected-chat surface');
  assert.equal(await emote.getAttribute('referrerpolicy'),'no-referrer');
  const retainedEmote=await emote.elementHandle();
  await add('지정 사용자','새 채팅에도 기존 이미지 유지','','retain-rich');

@@ -14,7 +14,8 @@ export function create({getOwnerName}) {
     scrollModes.set(parent,past);return past;
   }
   function domSummary(scanned){
-    return {sourceTimeReader:document.documentElement.getAttribute('data-cz-time-reader')||'',rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
+    let socketTimeSource=null;try{const raw=document.documentElement.getAttribute('data-cz-socket-time-state')||'';if(raw.length<600)socketTimeSource=JSON.parse(raw);}catch(_){}
+    return {socketTimeSource,sourceTimeReader:document.documentElement.getAttribute('data-cz-time-reader')||'',rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));

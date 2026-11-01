@@ -4,9 +4,12 @@ import {sourceTimes} from '../shared/chat/source-times.js';
 (() => {
  if(!['1','chat'].includes(new URLSearchParams(location.search).get('multiview')) || window.__CZChatSocketReaderV1 || typeof WebSocket!=='function')return;
  window.__CZChatSocketReaderV1=true;
- const Native=window.WebSocket,sockets=new Map();let disposed=false,enabled=false;
+ const Native=window.WebSocket,sockets=new Map();let disposed=false,enabled=new URLSearchParams(location.search).get('cz_timestamps')==='1';
+ let packets=0,statsTimer=null;
+ function report(){if(!statsTimer)statsTimer=setTimeout(()=>{statsTimer=null;document.documentElement?.setAttribute('data-cz-socket-time-state',JSON.stringify({revision:'20261102-1',enabled,sockets:sockets.size,packets,indexed:sourceTimes.size}));},250);}
  function receive(event){
   if(disposed || !enabled || typeof event.data!=='string' || event.data.length>1024*1024)return;
+  packets++;report();
   let packet;try{packet=JSON.parse(event.data);}catch(_){return;}
   let body=packet?.bdy??packet?.body;
   if(typeof body==='string'){if(body.length>1024*1024)return;try{body=JSON.parse(body);}catch(_){return;}}
@@ -26,11 +29,11 @@ import {sourceTimes} from '../shared/chat/source-times.js';
   return socket;
  }});
  function configure(){
-  enabled=!disposed && document.documentElement?.getAttribute('data-cz-timestamps-enabled')==='true';
+  enabled=!disposed && (document.documentElement?.hasAttribute('data-cz-timestamps-enabled')?document.documentElement.getAttribute('data-cz-timestamps-enabled')==='true':new URLSearchParams(location.search).get('cz_timestamps')==='1');
   for(const socket of sockets.keys()){socket.removeEventListener('message',receive);if(enabled)socket.addEventListener('message',receive);}
-  if(!enabled)sourceTimes.clear();
+  if(!enabled)sourceTimes.clear();report();
  }
  document.addEventListener('cz-chat-timestamps-config',configure);configure();
  window.WebSocket=ProxySocket;
- window.addEventListener('pagehide',()=>{disposed=true;document.removeEventListener('cz-chat-timestamps-config',configure);for(const close of sockets.values())close();sockets.clear();sourceTimes.clear();if(window.WebSocket===ProxySocket)window.WebSocket=Native;},{once:true});
+ window.addEventListener('pagehide',()=>{disposed=true;clearTimeout(statsTimer);statsTimer=null;document.removeEventListener('cz-chat-timestamps-config',configure);for(const close of sockets.values())close();sockets.clear();sourceTimes.clear();if(window.WebSocket===ProxySocket)window.WebSocket=Native;},{once:true});
 })();

@@ -23,6 +23,10 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T10:00:00.000Z');
   await page.evaluate(()=>{const row=document.querySelector('#message');delete row.__reactFiber$fixture;const message={messageTime:Date.parse('2026-10-28T11:00:00Z'),profile:{nickname:'작성자'}};Object.defineProperty(message,'content',{get(){window.__unexpectedGetter=true;return '원본 본문';}});row.__reactProps$fixture={message};row.setAttribute('data-item-index','5');});
   await page.waitForFunction(()=>!document.querySelector('#message .cz-native-chat-time'));assert.equal(await page.evaluate(()=>!!window.__unexpectedGetter),false,'source data getters are not invoked');
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={children:[null,{props:{message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}}}]};row.setAttribute('data-item-index','array');});
+  await page.waitForFunction(()=>document.querySelector('.cz-native-chat-time')?.dateTime==='2026-10-29T12:34:56.000Z');
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본'}};row.setAttribute('data-item-index','prefix');});
+  await page.waitForFunction(()=>!document.querySelector('.cz-native-chat-time'));
   await evaluate("document.documentElement.setAttribute('data-cz-timestamps-enabled','false');document.dispatchEvent(new Event('cz-chat-timestamps-config'));CZChatLayout.setTimestamps(false)");
   await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:1793277296000,profile:{nickname:'작성자'},content:'원본 본문'}};row.setAttribute('data-item-index','6');});
   await page.waitForTimeout(100);assert.equal(await page.locator('[data-cz-message-time],.cz-native-chat-time').count(),0,'OFF stops metadata reads and removes timestamps');

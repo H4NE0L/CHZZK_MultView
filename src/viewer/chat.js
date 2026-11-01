@@ -49,9 +49,10 @@ export const chat = {create(context) {
     }
 
     const channel = context.state.channels.find(c => c.uid === uid);
+    const timestampQuery=context.state.chatTimestamps===true?'&cz_timestamps=1':'';
     const target = channel?.type === "video"
-      ? `${channel.url}${channel.url.includes("?") ? "&" : "?"}multiview=chat`
-      : `https://chzzk.naver.com/live/${encodeURIComponent(channel?.sourceId || uid)}/chat?multiview=1`;
+      ? `${channel.url}${channel.url.includes("?") ? "&" : "?"}multiview=chat${timestampQuery}`
+      : `https://chzzk.naver.com/live/${encodeURIComponent(channel?.sourceId || uid)}/chat?multiview=1${timestampQuery}`;
 
     // Only reload chat when the selected channel changes.
     if (context.chatFrame.dataset.uid !== uid) {
