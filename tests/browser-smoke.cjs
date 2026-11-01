@@ -178,7 +178,7 @@ async function run() {
     await main.waitForFunction(() => document.body.classList.contains('ready')).catch(error=>{throw new Error(error.message+'; startup errors: '+JSON.stringify([...errors,...startupConsoleErrors]));});
     assert.equal(new URL(main.url()).search, '', 'launch inputs are consumed once');
     console.log('Checked MultiView initialization');
-    await main.locator('#settingsManager > summary').click();await main.locator('#recordingProfile').selectOption('original');
+    await main.locator('#settingsManager > summary').click();await main.locator('[data-settings-tab=player]').click();await main.locator('#recordingProfile').selectOption('original');
     assert.equal((await main.evaluate(()=>chrome.storage.local.get('chzzkRecordingProfileV1'))).chzzkRecordingProfileV1,'original');
     await main.locator('#recordingProfile').selectOption('balanced');await main.locator('#settingsManager > summary').click();
     assert.equal(await main.locator('.layout-toggle-btn[data-layout="grid"]').textContent(),'그리드');
@@ -196,9 +196,9 @@ async function run() {
     await main.locator('body').press('c');
     assert(await main.evaluate(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.chat-frame')!==window.__oldChat));
     await main.evaluate(()=>{delete window.__oldChat;});
-    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
+    await main.locator('#settingsManager > summary').click();await main.locator('[data-settings-tab=convenience]').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
     await main.locator('body').press('f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);
-    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
+    await main.locator('#settingsManager > summary').click();await main.locator('[data-settings-tab=convenience]').click();await main.locator('#shortcutsEnabled').check();await main.locator('#settingsManager > summary').click();
     await main.locator('#uidInput').fill('');await main.locator('#uidInput').press('f');assert.equal(await main.locator('#uidInput').inputValue(),'f');assert.equal(await main.locator('#favoriteManager').getAttribute('open'),null);await main.locator('#uidInput').fill('');
     for(const [selector,key]of [['#favoriteManager > summary','F'],['#volumeManager > summary','V'],['#screenLockBtn','H'],['#collapseBtn','B'],['#layoutToggle button','G'],['#chatToggleBtn','C'],['.tile-screenshot','S'],['.tile-record','R']])assert((await main.locator(selector).first().getAttribute('title')).includes('단축키 '+key));
     console.log('PASS: general shortcut actions, uppercase keys and persisted setting toggle.');
@@ -510,7 +510,7 @@ async function run() {
     assert.equal(await main.locator('.seek-back,.seek-forward').count(),0);
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).bottom),'60px');
     assert.equal(await main.locator('.media-transport').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
-    await main.locator('#settingsManager > summary').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
+    await main.locator('#settingsManager > summary').click();await main.locator('[data-settings-tab=convenience]').click();await main.locator('#shortcutsEnabled').uncheck();await main.locator('#settingsManager > summary').click();
     await replayPlayer.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});
     await replayPlayer.locator('body').press('s');
     await main.locator('.media-body img').waitFor();

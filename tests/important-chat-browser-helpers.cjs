@@ -1,9 +1,9 @@
 const assert=require('node:assert/strict');
 module.exports=async function checkImportantChat(page){
  const settings=page.locator('.ic-dialog');
- await page.locator('#settingsManager > summary').click();
+ await page.locator('.ic-header-settings').click();await settings.getByRole('tab',{name:'기본 채팅',exact:true}).click();
  assert.equal(await page.locator('#chatTimestampsEnabled').isChecked(),false,'timestamps default OFF');
- await page.locator('#chatTimestampsEnabled').check({force:true});await page.locator('#settingsManager > summary').click();
+ await page.locator('#chatTimestampsEnabled').check();await settings.locator('.ic-settings-close').click();
  const panel=page.locator('.important-chat-panel');await panel.waitFor();
  await page.waitForFunction(()=>!document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-name').disabled);
  assert.equal(await panel.evaluate(el=>el.tagName),'SECTION');
@@ -121,7 +121,7 @@ module.exports=async function checkImportantChat(page){
  const grown=(await panel.boundingBox()).height;await separator.press('ArrowUp');assert((await panel.boundingBox()).height<grown);
  const openSettings=async()=>{if(!await settings.evaluate(el=>el.open)){await panel.locator('.ic-header-settings').click();await settings.waitFor({state:'visible'});}};
  const closeSettings=async()=>{if(await settings.isVisible())await settings.locator('.ic-settings-close').click();};
- const setEnabled=async value=>{await closeSettings();await page.locator('#settingsManager > summary').click();await page.locator('#importantChatEnabled').setChecked(value);await page.locator('#settingsManager > summary').click();};
+ const setEnabled=async value=>{await closeSettings();await page.locator('#settingsManager > summary').click();await page.locator('[data-settings-tab=chat]').click();await page.locator('#importantChatEnabled').setChecked(value);await page.locator('#settingsManager > summary').click();};
  const add=async(name,text,role='',id='')=>frame.evaluate(({name,text,role,id})=>{
    let host=document.querySelector('aside.live_chat');if(!host){host=document.createElement('aside');host.className='live_chat';host.style.cssText='height:100%;width:100%';document.body.appendChild(host);}
    if(!document.querySelector('.native-toolbar-test')){const toolbar=document.createElement('div');toolbar.dataset.chatToolbar='';toolbar.className='live_chatting_header__test';toolbar.textContent='채팅 - 100% + ⋮';host.prepend(toolbar);}
@@ -233,7 +233,8 @@ module.exports=async function checkImportantChat(page){
  await page.locator('#settingsManager > summary').click();
  assert.equal(await page.locator('#importantChatSettings').count(),0,'global settings contain global toggles only');
  await page.locator('#settingsManager > summary').click();await panel.locator('.ic-header-settings').click();assert(await settings.isVisible());assert(await page.locator('#importantChatEnabled').isChecked(),'opening collection settings does not switch collection off');
- assert.equal(await settings.locator('#chatTimestampsEnabled').count(),0,'timestamp toggle remains global');
+ assert.equal(await page.locator('#settingsManager #chatTimestampsEnabled').count(),0,'timestamp control has moved out of global settings');
+ assert.equal(await settings.locator('#chatTimestampsEnabled').count(),1,'timestamp control lives in chat settings');
  await settings.getByRole('tab',{name:'기본 채팅',exact:true}).click();assert(await settings.locator('.ic-nativeHideBadges').isVisible());assert.equal(await settings.locator('.ic-form').isVisible(),false);
  await settings.getByRole('tab',{name:'모아보기',exact:true}).click();assert(await settings.locator('.ic-form').isVisible());
  assert.equal(await settings.locator('.ic-diagnostics').isVisible(),false,'detailed diagnostics is collapsed by default');
@@ -300,14 +301,16 @@ module.exports=async function checkImportantChat(page){
  assert(await panel.locator('svg.ic-badge path').count()>0,'native SVG badge shape is preserved');
  await settings.getByRole('tab',{name:'기본 채팅',exact:true}).click();
  const nativeBefore=await frame.locator('[data-chat-message][data-message-id="emote-only-render"] img').count();
+ await frame.locator('[data-message-id=emote-only-render] img').first().evaluate(img=>{const wrapper=document.createElement('span');wrapper.className='native-badge-box';wrapper.style.cssText='display:inline-flex;background:black;width:24px;padding:4px';img.before(wrapper);wrapper.append(img);});
  await settings.locator('.ic-nativeHideBadges').uncheck();
  await frame.waitForFunction(()=>document.documentElement.getAttribute('data-cz-hide-chat-badges')==='true');
  const nativeRow=frame.locator('[data-message-id="emote-only-render"]');
  await nativeRow.locator('[data-cz-native-badge]').first().waitFor({state:'hidden'});
  assert.equal(await nativeRow.locator('img').count(),nativeBefore,'native badge switch preserves source DOM');
+ assert.deepEqual(await nativeRow.locator('.native-badge-box').evaluate(el=>[el.getBoundingClientRect().width,el.getBoundingClientRect().height]),[0,0],'badge wrapper occupies zero space, including its black background');
  assert(await nativeRow.locator('.emote_button img').isVisible(),'body emotes remain visible');
  assert(await panel.locator('svg.ic-badge').count()>0,'native badge switch does not hide collected badges');
- await settings.locator('.ic-nativeHideBadges').check();await frame.waitForFunction(()=>document.documentElement.getAttribute('data-cz-hide-chat-badges')==='false');
+ await settings.locator('.ic-nativeHideBadges').check();await frame.waitForFunction(()=>document.documentElement.getAttribute('data-cz-hide-chat-badges')==='false');assert.equal(await nativeRow.locator('.native-badge-box').evaluate(el=>el.style.display),'inline-flex','ON restores the original wrapper display');
  await settings.getByRole('tab',{name:'모아보기',exact:true}).click();
  const beforeBadgeToggle=await panel.locator('.ic-message').count();
  assert(await panel.locator('.ic-badge').count()>0,'native-style messages show sender badges by default');
@@ -350,14 +353,12 @@ module.exports=async function checkImportantChat(page){
  await openSettings();await page.keyboard.press('Escape');assert.equal(await settings.isVisible(),false);
  const historyBeforeDisabled=await panel.locator('.ic-message').count();await setEnabled(false);assert.equal(await panel.isVisible(),false);
  await add('지정 사용자','수집 중지 확인','','disabled-1');await page.waitForTimeout(350);
- await page.locator('#settingsManager > summary').click();
  assert.equal(await page.locator('#chatTimestampsEnabled').isChecked(),true);
- await page.locator('#chatTimestampsEnabled').check({force:true});await page.locator('#settingsManager > summary').click();
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','2026-10-28T12:34:00Z'));
  await frame.waitForFunction(()=>document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:00.000Z');
  await frame.locator('[data-message-id=disabled-1]').evaluate(el=>el.setAttribute('data-message-time','invalid'));
  await frame.waitForFunction(()=>!document.querySelector('[data-message-id=disabled-1] .cz-native-chat-time'));
- await page.locator('#settingsManager > summary').click();await page.locator('#chatTimestampsEnabled').uncheck({force:true});await page.locator('#settingsManager > summary').click();
+ await page.locator('#settingsManager > summary').click();await page.locator('[data-settings-tab=chat]').click();await page.locator('#openChatSettingsBtn').click();await settings.locator('#chatTimestampsEnabled').uncheck();await settings.locator('.ic-settings-close').click();
  assert.equal(await panel.locator('.ic-message').count(),historyBeforeDisabled,'timestamp toggle and collection disabling retain existing history');
  assert(!(await panel.locator('.ic-list').textContent()).includes('수집 중지 확인'));
  await setEnabled(true);assert(await panel.isVisible());await page.waitForTimeout(350);await openSettings();

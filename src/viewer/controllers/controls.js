@@ -12,7 +12,7 @@ export function bind(context) {
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
     bindSettings({root:ui,get state(){return context.state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,
-      openChatSettings:()=>importantChat.openSettings(),openPowerDiagnostics:()=>powerDiagnostics.open()});
+      openChatSettings:()=>importantChat.openSettings('native'),openPowerDiagnostics:()=>powerDiagnostics.open()});
     volumePanel.bind();
 
     // Only one of the sync / volume panels is open at a time (both are right-aligned).

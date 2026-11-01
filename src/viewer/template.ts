@@ -73,15 +73,21 @@ export const html = `
             <summary title="설정">⚙ 설정</summary>
             <div class="settings-panel"><strong>설정</strong>
               <div class="settings-feature"><button id="settingsBackupBtn" type="button">설정 내보내기 / 불러오기</button><p>즐겨찾기와 멀티뷰 설정을 JSON 파일로 보관하거나 복원합니다.</p></div>
-              <div class="settings-feature">
+              <div class="settings-category-tabs" role="tablist" aria-label="설정 분야">
+                <button type="button" role="tab" id="settingsConvenienceTab" data-settings-tab="convenience" aria-controls="settingsConveniencePanel" aria-selected="true">편의기능</button>
+                <button type="button" role="tab" id="settingsMultiviewTab" data-settings-tab="multiview" aria-controls="settingsMultiviewPanel" aria-selected="false" tabindex="-1">멀티뷰</button>
+                <button type="button" role="tab" id="settingsPlayerTab" data-settings-tab="player" aria-controls="settingsPlayerPanel" aria-selected="false" tabindex="-1">플레이어</button>
+                <button type="button" role="tab" id="settingsChatTab" data-settings-tab="chat" aria-controls="settingsChatPanel" aria-selected="false" tabindex="-1">채팅</button>
+              </div>
+              <section id="settingsConveniencePanel" role="tabpanel" aria-labelledby="settingsConvenienceTab" data-settings-panel="convenience">
+                <div class="settings-feature">
                 <label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
               </div>
-              <div class="settings-feature">
-                <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
-                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
-              </div>
-              <div class="settings-feature">
+              </section>
+              <section id="settingsMultiviewPanel" role="tabpanel" aria-labelledby="settingsMultiviewTab" data-settings-panel="multiview" hidden><div class="settings-feature"><button id="settingsLayoutBtn" type="button">그리드 / 레이드 전환</button><p>현재 방송 목록과 음량을 유지하며 배치를 전환합니다.</p></div><div class="settings-feature"><button id="settingsScreenLockBtn" type="button">플레이어 조작 잠금 전환</button><p>플레이어의 클릭 조작을 잠그거나 해제합니다.</p></div></section>
+              <section id="settingsPlayerPanel" role="tabpanel" aria-labelledby="settingsPlayerTab" data-settings-panel="player" hidden>
+                <div class="settings-feature">
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
@@ -89,11 +95,13 @@ export const html = `
                 <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
               </div>
-              <div class="settings-feature">
-                <label class="settings-option"><span>채팅 타임스탬프 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>
+              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div></section>
+              <section id="settingsChatPanel" role="tabpanel" aria-labelledby="settingsChatTab" data-settings-panel="chat" hidden>
+                <div class="settings-feature">
+                <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
               </div>
-              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
+                <div class="settings-feature"><button id="openChatSettingsBtn" type="button">채팅 세부 설정</button><p>기본 채팅의 배지·타임스탬프와 모아보기 수집 설정을 관리합니다.</p></div></section>
             </div>
           </details>
         </div>

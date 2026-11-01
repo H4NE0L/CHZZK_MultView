@@ -2,6 +2,8 @@ const assert=require('node:assert/strict');
 module.exports=async page=>{
  await page.locator('#settingsManager > summary').click();
  assert.equal(await page.locator('.settings-panel > .settings-feature').first().locator('button').getAttribute('id'),'settingsBackupBtn');
+ assert.deepEqual(await page.locator('[data-settings-tab]').allTextContents(),['편의기능','멀티뷰','플레이어','채팅']);
+ await page.locator('[data-settings-tab=player]').click();assert(await page.locator('#recordingProfile').isVisible());assert.equal(await page.locator('#importantChatEnabled').isVisible(),false);
  const live=page.locator('.video-tile iframe[src*="/live/"]').first();
  if(await live.count()){
   const handle=await live.elementHandle(),frame=await handle.contentFrame();await handle.dispose();

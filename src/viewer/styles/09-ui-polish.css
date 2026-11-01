@@ -42,3 +42,11 @@
 .ic-capture-dialog::backdrop { background:#0007; }
 .ic-capture-dialog>header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
 .ic-capture-dialog button { border:1px solid #444; border-radius:4px; color:#eee; background:#222428; padding:6px 8px; font-size:12px; cursor:pointer; }
+
+.settings-panel { width:min(360px,calc(100vw - 32px)); max-height:calc(100vh - 88px); overflow:auto; box-sizing:border-box; }
+.settings-category-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin:12px 0; }
+.settings-category-tabs button { min-height:32px; padding:4px; border:1px solid #444; border-radius:4px; background:#222428; color:#bfc6d0; font-size:12px; cursor:pointer; }
+.settings-category-tabs button[aria-selected="true"] { background:#454a52; border-color:#7b838e; color:#fffafa; }
+[data-settings-panel][hidden] { display:none!important; }
+.ic-dialog .settings-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ic-dialog .settings-feature p { color:#aeb7c4; font-size:11px; line-height:1.7; margin:8px 0 0; }

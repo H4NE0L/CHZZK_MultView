@@ -17,6 +17,13 @@ export function bind(context: SettingsContext) {
     return el;
   }
   const settings=element<HTMLDetailsElement>('#settingsManager');
+  // New settings join a category through these data attributes.
+  const tabs=[...root.querySelectorAll<HTMLButtonElement>('[data-settings-tab]')];
+  function selectCategory(name: string){for(const tab of tabs){const selected=tab.dataset.settingsTab===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;}for(const panel of root.querySelectorAll<HTMLElement>('[data-settings-panel]'))panel.hidden=panel.dataset.settingsPanel!==name;}
+  tabs.forEach((tab,index)=>{scope.listen(tab,'click',()=>selectCategory(tab.dataset.settingsTab!));scope.listen(tab,'keydown',event=>{const e=event as KeyboardEvent;if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;selectCategory(tabs[next]!.dataset.settingsTab!);tabs[next]!.focus();});});
+  scope.listen(element('#openChatSettingsBtn'),'click',()=>{settings.open=false;context.openChatSettings();});
+  scope.listen(element('#settingsLayoutBtn'),'click',()=>{const next=context.state.layout==='grid'?'main-sub':'grid';root.querySelector<HTMLButtonElement>(`.layout-toggle-btn[data-layout="${next}"]`)?.click();});
+  scope.listen(element('#settingsScreenLockBtn'),'click',()=>element<HTMLButtonElement>('#screenLockBtn').click());
   const shortcut=element<HTMLInputElement>('#shortcutsEnabled');
   shortcut.checked=context.state.shortcutsEnabled!==false;
   scope.listen(shortcut,'change',()=>{
