@@ -18,14 +18,14 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     if(dom.aboveHeader(row))return;
     const parsed=dom.read(row);structure=parsed.structure;report();
     if(!parsed.message)return;
-    const {name,text,segments,nativeTime,sourceId,badges,role}=parsed.message;
+    const {name,text,segments,nativeTime,sourceId,badges,badgesAfter,nameColor,bodyColor,role}=parsed.message;
     const fingerprint=JSON.stringify([name,text]),hint=replacements.get(row);
     const historyKey=sourceId?'native:'+sourceId:hash(JSON.stringify([name,text,segments,nativeTime]));
     const existing=identities.get(row),sameExisting=existing?.fingerprint===fingerprint && (!sourceId || existing.id===sourceId);
     const cached=history.get(historyKey),restored=cached && !sameExisting && (sourceId || !liveInserts.has(row) && readingHistory(row))?cached:null;
     const previous=(sameExisting?existing:null)||((hint?.fingerprint===fingerprint && (!sourceId || sourceId===hint.id))?hint:null)||(restored?{...restored,fingerprint}:null);
     const id=String(sourceId || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
-    const item=CZImportantChat.message({id,name,text,segments,badges,role,time:CZImportantChat.timestamp(nativeTime)??(previous?.fingerprint===fingerprint?previous.time:null)});
+    const item=CZImportantChat.message({id,name,text,segments,badges,badgesAfter,nameColor,bodyColor,role,time:CZImportantChat.timestamp(nativeTime)??(previous?.fingerprint===fingerprint?previous.time:null)});
     if(!item)return;
     if(existing?.historical && !liveInserts.has(row))item.updateOnly=true;
     if(liveInserts.has(row) || !readingHistory(row))liveTails.set(row.parentElement,new WeakRef(row));
@@ -102,6 +102,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     scan(document.body);
   }
   function dispose(){stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}
+  scope.listen(document,'load',event=>{if(filter.enabled && event.target?.matches?.('img'))scan(event.target);},true);
   scope.listen(window,'pagehide',event=>{if(!event.persisted)dispose();});
   return {configure,stop,dispose};
 }};

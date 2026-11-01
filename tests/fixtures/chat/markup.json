@@ -1,7 +1,97 @@
 [
-  {"id":"css-module-author-decorations","html":"<div id='message' class='_chatting_message_w9pvh_21'><button class='_button_chatting_1cgzf_35'><span class='_nickname_w9pvh_33'><span class='_nickname_1mc5x_80'>Alice<img alt='인증 마크' src='https://pstatic.net/verified.png'><span class='sr_only'>인증</span></span></span><img alt='인증 마크' src='https://pstatic.net/verified.png'><span>반갑습니다 </span><img alt='웃음' src='https://pstatic.net/emote.png'></button></div>","owner":"Alice","expected":{"name":"Alice","text":"반갑습니다 웃음","role":"streamer","nativeTime":""}},
-  {"id":"explicit-manager-over-body-color","html":"<div id='message' data-chat-message data-message-id='m1' data-message-time='1793278676000'><img alt='관리자 배지' src='https://pstatic.net/manager.png'><span data-chat-nickname>Manager</span><span data-chat-text style='color:rgb(0,220,155)'>hello</span></div>","expected":{"name":"Manager","text":"hello","role":"manager","nativeTime":"1793278676000","sourceId":"m1"}},
-  {"id":"unknown-row-discovery","html":"<article id='message' class='future_message'><div class='author'><span data-chat-nickname>Manual</span></div><span>새 본문 구조</span></article>","discovery":true,"expected":{"name":"Manual","text":"새 본문 구조","role":"","nativeTime":""}},
-  {"id":"nickname-color-is-not-role","html":"<div id='message' data-chat-message><span data-chat-nickname style='color:rgb(255,180,50)'>Alice</span><span data-chat-text style='color:rgb(255,255,255)'>normal</span></div>","expected":{"name":"Alice","text":"normal","role":"","nativeTime":""}},
-  {"id":"partner-body-color","html":"<div id='message' data-chat-message><span data-chat-nickname>Partner</span><span data-chat-text style='color:rgb(0,220,155)'>파트너 본문</span></div>","expected":{"name":"Partner","text":"파트너 본문","role":"partner","nativeTime":""}}
+  {
+    "id": "css-module-author-decorations",
+    "html": "<div id='message' class='_chatting_message_w9pvh_21'><button class='_button_chatting_1cgzf_35'><span class='_nickname_w9pvh_33'><span class='_nickname_1mc5x_80'>Alice<img alt='인증 마크' src='https://pstatic.net/verified.png'><span class='sr_only'>인증</span></span></span><img alt='인증 마크' src='https://pstatic.net/verified.png'><span>반갑습니다 </span><img alt='웃음' src='https://pstatic.net/emote.png'></button></div>",
+    "owner": "Alice",
+    "expected": {
+      "name": "Alice",
+      "text": "반갑습니다 웃음",
+      "role": "streamer",
+      "nativeTime": ""
+    }
+  },
+  {
+    "id": "explicit-manager-over-body-color",
+    "html": "<div id='message' data-chat-message data-message-id='m1' data-message-time='1793278676000'><img alt='관리자 배지' src='https://pstatic.net/manager.png'><span data-chat-nickname>Manager</span><span data-chat-text style='color:rgb(0,220,155)'>hello</span></div>",
+    "expected": {
+      "name": "Manager",
+      "text": "hello",
+      "role": "manager",
+      "nativeTime": "1793278676000",
+      "sourceId": "m1"
+    }
+  },
+  {
+    "id": "unknown-row-discovery",
+    "html": "<article id='message' class='future_message'><div class='author'><span data-chat-nickname>Manual</span></div><span>새 본문 구조</span></article>",
+    "discovery": true,
+    "expected": {
+      "name": "Manual",
+      "text": "새 본문 구조",
+      "role": "",
+      "nativeTime": ""
+    }
+  },
+  {
+    "id": "nickname-color-is-not-role",
+    "html": "<div id='message' data-chat-message><span data-chat-nickname style='color:rgb(255,180,50)'>Alice</span><span data-chat-text style='color:rgb(255,255,255)'>normal</span></div>",
+    "expected": {
+      "name": "Alice",
+      "text": "normal",
+      "role": "",
+      "nativeTime": ""
+    }
+  },
+  {
+    "id": "partner-body-color",
+    "html": "<div id='message' data-chat-message><span data-chat-nickname>Partner</span><span data-chat-text style='color:rgb(0,220,155)'>파트너 본문</span></div>",
+    "expected": {
+      "name": "Partner",
+      "text": "파트너 본문",
+      "role": "partner",
+      "nativeTime": ""
+    }
+  },
+  {
+    "id": "button-emote-only",
+    "html": "<div id=\"message\" data-chat-message><span data-chat-nickname>방송인</span><button data-chat-text><span><img src=\"https://ssl.pstatic.net/emote.png\" alt=\"웃음\"></span></button></div>",
+    "owner": "방송인",
+    "expected": {
+      "name": "방송인",
+      "text": "웃음",
+      "role": "streamer"
+    }
+  },
+  {
+    "id": "unlabelled-emote-button",
+    "html": "<div id=\"message\" data-chat-message><span data-chat-nickname>방송인</span><button class=\"emote_button\"><img src=\"https://ssl.pstatic.net/emote.png\"></button></div>",
+    "owner": "방송인",
+    "expected": {
+      "name": "방송인",
+      "text": "[이모티콘]",
+      "role": "streamer"
+    }
+  },
+  {
+    "id": "emote-only-colored-manager",
+    "html": "<div id=\"message\" data-chat-message><span data-chat-nickname>관리인</span><button style=\"color:rgb(0, 153, 255)\"><img src=\"https://ssl.pstatic.net/emote.png\" alt=\"인사\"></button></div>",
+    "expected": {
+      "name": "관리인",
+      "text": "인사",
+      "role": "manager"
+    }
+  },
+  {
+    "id": "author-badge-source-does-not-replace-emote",
+    "html": "<div id=\"message\" data-chat-message><span data-chat-nickname>방송인<img alt=\"구독 배지\" src=\"https://ssl.pstatic.net/subscriber.png\"></span><svg viewBox=\"0 0 16 16\"><path d=\"M1 1L15 1L8 15Z\"/></svg><button><img src=\"https://ssl.pstatic.net/emote.png\" alt=\"웃음\"></button></div>",
+    "owner": "방송인",
+    "expected": {
+      "name": "방송인",
+      "text": "웃음",
+      "role": "streamer"
+    },
+    "expectedImageSources": [
+      "https://ssl.pstatic.net/emote.png"
+    ]
+  }
 ]

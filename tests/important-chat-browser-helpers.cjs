@@ -293,7 +293,13 @@ module.exports=async function checkImportantChat(page){
  await frame.evaluate(src=>{const row=document.createElement('div');row.className='_chatting_message_rich_21';row.innerHTML='<img alt="구독 배지"><span class="_nickname_rich_33"><span class="_nickname_leaf_80">지정 사용자</span></span><span>이모티콘 이미지 표시 <img alt="테스트 웃음"></span>';row.querySelectorAll('img').forEach(img=>img.src=src);document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
  const emote=panel.locator('.ic-emote[alt="테스트 웃음"]');await emote.waitFor();
  await page.waitForFunction(()=>{const image=document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-emote[alt="테스트 웃음"]');return image?.complete && image.naturalWidth>0;});
- assert.equal(await panel.locator('.ic-badge').count(),0,'compact messages omit sender badges');
+ await frame.evaluate(src=>{const row=document.createElement('div');row.dataset.chatMessage='';row.dataset.messageId='emote-only-render';row.innerHTML='<img alt="구독 배지" src="'+src+'"><span data-chat-nickname style="color:rgb(91, 154, 240)">지정 사용자</span><svg aria-label="인증마크" viewBox="0 0 16 16"><path d="M1 1L15 1L8 15Z" fill="#00e6a0"/></svg><button class="emote_button"><img src="'+src+'"></button>';document.querySelector('aside.live_chat').appendChild(row);},imageUrl);
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message-text .ic-emote').length>=2);
+ assert(await panel.locator('svg.ic-badge path').count()>0,'native SVG badge shape is preserved');
+ const beforeBadgeToggle=await panel.locator('.ic-message').count();
+ assert(await panel.locator('.ic-badge').count()>0,'native-style messages show sender badges by default');
+ await settings.locator('.ic-hideBadges').check();assert.equal(await panel.locator('.ic-badge').count(),0,'hide badges is display-only');assert.equal(await panel.locator('.ic-message').count(),beforeBadgeToggle,'toggling badges never clears collected history');
+ await settings.locator('.ic-hideBadges').uncheck();assert(await panel.locator('svg.ic-badge').count()>0);await settings.locator('.ic-hideBadges').check();
  const compact=panel.locator('.ic-message').filter({hasText:'이모티콘 이미지 표시'});
  assert.deepEqual(await compact.evaluate(el=>[...el.children].map(child=>child.tagName)),['TIME','STRONG','SPAN']);
  assert.equal(await compact.locator('.ic-author').textContent(),'지정 사용자');

@@ -54,3 +54,10 @@ test('timestamp setting defaults OFF for old backups and roundtrips explicit ON 
  const restored=plain((await f.send('SETTINGS_BACKUP_EXPORT')).document);assert.equal(restored.data.session.chatTimestamps,true);assert.deepEqual(restored.data.chat,filters);
  document.data.session.chatTimestamps='true';assert.throws(()=>f.api.parse(document),/타임스탬프/);
 });
+
+test('badge display setting defaults for old backups and roundtrips without changing collection lists',async()=>{
+ const f=setup(),document=(await f.send('SETTINGS_BACKUP_EXPORT')).document;
+ delete document.data.chat.hideBadges;assert.equal(f.api.parse(document).data.chat.hideBadges,false);
+ document.data.chat.hideBadges=true;assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[C].hideBadges,true);assert.deepEqual(plain(f.data[C].names),['추가']);
+ document.data.chat.hideBadges='true';assert.throws(()=>f.api.parse(document));
+});

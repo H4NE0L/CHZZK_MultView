@@ -13,7 +13,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   const renderer=createRenderer($('.ic-list'));
   $('.ic-toggle').title='접혀 있어도 주요 채팅은 계속 수집됩니다';
   $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));render();resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
-  for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함']]){
+  for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함'],['hideBadges','배지 숨기기']]){
     const label=document.createElement('label');label.className='ic-option';label.dataset.role=key;
     const text=document.createElement('span');text.textContent=title;
     const toggle=document.createElement('span');toggle.className='settings-switch';
@@ -56,7 +56,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     const request=channel.type==='video'?CZChzzkApi.fetchVideoChannelName(channel.sourceId||uid.replace(/^video:/,'')):CZChzzkApi.fetchChannelName(channel.sourceId||uid);
     Promise.resolve(request).then(name=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:''});diagnostics();});
   }
-  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const signature=JSON.stringify([frame.dataset.uid,filter,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:filter,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
+  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const {hideBadges,...collection}=filter;const signature=JSON.stringify([frame.dataset.uid,collection,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:collection,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
   function render(){
     if(scope.isDisposed)return;
     panel.hidden=ready && !filter.enabled;
@@ -64,13 +64,13 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     // Collapse affects presentation only: receive() keeps the bounded model
     // collecting while hidden; expand flushes the current snapshot once.
     panel.dataset.collectedCount=String(model.items.length);
-    if(expanded && !panel.hidden)renderer.render(model.items);
+    if(expanded && !panel.hidden)renderer.render(model.items,filter.hideBadges);
     diagnostics();
   }
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);
     enabledControl.checked=filter.enabled;enabledControl.disabled=!ready;
-    for(const key of ['streamers','managers','partners'])$('.ic-'+key).checked=filter[key];
+    for(const key of ['streamers','managers','partners','hideBadges'])$('.ic-'+key).checked=filter[key];
     excludedControls();
     $('.ic-names').replaceChildren();
     filter.names.forEach((name,index)=>{const button=document.createElement('button');button.type='button';button.textContent=name+' ×';button.title='추가 목록에서 삭제';button.onclick=()=>save({...filter,names:filter.names.filter((_,i)=>i!==index)});$('.ic-names').appendChild(button);});
@@ -81,7 +81,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   }
   function save(value){filter=CZImportantChat.settings(value);model.applySettings(filter);controls();configure();render();chrome.storage.local.set({[CZImportantChat.KEY]:filter}).catch(error=>notify('채팅 설정 저장 실패: '+error.message));}
   enabledControl.onchange=event=>save({...filter,enabled:event.target.checked});
-  for(const key of ['streamers','managers','partners'])$('.ic-'+key).onchange=event=>save({...filter,[key]:event.target.checked});
+  for(const key of ['streamers','managers','partners','hideBadges'])$('.ic-'+key).onchange=event=>save({...filter,[key]:event.target.checked});
   $('.ic-exclude-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-exclude-name');if(!input.value.trim())return;if(filter.excludedNames.length>=50){notify('제외 사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,excludedNames:[...filter.excludedNames,input.value]});input.value='';};
   $('.ic-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-name');if(!input.value.trim())return;if(filter.names.length>=50){notify('사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,names:[...filter.names,input.value]});input.value='';};
   $('.ic-copy-diagnostics').onclick=async()=>{

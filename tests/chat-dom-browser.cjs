@@ -14,6 +14,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
    },fixture);
    assert(actual.unchanged,fixture.id+' mutated native markup');assert(actual.message,fixture.id);
    for(const [key,value] of Object.entries(fixture.expected))assert.equal(actual.message[key],value,fixture.id+' '+key);
+   if(fixture.expectedImageSources)assert.deepEqual(actual.message.segments.filter(part=>part.type==='image').map(part=>part.src),fixture.expectedImageSources);
    if(fixture.discovery)assert(actual.discovered,fixture.id);
   }
   assert.deepEqual(errors,[]);console.log(`PASS: ${fixtures.length} native chat markup fixtures preserve author/body/role/time and do not mutate native DOM.`);

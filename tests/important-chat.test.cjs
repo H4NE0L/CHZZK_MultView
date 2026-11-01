@@ -65,3 +65,15 @@ test('changing inclusion retains collected history and exclusion removes only th
  buffer.add('A',[{id:'b',name:'Bob',text:'keep',updateOnly:true,time:9999}],original);assert.equal(buffer.items.length,1);assert.equal(buffer.items[0].time,9999);
  assert.equal(api.message({id:'unknown',name:'A',text:'x'}).time,null);
 });
+
+test('emote-only messages derive readable text and badge display remains a separate setting',()=>{
+ const api=setup(),src='https://ssl.pstatic.net/emote.png';
+ const item=api.message({id:'emote-only',name:'owner',text:'',segments:[{type:'image',src,alt:''}],nameColor:'rgb(12, 34, 56)',bodyColor:'url(https://evil.invalid)',badgesAfter:[{src,alt:'구독'}]});
+ assert(item);assert.equal(item.text,'[이모티콘]');assert.equal(item.segments[0].type,'image');assert.equal(item.nameColor,'rgb(12, 34, 56)');assert.equal(item.bodyColor,'');assert.equal(item.badgesAfter.length,1);
+ assert.equal(api.settings().hideBadges,false);assert.equal(api.settings({hideBadges:true}).hideBadges,true);
+});
+
+test('native badge shapes cannot carry script, events, links or external paint sources',()=>{
+ const api=setup(),item=api.message({id:'badge',name:'owner',text:'body',badges:[{alt:'인증',svg:{viewBox:'0 0 16 16',color:'url(https://evil.invalid)',shapes:[{tag:'script',attrs:{onload:'alert(1)'}},{tag:'path',attrs:{d:'M1 1L15 1L8 15Z',fill:'url(https://evil.invalid)',href:'javascript:alert(1)',onload:'alert(1)',stroke:'rgb(0, 255, 0)'}}]}}]});
+ const svg=item.badges[0].svg;assert.equal(svg.shapes.length,1);assert.equal(svg.color,'');assert.equal(svg.shapes[0].tag,'path');assert.equal(svg.shapes[0].attrs.fill,undefined);assert.equal(svg.shapes[0].attrs.href,undefined);assert.equal(svg.shapes[0].attrs.onload,undefined);assert.equal(svg.shapes[0].attrs.stroke,'rgb(0, 255, 0)');
+});
