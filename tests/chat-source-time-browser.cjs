@@ -20,7 +20,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await page.evaluate(()=>{Date.now=()=>Date.parse('2026-10-29T18:00:00Z');const old=document.querySelector('#message'),row=old.cloneNode(true);row.querySelector('time').remove();row.removeAttribute('data-cz-message-time');row.__reactProps$fixture=old.__reactProps$fixture;old.replaceWith(row);});
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:56.000Z');
   // A different source sender/content must never supply the timestamp.
-  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={chattingMessage:{messageTime:Date.parse('2026-10-28T13:00:00Z'),profile:{nickname:'다른 사용자'},content:'원본 본문'}};row.setAttribute('data-item-index','2');});
+  await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={message:{messageTime:Date.parse('2026-10-28T13:00:00Z'),profile:{nickname:'다른 사용자'},content:'원본 본문'}};row.setAttribute('data-item-index','2');});
   await page.waitForFunction(()=>!document.querySelector('#message .cz-native-chat-time'));
   await page.evaluate(()=>{const row=document.querySelector('#message');row.__reactProps$fixture={chattingMessage:{messageTime:Date.parse('2026-10-28T13:14:15Z'),profile:{nickname:'작성자'},content:'원본 본문'}};row.setAttribute('data-item-index','3');});
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T13:14:15.000Z');

@@ -5,7 +5,7 @@ import {sourceTimes} from '../shared/chat/source-times.js';
 // connections, network requests, React hooks or changes to site handlers.
 (() => {
   if(window.__CZ_CHAT_METADATA_V1__)return;
-  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261102-3');
+  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261102-4');
   const rows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
   const names='[data-chat-nickname],[class*="live_chatting_username_nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
   const own=(object,key)=>object && typeof object==='object'?Object.getOwnPropertyDescriptor(object,key)?.value:undefined;
@@ -31,6 +31,58 @@ import {sourceTimes} from '../shared/chat/source-times.js';
     }
     return matches.size===1?[...matches][0]:null;
   }
+  // Trust explicit message props owned by this single row, independently of
+  // nickname/body presentation. Ancestor/list data still uses strict matching.
+  const authoredTimes=new Map();
+  function ownedTime(row,fields){
+    const candidates=new Set(),propsSeen=new Set(),fibersSeen=new Set();let budget=240;
+    const visit=props=>{
+      const queue=[{value:props,depth:0}];let nearest=Infinity;
+      while(queue.length&&budget-->0){const {value,depth}=queue.shift();if(depth>nearest||!value||typeof value!=='object'||propsSeen.has(value))continue;propsSeen.add(value);
+        if(Array.isArray(value)){if(depth<6)for(let i=0;i<Math.min(value.length,16);i++)queue.push({value:own(value,String(i)),depth:depth+1});continue;}
+        for(const key of ['chatMessage','chattingMessage']){const message=own(value,key);if(message&&typeof message==='object'&&!Array.isArray(message)){candidates.add(message);nearest=depth;}}
+        if(depth<6)for(const key of ['props','children'])queue.push({value:own(value,key),depth:depth+1});
+      }
+    };
+    const nodes=[row];let parent=row.parentElement;
+    for(let depth=0;parent&&parent!==document.body&&depth<4;depth++,parent=parent.parentElement){
+      const nicknames=[...parent.querySelectorAll(names)].filter(node=>!node.querySelector(names));if(nicknames.length!==1)break;
+      if(parent.matches('[class*="live_chatting_list_item"],[data-chat-message],[class*="vod_chatting_item"],[class^="_item_"],[class*=" _item_"]'))nodes.push(parent);
+    }
+    for(const node of nodes){
+      const keys=Object.getOwnPropertyNames(node);
+      // Current host props take precedence over a stale Fiber during rendering.
+      for(const key of keys.filter(key=>key.startsWith('__reactProps$')))visit(own(node,key));
+      if(candidates.size)break;
+      for(const key of keys.filter(key=>key.startsWith('__reactFiber$'))){let fiber=own(node,key);
+        for(let depth=0;fiber&&depth<60&&budget>0;depth++,fiber=own(fiber,'child')){
+          if(fibersSeen.has(fiber))break;fibersSeen.add(fiber);
+          const host=own(fiber,'stateNode');if(host instanceof Element&&host!==node&&!node.contains(host))break;
+          visit(own(fiber,'memoizedProps'));if(candidates.size)break;
+        }
+        if(candidates.size)break;
+      }
+      if(candidates.size)break;
+    }
+    if(!candidates.size)return {found:false,time:null};
+    fields.add('react:row-owned');const nativeId=row.getAttribute('data-message-id'),matches=new Set(),identities=new Set(),remember=[];
+    for(const message of candidates){
+      const rawId=own(message,'messageId')??own(message,'msgId'),id=['string','number'].includes(typeof rawId)?String(rawId):null;
+      if(id&&nativeId&&id!==nativeId){fields.add('react:identity-conflict');return {found:true,time:null,blocked:true};}
+      if(id)identities.add(id);
+      const time=(id?authoredTimes.get(id):null)??sourceEpoch(message);if(time===null||time===undefined){fields.add('react:no-authored-time');return {found:true,time:null};}
+      matches.add(time);if(id&&id.length<=160)remember.push([id,time]);
+    }
+    if(matches.size!==1||identities.size>1){fields.add('react:ambiguous');return {found:true,time:null,blocked:true};}
+    for(const [id,time]of remember)authoredTimes.set(id,time);
+    while(authoredTimes.size>2048)authoredTimes.delete(authoredTimes.keys().next().value);
+    return {found:true,time:[...matches][0]};
+  }
+  function writeTime(row,timestamp,fields){
+    if(timestamp!==null){unwatch(row);cancelRetry(row);retryState.delete(row);const iso=new Date(timestamp).toISOString();if(row.getAttribute('data-cz-message-time')!==iso)row.setAttribute('data-cz-message-time',iso);}
+    else row.removeAttribute('data-cz-message-time');
+    const schema=[...fields].join(',').slice(0,600);if(row.getAttribute('data-cz-time-fields')!==schema)row.setAttribute('data-cz-time-fields',schema);
+  }
   const retryTimers=new Map(),retryState=new WeakMap(),retryDelays=[80,200,450,900];
   function cancelRetry(row){clearTimeout(retryTimers.get(row));retryTimers.delete(row);}
   function retry(row,identity){
@@ -55,16 +107,19 @@ import {sourceTimes} from '../shared/chat/source-times.js';
   }
   function inspect(row){
     if(!row.isConnected)return;
-    const nickname=[...row.querySelectorAll(names)].find(node=>!node.querySelector(names));if(!nickname)return;
+    const fields=new Set(),primary=ownedTime(row,fields);
+    if(primary.time!==null){writeTime(row,primary.time,fields);return;}
+    if(primary.blocked){writeTime(row,null,fields);retry(row,row.getAttribute('data-message-id')||'ambiguous-source');return;}
+    const nickname=[...row.querySelectorAll(names)].find(node=>!node.querySelector(names));if(!nickname){writeTime(row,null,fields);retry(row,row.getAttribute('data-message-id')||'row-source');return;}
     const walker=document.createTreeWalker(nickname,NodeFilter.SHOW_TEXT),parts=[];let textNode;
     while((textNode=walker.nextNode()) && parts.length<40){
       const parent=textNode.parentElement;if(!parent || parent.closest('svg,[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[hidden],[aria-hidden="true"]'))continue;
       const style=getComputedStyle(parent);if(style.display==='none'||style.visibility==='hidden'||style.clip&&style.clip!=='auto'||style.clipPath&&style.clipPath!=='none')continue;parts.push(textNode.textContent);
     }
-    const author=clean(parts.join('')),content=bodyText(row,nickname),body=content,id=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id'),fields=new Set(),seen=new Set(),budget={remaining:160};if(!author)return;
+    const author=clean(parts.join('')),content=bodyText(row,nickname),body=content,id=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id'),seen=new Set(),budget={remaining:160};if(!author){writeTime(row,null,fields);retry(row,id||'row-source');return;}
     let timestamp=null;
     const nodes=[row,...row.querySelectorAll('[class*="button_chatting"],'+names)].slice(0,3);
-    for(const node of nodes){
+    if(!primary.found)for(const node of nodes){
       for(const key of Object.getOwnPropertyNames(node).sort((a,b)=>Number(b.startsWith('__reactProps$'))-Number(a.startsWith('__reactProps$')))){
         if(key.startsWith('__reactProps$'))timestamp=search(own(node,key),author,body,fields,seen,budget,id);
         else if(key.startsWith('__reactFiber$')){
@@ -72,6 +127,7 @@ import {sourceTimes} from '../shared/chat/source-times.js';
           // Stay on this row's child chain; never follow siblings into other rows.
           for(let depth=0;child&&depth<32&&timestamp===null&&budget.remaining>0;depth++,child=own(child,'child')){
             if(visited.has(child))break;visited.add(child);
+            const host=own(child,'stateNode');if(host instanceof Element&&host!==node&&!node.contains(host))break;
             timestamp=search(own(child,'memoizedProps'),author,body,fields,seen,budget,id);
           }
           let parent=own(root,'return');
@@ -89,9 +145,7 @@ import {sourceTimes} from '../shared/chat/source-times.js';
       if(timestamp!==null && fields.size<24)fields.add('socket:source-time');
     }
     if(timestamp===null){watch(row,id?'id:'+id:'body:'+sourceTimes.key(author,content));retry(row,sourceTimes.key(author,content)+':'+(id||''));}else{unwatch(row);cancelRetry(row);retryState.delete(row);}
-    if(timestamp!==null){const iso=new Date(timestamp).toISOString();if(row.getAttribute('data-cz-message-time')!==iso)row.setAttribute('data-cz-message-time',iso);}
-    else row.removeAttribute('data-cz-message-time');
-    const schema=[...fields].join(',').slice(0,600);if(row.getAttribute('data-cz-time-fields')!==schema)row.setAttribute('data-cz-time-fields',schema);
+    writeTime(row,timestamp,fields);
   }
   const pending=new Set();let job=0,scheduled=false,enabled=false,disposed=false;
   function queue(node){
@@ -109,12 +163,12 @@ import {sourceTimes} from '../shared/chat/source-times.js';
       observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['data-index','data-item-index','data-message-id','data-chat-id','src','srcset','alt']});
       queue(document.documentElement);
     }else{
-      sourceTimes.clear();
+      authoredTimes.clear();sourceTimes.clear();
       document.querySelectorAll('[data-cz-message-time],[data-cz-time-fields]').forEach(row=>{row.removeAttribute('data-cz-message-time');row.removeAttribute('data-cz-time-fields');});
     }
   }
   const imageLoaded=event=>{if(event.target instanceof HTMLImageElement)queue(event.target);};
   document.addEventListener('load',imageLoaded,true);
   document.addEventListener('cz-chat-timestamps-config',configure);configure();
-  window.addEventListener('pagehide',()=>{disposed=true;clearRetries();document.removeEventListener('load',imageLoaded,true);unsubscribe?.();waiting.clear();observer.disconnect();job++;scheduled=false;pending.clear();document.removeEventListener('cz-chat-timestamps-config',configure);},{once:true});
+  window.addEventListener('pagehide',()=>{disposed=true;authoredTimes.clear();clearRetries();document.removeEventListener('load',imageLoaded,true);unsubscribe?.();waiting.clear();observer.disconnect();job++;scheduled=false;pending.clear();document.removeEventListener('cz-chat-timestamps-config',configure);},{once:true});
 })();
