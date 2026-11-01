@@ -4,7 +4,7 @@
   var record = (value) => value && typeof value === "object" ? value : {};
   var sessionStore = (() => {
     const KEY = "chzzkMultiviewV09";
-    const DEFAULT_STATE = Object.freeze({ channels: [], selectedUid: null, layout: "grid", chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: "right", shortcutsEnabled: true, powerRewards: false, chatTimestamps: false });
+    const DEFAULT_STATE = Object.freeze({ channels: [], selectedUid: null, layout: "grid", chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: "right", shortcutsEnabled: true, powerRewards: false, chatTimestamps: false, rewindBar: true, autoWide: true });
     const clamp01 = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
     function parseInput(value) {
       const raw = String(value || "").trim();
@@ -63,7 +63,9 @@
         chatSide: saved.chatSide === "left" ? "left" : "right",
         shortcutsEnabled: saved.shortcutsEnabled !== false,
         powerRewards: saved.powerRewards === true,
-        chatTimestamps: saved.chatTimestamps === true
+        chatTimestamps: saved.chatTimestamps === true,
+        rewindBar: saved.rewindBar !== false,
+        autoWide: saved.autoWide !== false
       };
     }
     async function read() {

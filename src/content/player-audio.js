@@ -2,7 +2,16 @@
 (() => {
   // src/content/player-audio.js
   globalThis.CZPlayerAudio = { create({ findVideo, report }) {
-    let desired = null, intentUntil = 0, pointer = null, timer = null, intentKind = "volume", disposed = false;
+    const counts = { commands: 0, corrections: 0, reports: 0, nativeChanges: 0 };
+    let lastReport = "", desired = null, intentUntil = 0, pointer = null, timer = null, intentKind = "volume", disposed = false;
+    function publish(video, reason, operation = "volume") {
+      const signature = JSON.stringify([video.volume, video.muted, reason, operation]);
+      if (signature === lastReport) return;
+      lastReport = signature;
+      counts.reports++;
+      if (reason === "player") counts.nativeChanges++;
+      report(video, reason, operation);
+    }
     const clearIntent = () => {
       intentUntil = 0;
       pointer = null;
@@ -25,12 +34,14 @@
         const video = findVideo();
         if (video && desired && !matches(video)) {
           recoveries.push(Date.now());
+          counts.corrections++;
           apply(video);
         }
       }, delay);
     }
     function setVolume(volume, muted) {
       if (disposed || !Number.isFinite(volume)) return false;
+      counts.commands++;
       const next = { volume: Math.max(0, Math.min(1, volume)), muted: typeof muted === "boolean" ? muted : volume <= 0 };
       const changed = !desired || next.volume !== desired.volume || next.muted !== desired.muted;
       desired = next;
@@ -43,27 +54,33 @@
       const video = findVideo();
       if (!video) return false;
       if (changed || Date.now() >= intentUntil) apply(video);
-      report(video, "command");
+      publish(video, "command");
       return true;
     }
     function setMuted(muted) {
       const video = findVideo(), volume = desired?.volume ?? video?.volume ?? 1;
       return setVolume(!muted && volume <= 0 ? 0.01 : volume, !!muted);
     }
-    const bound = /* @__PURE__ */ new WeakSet();
-    document.addEventListener("volumechange", (event) => {
+    const bound = /* @__PURE__ */ new WeakSet(), early = globalThis.CZPlayerAudioEarly;
+    const onVolumeChange = (event) => {
       const video = event.target;
-      if (disposed || video !== findVideo() || !bound.has(video) || !desired) return;
+      if (disposed) {
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (video !== findVideo() || !bound.has(video) || !desired) return;
       if (!video.ended && !matches(video) && Date.now() < intentUntil) {
         const operation = intentKind === "mute" && (video.muted !== desired.muted || video.volume === 0 || desired.muted) ? "mute" : "volume";
         desired = { volume: video.volume, muted: video.muted };
-        report(video, "player", operation);
+        publish(video, "player", operation);
         return;
       }
       event.stopImmediatePropagation();
-      if (matches(video)) report(video, "command");
+      if (matches(video)) publish(video, "command");
       else recover();
-    }, true);
+    };
+    if (early) early.volumechange = onVolumeChange;
+    else window.addEventListener("volumechange", onVolumeChange, true);
     function bind(video) {
       bound.add(video);
       apply(video);
@@ -99,18 +116,25 @@
       pointer = null;
       intentUntil = 0;
     }, true);
-    window.addEventListener("storage", (event) => {
+    const onStorage = (event) => {
       clearIntent();
       if (typeof event.key !== "string" || !/(?:volume|muted?|sound)/i.test(event.key)) return;
       event.stopImmediatePropagation();
       recover();
-    }, true);
-    window.addEventListener("pagehide", () => {
+    };
+    if (early) early.storage = onStorage;
+    else window.addEventListener("storage", onStorage, true);
+    function dispose() {
       disposed = true;
       clearIntent();
       clearTimeout(timer);
       timer = null;
-    });
-    return { bind, setMuted, setVolume };
+    }
+    window.addEventListener("pagehide", dispose);
+    function snapshot() {
+      const video = findVideo();
+      return { revision: "early-window-capture-1", earlyCapture: !!early, desired: desired ? { ...desired } : null, actual: video ? { volume: video.volume, muted: video.muted, paused: video.paused, ended: video.ended, readyState: video.readyState, errorCode: video.error?.code || null } : null, counts: { ...counts }, recoveryPending: timer !== null };
+    }
+    return { bind, setMuted, setVolume, snapshot, dispose };
   } };
 })();

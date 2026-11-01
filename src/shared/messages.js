@@ -5,7 +5,7 @@
     const SOURCE = "chzzk-multiview";
     const CHZZK_ORIGIN = "https://chzzk.naver.com";
     const playerTypes = /* @__PURE__ */ new Set(["POWER_DIAGNOSTICS_RESULT", "PLAYER_READY", "CHAT_READY", "CHAT_SETTINGS_OPEN", "CHAT_HEADER", "IMPORTANT_CHAT_BATCH", "IMPORTANT_CHAT_STATUS", "VIDEO_STATE", "SYNC_STATE", "SYNC_RESULT", "MEDIA_RESULT", "MEDIA_STATE", "MEDIA_TIME", "MEDIA_KEY"]);
-    const commandTypes = /* @__PURE__ */ new Set(["CHAT_TIMESTAMP_CONFIG", "POWER_REWARDS_CONFIG", "POWER_DIAGNOSTICS", "CHAT_PRESENTATION", "IMPORTANT_CHAT_CONFIG", "SET_NAV_VISIBLE", "SET_CHAT_MODE", "SET_CHAT_VISIBLE", "SET_MUTED", "SET_VOLUME", "ENTER_THEATER", "SYNC_SEEK", "MEDIA_SCREENSHOT", "MEDIA_RECORD", "MEDIA_STOP", "MEDIA_SEEK", "MEDIA_SHORTCUTS"]);
+    const commandTypes = /* @__PURE__ */ new Set(["PLAYER_OPTIONS", "PLAYER_DISPOSE", "CHAT_TIMESTAMP_CONFIG", "POWER_REWARDS_CONFIG", "POWER_DIAGNOSTICS", "CHAT_PRESENTATION", "IMPORTANT_CHAT_CONFIG", "SET_NAV_VISIBLE", "SET_CHAT_MODE", "SET_CHAT_VISIBLE", "SET_MUTED", "SET_VOLUME", "ENTER_THEATER", "SYNC_SEEK", "MEDIA_SCREENSHOT", "MEDIA_RECORD", "MEDIA_STOP", "MEDIA_SEEK", "MEDIA_SHORTCUTS"]);
     function isPlayerMessage(event, frame) {
       const data = event?.data;
       if (!frame || event.origin !== CHZZK_ORIGIN || event.source !== frame.contentWindow || data?.source !== SOURCE || !playerTypes.has(data.type) || typeof data.uid !== "string") return false;

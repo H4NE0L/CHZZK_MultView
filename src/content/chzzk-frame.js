@@ -3,35 +3,17 @@
   // src/content/power-rewards.js
   function create({ findVideo }) {
     let enabled = false, disposed = false, timer = null, attempts = 0;
-    const pressed = /* @__PURE__ */ new WeakMap(), styled = /* @__PURE__ */ new Set();
-    const style = document.createElement("style");
-    style.textContent = ".cz-power-native-player{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;z-index:2147483000!important}";
+    const pressed = /* @__PURE__ */ new WeakMap();
     function scan() {
       if (!enabled || disposed) return;
-      for (const player of styled) if (!player.isConnected) {
-        player.classList.remove("cz-power-native-player");
-        styled.delete(player);
-      }
       const video = findVideo();
-      if (video) {
-        const player = video.closest(".pzp-pc,[data-player]");
-        if (player) {
-          player.classList.add("cz-power-native-player");
-          styled.add(player);
-        }
-      }
-      const normal = [...document.querySelectorAll(".pzp-pc__viewmode-button")].find((button) => /기본 화면|일반 화면|원래 화면|normal view/i.test(`${button.getAttribute("aria-label") || ""} ${button.getAttribute("title") || ""}`));
-      if (normal && !pressed.has(normal)) {
-        pressed.set(normal, "normal");
-        normal.click();
-      }
       if (video && !video.paused && !video.ended && video.readyState >= 2) {
         for (const button of [...document.querySelectorAll('button,[role="button"]')].slice(-600)) {
           if (button.closest('[data-chat-message],[class*="chatting_message"],[class*="live_chatting_list_item"]')) continue;
           const label = [button.getAttribute("aria-label"), button.getAttribute("title"), button.textContent].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
           const ready = !button.disabled && button.getAttribute("aria-disabled") !== "true" && !button.closest('[hidden],[aria-hidden="true"]') && /통나무|log.?power/i.test(label + " " + (button.closest('[class*="log_power"],[class*="logPower"],[data-log-power]')?.className || "")) && /받기|수령|획득|claim/i.test(label) && !/승부|예측|베팅|구매|사용|후원|참여|prediction|bet|buy/i.test(label);
           if (!ready) {
-            if (pressed.get(button) !== "normal") pressed.delete(button);
+            pressed.delete(button);
             continue;
           }
           const signature = button.getAttribute("data-reward-id") || label;
@@ -51,20 +33,12 @@
       }, 5e3);
     }
     function configure(on) {
-      if (disposed) return;
+      if (disposed || enabled === (on === true)) return;
       enabled = on === true;
       clearTimeout(timer);
       timer = null;
-      if (enabled) {
-        if (!style.isConnected) (document.head || document.documentElement).appendChild(style);
-        scan();
-      } else {
-        for (const button of document.querySelectorAll(".pzp-pc__viewmode-button")) if (pressed.get(button) === "normal") pressed.delete(button);
-        for (const player of styled) player.classList.remove("cz-power-native-player");
-        styled.clear();
-        style.remove();
-        document.documentElement.removeAttribute("data-cz-power-rewards");
-      }
+      if (enabled) scan();
+      else document.documentElement.removeAttribute("data-cz-power-rewards");
     }
     function dispose() {
       if (disposed) return;
@@ -141,13 +115,22 @@
     function bindVideo(video) {
       if (!video || video.dataset.chzzkMvBound === "1") return;
       video.dataset.chzzkMvBound = "1";
-      if (!chatMode) audio.bind(video);
+      if (!chatMode) {
+        audio.bind(video);
+        for (const event of ["loadeddata", "playing"]) video.addEventListener(event, scheduleTheater);
+      }
       if (!chatMode) window.parent.postMessage({ source: "chzzk-multiview", type: "PLAYER_READY", uid: frameUid }, PARENT_ORIGIN);
     }
     function bindObserver() {
       if (videoObserver || !document.documentElement) return;
-      videoObserver = new MutationObserver(() => {
-        document.querySelectorAll("video").forEach(bindVideo);
+      videoObserver = new MutationObserver((records) => {
+        for (const record of records) for (const node of record.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          const controls = '.pzp-pc__viewmode-button,button[aria-label*="넓은"],button[title*="넓은"],video';
+          if (autoWide && !theaterApplied && (node.matches(controls) || node.querySelector(controls))) scheduleTheater();
+          if (node.matches("video")) bindVideo(node);
+          else node.querySelectorAll("video").forEach(bindVideo);
+        }
       });
       videoObserver.observe(document.documentElement, { childList: true, subtree: true });
       document.querySelectorAll("video").forEach(bindVideo);
@@ -262,35 +245,39 @@
       }, PARENT_ORIGIN);
     }
     const media = CZMediaFrame.create({ chatOnly: chatMode, uid: frameUid, findVideo, seekRange, seekBy, send: (data) => window.parent.postMessage({ source: "chzzk-multiview", ...data }, PARENT_ORIGIN) });
-    setInterval(reportSyncState, 1e3);
+    const syncTimer = setInterval(reportSyncState, 1e3);
     const powerRewards = chatMode ? null : create({ findVideo });
-    let theaterApplied = false;
+    let theaterApplied = false, autoWide = true;
     let theaterTimer = null;
+    function theaterLabel(el) {
+      return [el.getAttribute("aria-label"), el.getAttribute("title"), el.getAttribute("data-tooltip"), el.textContent, el.querySelector("svg title")?.textContent, ...String(el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.textContent)].filter(Boolean).join(" ").trim();
+    }
     function getTheaterButton() {
       const buttons = Array.from(document.querySelectorAll(
         '.pzp-pc__viewmode-button, button, [role="button"]'
       ));
+      const native = document.querySelector(".pzp-pc__viewmode-button");
+      if (native) return native;
       return buttons.find((el) => {
-        const text = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""} ${el.textContent || ""}`.trim();
-        return /넓은 화면|극장|theater|cinema/i.test(text);
+        if (el.closest('[data-chat-message],[class*="chatting_message"],[class*="live_chatting_list_item"]')) return false;
+        const text = theaterLabel(el);
+        return /넓은\s*화면|극장|theater|cinema/i.test(text) || el.matches(".pzp-pc__viewmode-button");
       }) || null;
     }
     function isWideModeButton(button) {
-      if (!button) return false;
-      const text = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("title") || ""} ${button.textContent || ""}`.trim();
+      if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
+      const text = theaterLabel(button);
       if (/기본 화면|일반 화면|원래 화면|나가기|exit/i.test(text)) return false;
-      return /넓은 화면|극장|theater|cinema/i.test(text);
+      if (button.getAttribute("aria-pressed") === "true" || button.closest('.pzp-pc--viewmode-wide,[data-viewmode="wide"]')) return false;
+      return /넓은\s*화면|극장|theater|cinema/i.test(text) || !!button.closest('.pzp-pc--viewmode-normal,[data-viewmode="normal"]');
     }
     function pressTheaterShortcut() {
-      if (chatMode || theaterApplied) return false;
+      if (chatMode || !autoWide || theaterApplied) return false;
       const video = findVideo();
-      if (!video) return false;
+      if (!video || video.ended || video.readyState < 2) return false;
       const button = getTheaterButton();
       if (!button) return false;
-      if (!isWideModeButton(button)) {
-        theaterApplied = true;
-        return false;
-      }
+      if (!isWideModeButton(button)) return false;
       try {
         button.click();
         theaterApplied = true;
@@ -300,7 +287,9 @@
       }
     }
     function scheduleTheater() {
-      if (chatMode || powerRewards?.enabled || theaterApplied || theaterTimer) return;
+      if (chatMode || !autoWide || theaterApplied || theaterTimer) return;
+      const video = findVideo();
+      if (!video || video.ended || video.readyState < 2 || !getTheaterButton()) return;
       let tries = 0;
       theaterTimer = setInterval(() => {
         tries++;
@@ -310,10 +299,10 @@
           hideChat();
           return;
         }
-        const video = findVideo();
-        if (video?.readyState >= 2) {
+        const video2 = findVideo();
+        if (video2?.readyState >= 2) {
           const button = getTheaterButton();
-          if (button && !isWideModeButton(button)) {
+          if (button && /기본\s*화면|일반\s*화면|원래\s*화면|exit/i.test(theaterLabel(button))) {
             theaterApplied = true;
             clearInterval(theaterTimer);
             theaterTimer = null;
@@ -330,18 +319,64 @@
     const importantCollector = chatMode ? CZChatCollector.create({ status: (stats) => window.parent.postMessage({ source: "chzzk-multiview", type: "IMPORTANT_CHAT_STATUS", uid: frameUid, stats }, PARENT_ORIGIN), send: (messages) => window.parent.postMessage({ source: "chzzk-multiview", type: "IMPORTANT_CHAT_BATCH", uid: frameUid, messages }, PARENT_ORIGIN) }) : null;
     bindObserver();
     if (chatMode) window.parent.postMessage({ source: "chzzk-multiview", type: "CHAT_READY", uid: frameUid }, PARENT_ORIGIN);
+    let disposing = false;
     window.addEventListener("message", (event) => {
       if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
-      if (event.data.type === "POWER_REWARDS_CONFIG" && powerRewards) {
+      if (disposing) return;
+      if (event.data.type === "PLAYER_DISPOSE") {
+        disposing = true;
+        const before = audio.snapshot();
+        videoObserver?.disconnect();
+        uiObserver?.disconnect();
+        clearInterval(syncTimer);
         clearInterval(theaterTimer);
-        theaterTimer = null;
-        powerRewards.configure(event.data.enabled);
-        if (!powerRewards.enabled) {
-          theaterApplied = false;
-          scheduleTheater();
+        audio.dispose();
+        powerRewards?.dispose();
+        media?.dispose();
+        const mediaReleased = Promise.all([...document.querySelectorAll("video,audio")].map((element) => new Promise((resolve) => {
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            element.removeEventListener("emptied", finish);
+            resolve();
+          };
+          const timer = setTimeout(finish, 120);
+          element.addEventListener("emptied", finish, { once: true });
+          try {
+            const empty = element.networkState === 0;
+            element.pause();
+            element.srcObject = null;
+            element.removeAttribute("src");
+            element.querySelectorAll("source").forEach((source) => source.remove());
+            element.load();
+            if (empty) finish();
+          } catch (_) {
+            finish();
+          }
+        })));
+        const reply = (result) => window.parent.postMessage({ source: "chzzk-multiview", type: "PLAYER_DISPOSED", uid: frameUid, requestId: event.data.requestId, details: { before, audio: result?.audio || null, error: result?.error || null } }, PARENT_ORIGIN);
+        Promise.all([mediaReleased, chrome.runtime.sendMessage({ type: "PLAYER_AUDIO_TEARDOWN" }).catch((error) => ({ error: String(error) }))]).then(([, result]) => reply(result));
+        return;
+      }
+      if (event.data.type === "PLAYER_OPTIONS" && !chatMode) {
+        const next = event.data.autoWide !== false;
+        if (next !== autoWide) {
+          autoWide = next;
+          if (!autoWide) {
+            clearInterval(theaterTimer);
+            theaterTimer = null;
+          } else {
+            theaterApplied = false;
+            scheduleTheater();
+          }
         }
       }
-      if (event.data.type === "POWER_DIAGNOSTICS" && !chatMode) chrome.runtime.sendMessage({ type: "POWER_DIAGNOSTICS" }).then((result) => window.parent.postMessage({ source: "chzzk-multiview", type: "POWER_DIAGNOSTICS_RESULT", uid: frameUid, requestId: event.data.requestId, ...result?.ok ? { diagnostics: result.diagnostics } : { error: result?.error || "점검 실행 실패" } }, PARENT_ORIGIN)).catch((error) => window.parent.postMessage({ source: "chzzk-multiview", type: "POWER_DIAGNOSTICS_RESULT", uid: frameUid, requestId: event.data.requestId, error: String(error) }, PARENT_ORIGIN));
+      if (event.data.type === "POWER_REWARDS_CONFIG" && powerRewards) {
+        powerRewards.configure(event.data.enabled);
+      }
+      if (event.data.type === "POWER_DIAGNOSTICS" && !chatMode) chrome.runtime.sendMessage({ type: "POWER_DIAGNOSTICS" }).then((result) => window.parent.postMessage({ source: "chzzk-multiview", type: "POWER_DIAGNOSTICS_RESULT", uid: frameUid, requestId: event.data.requestId, ...result?.ok ? { diagnostics: { ...result.diagnostics, audio: audio.snapshot() } } : { error: result?.error || "점검 실행 실패" } }, PARENT_ORIGIN)).catch((error) => window.parent.postMessage({ source: "chzzk-multiview", type: "POWER_DIAGNOSTICS_RESULT", uid: frameUid, requestId: event.data.requestId, error: String(error) }, PARENT_ORIGIN));
       if (event.data.type === "CHAT_TIMESTAMP_CONFIG" && chatMode) configureTimestamps(event.data.enabled);
       if (event.data.type === "CHAT_PRESENTATION" && chatMode) CZChatLayout.setPresentation(event.data);
       if (event.data.type === "IMPORTANT_CHAT_CONFIG" && chatMode) importantCollector?.configure(event.data.settings, { streamerName: event.data.streamerName });
@@ -359,7 +394,7 @@
       if (event.data.type === "SET_CHAT_VISIBLE") event.data.visible ? showChat() : hideChat();
       if (event.data.type === "SET_MUTED") setMuted(!!event.data.muted);
       if (event.data.type === "SET_VOLUME") setVolume(event.data.volume, typeof event.data.muted === "boolean" ? event.data.muted : null);
-      if (event.data.type === "ENTER_THEATER" && !chatMode && !powerRewards?.enabled) {
+      if (event.data.type === "ENTER_THEATER" && !chatMode) {
         preventFrameScrollbars();
         scheduleTheater();
       }

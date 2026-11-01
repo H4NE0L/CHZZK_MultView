@@ -49,7 +49,14 @@
       return past;
     }
     function domSummary(scanned) {
+      let socketTimeSource = null;
+      try {
+        const raw = document.documentElement.getAttribute("data-cz-socket-time-state") || "";
+        if (raw.length < 600) socketTimeSource = JSON.parse(raw);
+      } catch (_) {
+      }
       return {
+        socketTimeSource,
         sourceTimeReader: document.documentElement.getAttribute("data-cz-time-reader") || "",
         rowCandidates: document.querySelectorAll(rows).length,
         nicknameCandidates: document.querySelectorAll(names).length,
@@ -60,7 +67,7 @@
       const found = [...node.querySelectorAll(names)].filter((el) => !el.querySelector(names));
       return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]') ? found.slice(0, 1) : found;
     };
-    const decorations = '[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i],svg,button,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
+    const decorations = '[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i],svg,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
     const isDecoration = (node) => node.matches?.(decorations) && !node.matches('button[class*="button_chatting"]');
     function authorBoundary(row, nickname) {
       let boundary = nickname;
@@ -77,15 +84,26 @@
       return copy.textContent.trim().slice(0, 80);
     }
     function markImage(el) {
-      if (!el.matches?.('img,[role="img"]')) return false;
-      const label = ["alt", "title", "aria-label"].map((key) => el.getAttribute(key) || "").join(" ");
+      if (!el.matches?.('img,svg,[role="img"]')) return false;
+      const label = ["alt", "title", "aria-label"].map((key) => el.getAttribute(key) || "").join(" ") + " " + (el.querySelector?.("title")?.textContent || "");
       const asset = el.getAttribute("src") || "";
       return /인증\s*(?:마크|배지)|공식\s*(?:마크|배지)|(?:파트너|스트리머|관리자)\s*(?:마크|배지)|verified|verification|certified|certification|official\s*(?:mark|badge)/i.test(label) || /(?:^|[/_.-])(?:badge|verified|verification|certified)(?:[/_.-]|$)/i.test(asset.split("?")[0]);
     }
-    function cleanBody(fragment) {
-      fragment.querySelectorAll(decorations).forEach((el) => {
-        if (isDecoration(el)) el.remove();
+    const bodyIgnored = (node) => node.matches?.('script,style,time,[hidden],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i]');
+    const imageSource = (image) => [image.currentSrc, image.getAttribute("data-src"), image.src, image.getAttribute("srcset")?.split(/\s+/)[0]].find((source) => typeof source === "string" && /^https:\/\//.test(source)) || image.currentSrc || image.src || "";
+    function copyImageSources(originals, copies) {
+      originals.forEach((image, index) => {
+        const source = imageSource(image);
+        if (source && copies[index]) copies[index].setAttribute("src", source);
       });
+    }
+    function cloneBody(node) {
+      const copy = node.cloneNode(true);
+      copyImageSources(node.matches?.("img") ? [node] : [...node.querySelectorAll("img")], copy.matches?.("img") ? [copy] : [...copy.querySelectorAll("img")]);
+      return cleanBody(copy, false);
+    }
+    function cleanBody(fragment, authorSuffix = true) {
+      fragment.querySelectorAll("script,style,time,[hidden],[class*=blind i],[class*=sr_only i],[class*=screen_reader i],[class*=visually_hidden i]").forEach((el) => el.remove());
       const prefix = (node) => {
         for (const child of [...node.childNodes]) {
           if (child.nodeType === 3) {
@@ -93,23 +111,25 @@
             continue;
           }
           if (child.nodeType !== 1) continue;
-          if (markImage(child)) {
+          if (markImage(child) || child.matches('svg,[class*="badge" i],[data-user-role],[data-user-type]')) {
             child.remove();
             continue;
           }
-          if (child.matches("img,br")) return false;
+          if (child.matches("img,br,svg")) return false;
           if (!prefix(child)) return false;
         }
         return true;
       };
-      prefix(fragment);
+      if (authorSuffix) prefix(fragment);
       return fragment;
     }
     function afterName(row, nickname) {
       const range = document.createRange();
       range.selectNodeContents(row);
       range.setStartAfter(authorBoundary(row, nickname));
-      return cleanBody(range.cloneContents());
+      const fragment = range.cloneContents(), boundary = authorBoundary(row, nickname);
+      copyImageSources([...row.querySelectorAll("img")].filter((image) => !boundary.contains(image) && !!(boundary.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING)), [...fragment.querySelectorAll("img")]);
+      return cleanBody(fragment);
     }
     function textAfter(row, nickname) {
       return content(afterName(row, nickname)).trim();
@@ -121,9 +141,13 @@
         return parts;
       }
       if (node.nodeType !== 1 && node.nodeType !== 11) return parts;
-      if (isDecoration(node)) return parts;
+      if (bodyIgnored(node)) return parts;
       if (node.tagName === "IMG") {
         parts.push({ type: "image", src: node.currentSrc || node.src || "", alt: node.getAttribute("alt") || "[이모티콘]" });
+        return parts;
+      }
+      if (node.tagName?.toLowerCase() === "svg") {
+        parts.push({ type: "text", text: node.getAttribute("aria-label") || node.querySelector("title")?.textContent || "[이모티콘]" });
         return parts;
       }
       if (node.tagName === "BR") {
@@ -163,13 +187,18 @@
         if (style.display === "none" || style.visibility === "hidden") continue;
         return { role: colorRole(style.color), color: style.color };
       }
+      for (const image of row.querySelectorAll("img")) {
+        if (boundary.contains(image) || markImage(image) || !(boundary.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+        const color2 = getComputedStyle(image).color;
+        if (colorRole(color2)) return { role: colorRole(color2), color: color2 };
+      }
       const color = getComputedStyle(row).color;
       return { role: colorRole(color), color };
     }
     let roleSample = [];
-    function role(row, textElements, nickname) {
+    function role(row, textElements, nickname, suffix = /* @__PURE__ */ new Set()) {
       if (getOwnerName() && nameKey(authorName(nickname)) === nameKey(getOwnerName())) return "streamer";
-      let author = nickname.parentElement;
+      let author = authorBoundary(row, nickname);
       for (let node = author, depth = 0; node && node !== row && depth < 4; node = node.parentElement, depth++) if (/username|nickname|author/.test(String(node.className))) author = node;
       let detected = "";
       roleSample = [];
@@ -177,7 +206,7 @@
       for (const badge of candidates) {
         if (textElements.some((el) => el === badge || el.contains(badge))) continue;
         const beforeName = !!(badge.compareDocumentPosition(nickname) & Node.DOCUMENT_POSITION_FOLLOWING);
-        if (!beforeName && !badge.contains(nickname) && !(author && author !== nickname && author.contains(badge))) continue;
+        if (!beforeName && !badge.contains(nickname) && !author.contains(badge) && !suffix.has(badge) && !suffix.has(badge.closest("svg"))) continue;
         const raw = ["alt", "title", "aria-label", "data-role", "data-user-role", "data-user-type"].map((key) => {
           const value = badge.getAttribute(key);
           return badge.contains(nickname) && ["alt", "title", "aria-label"].includes(key) && nameKey(value) === nameKey(nickname.textContent) ? "" : value;
@@ -203,8 +232,9 @@
     function content(node) {
       if (node.nodeType === 3) return node.textContent;
       if (node.nodeType !== 1 && node.nodeType !== 11) return "";
-      if (isDecoration(node)) return "";
+      if (bodyIgnored(node)) return "";
       if (node.tagName === "IMG") return node.getAttribute("alt") || "[이모티콘]";
+      if (node.tagName?.toLowerCase() === "svg") return node.getAttribute("aria-label") || node.querySelector("title")?.textContent || "[이모티콘]";
       if (node.tagName === "BR") return "\n";
       return Array.from(node.childNodes, content).join("");
     }
@@ -221,6 +251,24 @@
       }
       return false;
     }
+    function badgeSVG(element) {
+      if (!element.matches("svg")) return null;
+      let nodes = [...element.querySelectorAll("path,circle,rect,ellipse,line,polygon,polyline")];
+      if (!nodes.length) {
+        const href = element.querySelector("use")?.getAttribute("href") || element.querySelector("use")?.getAttribute("xlink:href");
+        if (href?.startsWith("#")) nodes = [...document.getElementById(href.slice(1))?.querySelectorAll("path,circle,rect,ellipse,line,polygon,polyline") || []];
+      }
+      return { viewBox: element.getAttribute("viewBox") || "0 0 24 24", color: getComputedStyle(element).color, shapes: nodes.slice(0, 8).map((node) => {
+        const attrs = {};
+        for (const name of ["d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "ry", "x1", "x2", "y1", "y2", "points", "stroke-width"]) {
+          const value = node.getAttribute(name);
+          if (value) attrs[name] = value.slice(0, 2048);
+        }
+        attrs.fill = getComputedStyle(node).fill;
+        attrs.stroke = getComputedStyle(node).stroke;
+        return { tag: node.tagName.toLowerCase(), attrs };
+      }) };
+    }
     function read(row) {
       const nickname = leafNames(row)[0], parts = Array.from(row.querySelectorAll(texts));
       const structure = { row: String(row.className || row.tagName).slice(0, 180), nickname: nickname ? String(nickname.className || nickname.tagName).slice(0, 180) : "찾지 못함", text: parts[0] ? String(parts[0].className || parts[0].tagName).slice(0, 180) : "찾지 못함" };
@@ -230,7 +278,7 @@
       structure.authorDecorations = [...row.querySelectorAll("img,svg,[role=img],[class*=blind i],[class*=sr_only i]")].slice(0, 8).map((el) => ({ tag: el.tagName, class: String(el.className?.baseVal ?? el.className ?? "").slice(0, 120), alt: (el.getAttribute("alt") || el.getAttribute("aria-label") || "").slice(0, 80), asset: (el.getAttribute("src") || "").split("?")[0].split("/").pop().slice(0, 100) }));
       const topParts = parts.filter((part) => !parts.some((other) => other !== part && other.contains(part)));
       let fallbackFragment = null;
-      const bodyFragments = topParts.map((part) => cleanBody(part.cloneNode(true)));
+      const bodyFragments = topParts.map(cloneBody);
       let body = bodyFragments.map(content).join(" ").trim();
       if (!body) {
         fallbackFragment = afterName(row, nickname);
@@ -240,12 +288,34 @@
       const name = authorName(nickname), text = body.slice(0, 1e3);
       if (!name || !text) return { structure, message: null };
       const segments = [];
-      if (topParts.length) {
+      if (bodyFragments.some((fragment) => content(fragment).trim())) {
         for (const part of bodyFragments) richParts(part, segments);
       } else richParts(fallbackFragment || afterName(row, nickname), segments);
       const nativeTime = row.getAttribute("data-cz-message-time") || row.getAttribute("data-message-time") || row.getAttribute("data-timestamp") || row.getAttribute("data-created-at") || row.querySelector("time:not(.cz-native-chat-time)")?.getAttribute("datetime") || "";
-      const badges = [...row.querySelectorAll("img")].filter((img) => !!(img.compareDocumentPosition(nickname) & Node.DOCUMENT_POSITION_FOLLOWING) && !topParts.some((part) => part.contains(img))).slice(0, 4).map((img) => ({ src: img.currentSrc || img.src || "", alt: img.getAttribute("alt") || "" }));
-      return { structure, message: { name, text, segments, nativeTime, sourceId: row.getAttribute("data-message-id") || row.getAttribute("data-chat-id"), badges, role: role(row, topParts, nickname) } };
+      const before = [], after = [], boundary = authorBoundary(row, nickname), suffix = /* @__PURE__ */ new Set();
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      let candidate;
+      while (candidate = walker.nextNode()) {
+        if (boundary.contains(candidate) || !(boundary.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+        if (candidate.nodeType === 3) {
+          if (candidate.textContent.trim() && !candidate.parentElement.closest(decorations)) break;
+          continue;
+        }
+        if (candidate.matches("img,svg")) {
+          if (candidate.matches("svg") || markImage(candidate) || candidate.closest('[class*="badge" i]')) suffix.add(candidate);
+          else break;
+        }
+      }
+      for (const element of [...row.querySelectorAll("img,svg")]) {
+        if (topParts.some((part) => part === element || part.contains(element))) continue;
+        const preceding = !!(element.compareDocumentPosition(nickname) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const following = !!(boundary.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (!preceding && !boundary.contains(element) && !(following && suffix.has(element))) continue;
+        const badge = { svg: badgeSVG(element), src: element.matches("img") ? element.currentSrc || element.src || "" : "", alt: element.getAttribute("alt") || element.getAttribute("aria-label") || element.querySelector("title")?.textContent || "배지" };
+        (preceding ? before : after).push(badge);
+      }
+      const badges = before.slice(0, 8), badgesAfter = after.slice(0, 8), nameColor = getComputedStyle(nickname).color, bodyColor2 = topParts[0] ? getComputedStyle(topParts[0]).color : getComputedStyle(row).color;
+      return { structure, message: { name, text, segments, nativeTime, badgesAfter, nameColor, bodyColor: bodyColor2, sourceId: row.getAttribute("data-message-id") || row.getAttribute("data-chat-id"), badges, role: role(row, topParts, nickname, suffix) } };
     }
     return {
       rows,
@@ -416,14 +486,14 @@
       structure = parsed.structure;
       report();
       if (!parsed.message) return;
-      const { name, text, segments, nativeTime, sourceId, badges, role } = parsed.message;
+      const { name, text, segments, nativeTime, sourceId, badges, badgesAfter, nameColor, bodyColor, role } = parsed.message;
       const fingerprint = JSON.stringify([name, text]), hint = replacements.get(row);
       const historyKey = sourceId ? "native:" + sourceId : hash(JSON.stringify([name, text, segments, nativeTime]));
       const existing = identities.get(row), sameExisting = existing?.fingerprint === fingerprint && (!sourceId || existing.id === sourceId);
       const cached = history.get(historyKey), restored = cached && !sameExisting && (sourceId || !liveInserts.has(row) && readingHistory(row)) ? cached : null;
       const previous = (sameExisting ? existing : null) || (hint?.fingerprint === fingerprint && (!sourceId || sourceId === hint.id) ? hint : null) || (restored ? { ...restored, fingerprint } : null);
       const id = String(sourceId || (previous?.fingerprint === fingerprint ? previous.id : ++sequence)).slice(0, 160);
-      const item = CZImportantChat.message({ id, name, text, segments, badges, role, time: CZImportantChat.timestamp(nativeTime) ?? (previous?.fingerprint === fingerprint ? previous.time : null) });
+      const item = CZImportantChat.message({ id, name, text, segments, badges, badgesAfter, nameColor, bodyColor, role, time: CZImportantChat.timestamp(nativeTime) ?? (previous?.fingerprint === fingerprint ? previous.time : null) });
       if (!item) return;
       if (existing?.historical && !liveInserts.has(row)) item.updateOnly = true;
       if (liveInserts.has(row) || !readingHistory(row)) liveTails.set(row.parentElement, new WeakRef(row));
@@ -575,6 +645,9 @@
       dom.resetScroll();
       scope.dispose();
     }
+    scope.listen(document, "load", (event) => {
+      if (filter.enabled && event.target?.matches?.("img")) scan(event.target);
+    }, true);
     scope.listen(window, "pagehide", (event) => {
       if (!event.persisted) dispose();
     });

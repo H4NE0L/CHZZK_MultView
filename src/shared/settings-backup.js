@@ -12,6 +12,7 @@
     for (const key of ["chatOpen", "screenLocked", "mainOnly", "shortcutsEnabled"]) if (typeof raw[key] !== "boolean") throw Error("설정 ON/OFF 값을 확인해주세요.");
     if (typeof raw.masterVolume !== "number" || !Number.isFinite(raw.masterVolume) || raw.masterVolume < 0 || raw.masterVolume > 1) throw Error("전체 음량을 확인해주세요.");
     if (raw.powerRewards !== void 0 && typeof raw.powerRewards !== "boolean") throw Error("통나무 수집 설정을 확인해주세요.");
+    for (const key of ["rewindBar", "autoWide"]) if (raw[key] !== void 0 && typeof raw[key] !== "boolean") throw Error("플레이어 설정을 확인해주세요.");
     if (raw.chatTimestamps !== void 0 && typeof raw.chatTimestamps !== "boolean") throw Error("타임스탬프 설정을 확인해주세요.");
     const channels = raw.channels.map((value2) => {
       const channel = object(value2);
@@ -29,6 +30,7 @@
     if (document.format !== "cz-control-room-settings" || document.version !== 1) throw Error("지원하는 설정 백업 파일이 아닙니다. 즐겨찾기 전용 파일은 그룹 관리에서 불러오세요.");
     const chat = object(data.chat);
     for (const key of ["enabled", "streamers", "managers", "partners"]) if (typeof chat[key] !== "boolean") throw Error("채팅 수집 설정을 확인해주세요.");
+    for (const key of ["hideBadges", "nativeHideBadges"]) if (chat[key] !== void 0 && typeof chat[key] !== "boolean") throw Error("배지 표시 설정을 확인해주세요.");
     for (const key of ["names", "excludedNames"]) if (!Array.isArray(chat[key]) || chat[key].length > 50 || chat[key].some((item) => typeof item !== "string" || item.length > 40)) throw Error("채팅 사용자 목록을 확인해주세요.");
     if (typeof data.chatHeight !== "number" || !Number.isFinite(data.chatHeight) || data.chatHeight < 64 || data.chatHeight > 1600) throw Error("채팅 영역 높이를 확인해주세요.");
     if (data.recordingProfile !== "balanced" && data.recordingProfile !== "original") throw Error("녹화 품질을 확인해주세요.");

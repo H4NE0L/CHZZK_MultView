@@ -169,7 +169,8 @@
         };
       }
       const channel = context.state.channels.find((c) => c.uid === uid);
-      const target = channel?.type === "video" ? `${channel.url}${channel.url.includes("?") ? "&" : "?"}multiview=chat` : `https://chzzk.naver.com/live/${encodeURIComponent(channel?.sourceId || uid)}/chat?multiview=1`;
+      const timestampQuery = context.state.chatTimestamps === true ? "&cz_timestamps=1" : "";
+      const target = channel?.type === "video" ? `${channel.url}${channel.url.includes("?") ? "&" : "?"}multiview=chat${timestampQuery}` : `https://chzzk.naver.com/live/${encodeURIComponent(channel?.sourceId || uid)}/chat?multiview=1${timestampQuery}`;
       if (context.chatFrame.dataset.uid !== uid) {
         context.chatFrame.dataset.uid = uid;
         context.chatFrame.dataset.playerReady = "false";
@@ -180,8 +181,91 @@
     return { updateChat };
   } };
 
+  // src/viewer/live-tracker.js
+  function createLiveTracker({ scope, tileMap, isRecording = () => false, notify = () => {
+  } }) {
+    const entries = /* @__PURE__ */ new Map();
+    let sweeping = false;
+    const alive = (entry) => !scope.isDisposed && entry.tile.isConnected && tileMap.get(entry.channel.uid) === entry.tile;
+    async function check(entry, manual = false) {
+      if (entry.busy || !alive(entry)) return;
+      entry.busy = true;
+      entry.button.disabled = true;
+      try {
+        const info = await CZChzzkApi.fetchLiveInfo(entry.channel.sourceId || entry.channel.uid, { throwOnError: true });
+        if (!alive(entry)) return;
+        if (info.online) {
+          if (entry.online === false || manual) {
+            if (isRecording(entry.channel.uid)) {
+              entry.button.title = "녹화 종료 후 새로고침할 수 있습니다.";
+              return;
+            }
+            const frame = entry.tile.querySelector("iframe");
+            if (frame) {
+              frame.dataset.playerReady = "false";
+              frame.src = entry.channel.url;
+            }
+          }
+          entry.button.hidden = true;
+          entry.online = true;
+        } else {
+          entry.online = false;
+          entry.button.hidden = false;
+          entry.button.innerHTML = '<svg class="tile-refresh-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.5 8a7 7 0 0 1 12-2L20 9M4 15l2.5 3a7 7 0 0 0 12-2"/></svg><span>새로고침</span>';
+          entry.button.title = "30초마다 확인합니다. 클릭하면 즉시 재확인합니다.";
+        }
+      } catch (error) {
+        if (alive(entry)) {
+          entry.button.title = "방송 상태 확인 실패 · 클릭하여 다시 시도";
+          if (manual) notify("방송 상태 확인 실패: " + error.message);
+        }
+      } finally {
+        entry.busy = false;
+        if (alive(entry)) entry.button.disabled = false;
+      }
+    }
+    async function sweep() {
+      if (sweeping || scope.isDisposed) return;
+      sweeping = true;
+      try {
+        const queue = [...entries.values()];
+        await Promise.all(Array.from({ length: Math.min(2, queue.length) }, async () => {
+          while (queue.length && !scope.isDisposed) {
+            const entry = queue.shift();
+            if (!alive(entry)) {
+              if (entries.get(entry.channel.uid) === entry) entries.delete(entry.channel.uid);
+              continue;
+            }
+            await check(entry);
+          }
+        }));
+      } finally {
+        sweeping = false;
+      }
+    }
+    scope.interval(sweep, 3e4);
+    scope.add(() => entries.clear());
+    return { watch(channel, tile) {
+      if (channel.type === "video" || scope.isDisposed) return;
+      const button = document.createElement("button");
+      button.className = "tile-offline-refresh";
+      button.type = "button";
+      button.hidden = true;
+      button.setAttribute("aria-label", "방송 상태 새로고침");
+      tile.append(button);
+      const entry = { channel, tile, button, online: null, busy: false };
+      entries.set(channel.uid, entry);
+      button.onclick = (event) => {
+        event.stopPropagation();
+        check(entry, true);
+      };
+      check(entry);
+    } };
+  }
+
   // src/viewer/players.js
   var players = { create(context) {
+    const liveTracker = context.scope ? createLiveTracker({ scope: context.scope, tileMap: context.tileMap, isRecording: (uid) => context.mediaTools.isRecording?.(uid), notify: context.showNotice }) : null;
     const { tileMap, escapeHtml, displayChannelName, removeChannel, showNotice, applyLayout, updateChat, refreshChannelManager, saveState, applyTileLock, syncVolumeUI, clearSyncState, sendTileVolume, makeMainAudible } = context;
     function isChannelVisibleInLayout(uid) {
       const index = context.state.channels.findIndex((c) => c.uid === uid);
@@ -200,8 +284,8 @@
         <span class="tile-streamer-name">${escapeHtml(displayChannelName(channel))}</span>
         <button class="main-btn" type="button" title="이 방송을 메인 방송으로 변경">메인으로 변경</button>
         <span class="tile-head-spacer"></span>
-        <button class="tile-screenshot" type="button" title="스크린샷 (S)" aria-label="스크린샷 (S)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="tile-record" type="button" title="녹화 시작/종료 (R)" aria-label="녹화 시작/종료 (R)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg></button>
+        <button class="tile-screenshot" type="button" title="스크린샷 · 단축키 S" aria-keyshortcuts="S" aria-label="스크린샷 (S)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 3v14a1 1 0 0 0 1 1h14M3 6h14a1 1 0 0 1 1 1v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="tile-record" type="button" title="녹화 시작/종료 · 단축키 R" aria-keyshortcuts="R" aria-label="녹화 시작/종료 (R)"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg></button>
         <button class="tile-address" title="방송 주소 복사">주소 복사</button>
         <button class="tile-btn remove-btn" title="삭제">✕</button>
       </div>
@@ -294,6 +378,11 @@
         try {
           CZMessages.postToPlayer(tileFrame, {
             source: "chzzk-multiview",
+            type: "PLAYER_OPTIONS",
+            autoWide: context.state.autoWide !== false
+          });
+          CZMessages.postToPlayer(tileFrame, {
+            source: "chzzk-multiview",
             type: "ENTER_THEATER"
           });
           CZMessages.postToPlayer(tileFrame, {
@@ -328,6 +417,7 @@
       tileMap.set(channel.uid, tile);
       context.mediaTools.attachTile(channel.uid, tile);
       context.videoGrid.appendChild(tile);
+      liveTracker?.watch(channel, tile);
       updateTileMainUI(channel.uid);
       sendTileVolume(channel.uid);
       applyTileLock(tile, context.state.screenLocked === true);
@@ -470,12 +560,12 @@
     function clearSyncState(uid) {
       syncOffsets.delete(uid);
       syncDelays.delete(uid);
-      for (const [id, pending] of syncPending) if (pending.uid === uid) syncPending.delete(id);
+      for (const [id, pending2] of syncPending) if (pending2.uid === uid) syncPending.delete(id);
       scheduleSyncRender();
     }
     function handleSyncResult(data) {
-      const pending = syncPending.get(data.requestId);
-      if (!pending || pending.uid !== data.uid) return;
+      const pending2 = syncPending.get(data.requestId);
+      if (!pending2 || pending2.uid !== data.uid) return;
       syncPending.delete(data.requestId);
       if (data.ok !== true) {
         showNotice(data.reason === "not-seekable" ? "이 방송은 아직 싱크를 조정할 수 없습니다. 재생이 시작된 뒤 다시 시도하세요." : "싱크를 조정하지 못했습니다.");
@@ -489,7 +579,7 @@
       if (typeof data.delay === "number" && Number.isFinite(data.delay)) {
         syncDelays.set(data.uid, { delay: data.delay, canSeek: true, t: Date.now() });
       }
-      if (data.clamped && !pending.latest) {
+      if (data.clamped && !pending2.latest) {
         const forward = Number(data.requested) > 0;
         showNotice(applied === 0 ? forward ? "더 이상 앞으로 당길 수 없습니다. (라이브에 가장 가깝습니다)" : "더 이상 뒤로 돌릴 수 없습니다." : "한계에 도달하여 일부만 적용되었습니다.");
       }
@@ -969,7 +1059,7 @@
     const scope = new ResourceScope(), urls = new ObjectURLs(), transferAbort = new AbortController();
     scope.add(() => urls.dispose());
     scope.add(() => transferAbort.abort());
-    const recordings = /* @__PURE__ */ new Map(), pending = /* @__PURE__ */ new Map(), positions = /* @__PURE__ */ new Map(), results = [];
+    const recordings = /* @__PURE__ */ new Map(), pending2 = /* @__PURE__ */ new Map(), positions = /* @__PURE__ */ new Map(), results = [];
     let openingResult = false, activeResult = null;
     let recordingProfile = "balanced", profileLoaded = false;
     let profileControl = null;
@@ -1039,11 +1129,11 @@
     }
     async function screenshot(uid) {
       if (scope.isDisposed) return;
-      if ([...pending.values()].filter((entry) => entry.kind === "screenshot").length >= MAX_PENDING_SCREENSHOTS) {
+      if ([...pending2.values()].filter((entry) => entry.kind === "screenshot").length >= MAX_PENDING_SCREENSHOTS) {
         context.showNotice("스크린샷 처리 중입니다. 잠시 후 다시 촬영해주세요.");
         return;
       }
-      const shots = [...pending.values(), ...results.map((result) => result.entry), ...activeResult ? [activeResult.entry] : []].filter((entry) => entry.kind === "screenshot").length + (gallery?.size || 0);
+      const shots = [...pending2.values(), ...results.map((result) => result.entry), ...activeResult ? [activeResult.entry] : []].filter((entry) => entry.kind === "screenshot").length + (gallery?.size || 0);
       if (shots >= MAX_SCREENSHOTS) {
         context.showNotice("스크린샷은 최대 12장까지 보관합니다. 저장 후 다시 촬영해주세요.");
         return;
@@ -1051,15 +1141,15 @@
       try {
         const id = request(uid, "MEDIA_SCREENSHOT"), controller = new AbortController(), entry = { uid, name: fileName(uid, void 0, void 0, controller), kind: "screenshot", controller };
         entry.cancel = scope.timeout(() => {
-          if (pending.delete(id)) context.showNotice("스크린샷 응답이 없습니다.");
+          if (pending2.delete(id)) context.showNotice("스크린샷 응답이 없습니다.");
         }, 2e4);
-        pending.set(id, entry);
+        pending2.set(id, entry);
       } catch (e) {
         context.showNotice(e.message);
       }
     }
     function recordingUids() {
-      return /* @__PURE__ */ new Set([...recordings.keys(), ...[...pending.values()].filter((entry) => entry.kind === "recording").map((entry) => entry.uid)]);
+      return /* @__PURE__ */ new Set([...recordings.keys(), ...[...pending2.values()].filter((entry) => entry.kind === "recording").map((entry) => entry.uid)]);
     }
     function toggleRecording(uid) {
       if (scope.isDisposed) return;
@@ -1075,7 +1165,7 @@
         const mime = uniqueFormats.find(([, label]) => label === "MP4")?.[0] || uniqueFormats[0]?.[0];
         if (!mime) throw Error("이 환경에서는 녹화를 지원하지 않습니다.");
         const id = request(uid, "MEDIA_RECORD", { mime, profile: recordingProfile }), controller = new AbortController();
-        pending.set(id, { uid, name: fileName(uid, /* @__PURE__ */ new Date(), "recording", controller), kind: "recording", controller });
+        pending2.set(id, { uid, name: fileName(uid, /* @__PURE__ */ new Date(), "recording", controller), kind: "recording", controller });
         recordings.set(uid, { startedAt: Date.now() });
         updateRecord(uid);
       } catch (e) {
@@ -1087,7 +1177,7 @@
       if (!button) return;
       button.classList.toggle("recording", !!record);
       button.innerHTML = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor"/><circle cx="10" cy="10" r="5" fill="currentColor"/></svg>' + (record ? `<span>${Math.floor((Date.now() - record.startedAt) / 1e3)}초</span>` : "");
-      button.title = record ? "녹화 중지 (R)" : "녹화 시작 (R)";
+      button.title = (record ? "녹화 중지" : "녹화 시작") + " · 단축키 R";
     }
     async function showNext() {
       if (scope.isDisposed || openingResult || !results.length) return;
@@ -1220,9 +1310,9 @@
           else context.showNotice("재생 위치를 이동할 수 없습니다.");
           return;
         }
-        const entry = pending.get(data.requestId);
+        const entry = pending2.get(data.requestId);
         if (!entry || entry.uid !== data.uid) return;
-        pending.delete(data.requestId);
+        pending2.delete(data.requestId);
         entry.cancel?.();
         if (data.error) {
           entry.controller?.abort();
@@ -1267,7 +1357,7 @@
       else context.onShortcut?.(key);
     }, { capture: true });
     scope.listen(window, "beforeunload", (event) => {
-      if (recordings.size || pending.size || results.length || activeResult || gallery?.hasUnsaved()) {
+      if (recordings.size || pending2.size || results.length || activeResult || gallery?.hasUnsaved()) {
         event.preventDefault();
         event.returnValue = "";
       }
@@ -1276,10 +1366,10 @@
     function detach(uid) {
       positions.delete(uid);
       recordings.delete(uid);
-      for (const [id, entry] of pending) if (entry.uid === uid) {
+      for (const [id, entry] of pending2) if (entry.uid === uid) {
         entry.cancel?.();
         entry.controller?.abort();
-        pending.delete(id);
+        pending2.delete(id);
       }
     }
     function dispose() {
@@ -1287,7 +1377,7 @@
       scope.dispose();
       gallery?.close();
       gallery = null;
-      pending.clear();
+      pending2.clear();
       recordings.clear();
       positions.clear();
       results.length = 0;
@@ -1307,11 +1397,63 @@
     }, bindSettings, screenshot, toggleRecording, attachTile, receive, hasRecordings: () => recordingUids().size > 0, isRecording: (uid) => recordingUids().has(uid) };
   } };
 
+  // src/viewer/player-lifecycle.js
+  var registry = globalThis.__CZPlayerLifecycleV1 ||= { sequence: 0, pending: /* @__PURE__ */ new WeakMap(), history: [] };
+  var { pending, history: history2 } = registry;
+  var number = (value) => typeof value === "number" && Number.isFinite(value) ? value : null;
+  function summarize(details) {
+    if (!details || typeof details !== "object") return null;
+    const before = details.before, actual = before?.actual, desired = before?.desired;
+    return { before: before ? { revision: typeof before.revision === "string" ? before.revision.slice(0, 64) : null, earlyCapture: before.earlyCapture === true, desired: desired ? { volume: number(desired.volume), muted: desired.muted === true } : null, actual: actual ? { volume: number(actual.volume), muted: actual.muted === true, paused: actual.paused === true, ended: actual.ended === true, readyState: number(actual.readyState), errorCode: number(actual.errorCode) } : null, counts: Object.fromEntries(["commands", "corrections", "reports", "nativeChanges"].map((key) => [key, number(before.counts?.[key])])) } : null, audio: details.audio ? { observed: number(details.audio.observed), states: Array.isArray(details.audio.states) ? details.audio.states.slice(0, 16).map((context) => ({ id: number(context?.id), state: typeof context?.state === "string" ? context.state.slice(0, 24) : null, currentTime: number(context?.currentTime) })) : [] } : null, error: typeof details.error === "string" ? details.error.slice(0, 300) : null };
+  }
+  var recentPlayerTeardowns = () => history2.map((entry) => ({ ...entry }));
+  function releasePlayer(frame, scope, uid) {
+    if (!frame) return Promise.resolve();
+    if (pending.has(frame)) return pending.get(frame);
+    const requestId = ++registry.sequence, started = Date.now();
+    let finish;
+    const promise = new Promise((resolve) => {
+      let completed = false, cancelTimer = () => {
+      }, cancelListener = () => {
+      }, cancelScope = () => {
+      };
+      finish = (status, details = null) => {
+        if (completed) return;
+        completed = true;
+        cancelTimer();
+        cancelListener();
+        cancelScope();
+        frame.dataset.playerReady = "false";
+        frame.remove();
+        pending.delete(frame);
+        history2.push({ uid, status, elapsedMs: Date.now() - started, details });
+        if (history2.length > 8) history2.shift();
+        resolve();
+      };
+      cancelListener = scope.listen(window, "message", (event) => {
+        const data = event.data;
+        if (event.origin !== "https://chzzk.naver.com" || event.source !== frame.contentWindow || data?.source !== "chzzk-multiview" || data.type !== "PLAYER_DISPOSED" || data.requestId !== requestId || data.uid !== uid) return;
+        finish("acknowledged", summarize(data.details));
+      });
+      cancelTimer = scope.timeout(() => finish("timeout"), 750);
+      cancelScope = scope.add(() => finish("viewer-disposed"));
+      if (completed) return;
+      try {
+        if (!CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "PLAYER_DISPOSE", requestId })) finish("not-ready");
+      } catch (_) {
+        finish("unavailable");
+      }
+    });
+    pending.set(frame, promise);
+    promise.then(() => pending.delete(frame));
+    return promise;
+  }
+
   // src/viewer/power-diagnostics.js
   var powerDiagnostics = { create(context) {
     let dialog = null, sequence = 0, requestId = null;
     const results = /* @__PURE__ */ new Map();
-    let timeout = null;
+    let timeout = null, tabAudio = null;
     function render() {
       if (!dialog) return;
       const rows = dialog.querySelector(".power-diagnostic-rows");
@@ -1326,7 +1468,7 @@
       if (!dialog) {
         dialog = document.createElement("dialog");
         dialog.className = "ic-dialog power-diagnostics";
-        dialog.innerHTML = '<header><strong>통나무 파워 점검</strong><button class="power-diagnostic-close" type="button" aria-label="통나무 파워 점검 닫기">✕</button></header><p class="power-diagnostic-help">설정의 통나무 수집 보조는 원본 구성요소 유지와 보너스 버튼 클릭을 시도합니다. 실제 적립 성공을 보장하지 않습니다. 여기서는 각 타일의 상태와 최근 요청 경로를 읽기 전용으로 확인합니다.</p><div class="power-diagnostic-rows"></div><p class="power-diagnostic-status" role="status"></p><button class="power-diagnostic-copy" type="button">점검 정보 복사</button>';
+        dialog.innerHTML = '<header><strong>통나무 파워 점검</strong><button class="power-diagnostic-close" type="button" aria-label="통나무 파워 점검 닫기">✕</button></header><p class="power-diagnostic-help">설정의 통나무 수집 보조는 원본 보너스 버튼의 수령을 시도합니다. 실제 적립 성공을 보장하지 않습니다. 여기서는 각 타일의 상태와 최근 요청 경로를 읽기 전용으로 확인합니다.</p><div class="power-diagnostic-rows"></div><p class="power-diagnostic-status" role="status"></p><button class="power-diagnostic-copy" type="button">점검 정보 복사</button>';
         context.ui.append(dialog);
         dialog.addEventListener("close", () => {
           clearTimeout(timeout);
@@ -1337,13 +1479,18 @@
         dialog.querySelector(".power-diagnostic-close").onclick = () => dialog.close();
         dialog.querySelector(".power-diagnostic-copy").onclick = async () => {
           try {
-            await navigator.clipboard.writeText(JSON.stringify({ version: chrome.runtime.getManifest?.().version || "2.0.3", channels: [...results].map(([uid, value]) => ({ uid, ...value })) }, null, 2));
+            await navigator.clipboard.writeText(JSON.stringify({ version: chrome.runtime.getManifest?.().version || "확인 불가", playerTeardowns: recentPlayerTeardowns(), browser: { userAgent: navigator.userAgent, vendor: navigator.vendor }, tabAudio, viewerAudio: { masterVolume: context.state.masterVolume, mainOnly: context.state.mainOnly, selectedUid: context.state.selectedUid, channels: context.state.channels.map((channel) => ({ uid: channel.uid, volume: channel.volume, muted: channel.muted })) }, channels: [...results].map(([uid, value]) => ({ uid, ...value })) }, null, 2));
             dialog.querySelector(".power-diagnostic-status").textContent = "쿠키·헤더·쿼리값 없이 점검 정보를 복사했습니다.";
           } catch (_) {
             dialog.querySelector(".power-diagnostic-status").textContent = "점검 정보 복사에 실패했습니다.";
           }
         };
       }
+      tabAudio = null;
+      Promise.resolve(chrome.tabs?.getCurrent?.()).then((tab) => {
+        tabAudio = tab ? { muted: tab.mutedInfo?.muted === true, reason: tab.mutedInfo?.reason || null, audible: typeof tab.audible === "boolean" ? tab.audible : null } : null;
+      }).catch(() => {
+      });
       if (!dialog.open) dialog.showModal();
       clearTimeout(timeout);
       results.clear();
@@ -1369,6 +1516,237 @@
     } };
   } };
 
+  // src/viewer/chat-colors.ts
+  function readableChatColor(input, fallback = "#c7ddff") {
+    let rgb = null, alpha = 1;
+    if (/^#[a-f\d]{3,8}$/i.test(input)) {
+      const hex = input.slice(1);
+      if (hex.length === 4) alpha = parseInt(hex[3] + hex[3], 16) / 255;
+      else if (hex.length === 8) alpha = parseInt(hex.slice(6), 16) / 255;
+      if (hex.length === 3 || hex.length === 4) rgb = [...hex.slice(0, 3)].map((value) => parseInt(value + value, 16));
+      else if (hex.length === 6 || hex.length === 8) rgb = [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
+    } else if (/^rgba?\(/i.test(input)) {
+      const values = input.match(/[\d.]+%?/g);
+      if (values && values.length >= 3) rgb = values.slice(0, 3).map((value) => value.endsWith("%") ? parseFloat(value) * 2.55 : Number(value));
+      if (values?.[3]) alpha = values[3].endsWith("%") ? parseFloat(values[3]) / 100 : Number(values[3]);
+      if (alpha <= 0) return fallback;
+    }
+    if (!rgb || rgb.some((value) => !Number.isFinite(value)) || !Number.isFinite(alpha)) return fallback;
+    alpha = Math.max(0, Math.min(1, alpha));
+    rgb = rgb.map((value, index) => Math.max(0, Math.min(255, value)) * alpha + [27, 29, 32][index] * (1 - alpha));
+    const luminance = (values) => values.map((value) => {
+      const n = value / 255;
+      return n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+    const background = luminance([27, 29, 32]), contrast = (values) => (Math.max(luminance(values), background) + 0.05) / (Math.min(luminance(values), background) + 0.05);
+    if (contrast(rgb) >= 4.5) return alpha === 1 ? input : `rgb(${rgb.map(Math.round).join(", ")})`;
+    let low = 0, high = 1;
+    for (let i = 0; i < 12; i++) {
+      const fraction = (low + high) / 2, candidate = rgb.map((value) => value + (255 - value) * fraction);
+      if (contrast(candidate) >= 4.5) high = fraction;
+      else low = fraction;
+    }
+    return `rgb(${rgb.map((value) => Math.ceil(value + (255 - value) * high)).join(", ")})`;
+  }
+
+  // src/viewer/chat-capture.ts
+  function createChatCapture(context) {
+    const urls = new ObjectURLs(), dialog = document.createElement("dialog");
+    dialog.className = "ic-capture-dialog";
+    dialog.setAttribute("aria-label", "모아보기 채팅 캡처");
+    dialog.innerHTML = '<header><strong>채팅 캡처</strong><button type="button" class="ic-capture-close" aria-label="캡처 닫기">✕</button></header><p>저장할 메시지를 선택하세요. 현재 수집된 목록을 기준으로 저장합니다.</p><div class="ic-capture-tools"><button type="button" class="ic-capture-all">전체 선택</button><button type="button" class="ic-capture-none">선택 해제</button></div><div class="ic-capture-list"></div><p class="ic-capture-status" role="status"></p><button type="button" class="ic-capture-save">PNG 저장</button>';
+    context.host.appendChild(dialog);
+    const query = (selector) => dialog.querySelector(selector);
+    const save = query(".ic-capture-save"), list = query(".ic-capture-list"), status = query(".ic-capture-status");
+    let snapshot = [], disposed = false, busy = false, controller = null;
+    const checked = () => [...list.querySelectorAll("input:checked")].map((input) => Number(input.value));
+    function update() {
+      const count = checked().length;
+      status.textContent = `${snapshot.length}개 중 ${count}개 선택`;
+      save.disabled = busy || !count;
+    }
+    function choose(on) {
+      list.querySelectorAll("input").forEach((input) => input.checked = on);
+      update();
+    }
+    query(".ic-capture-all").onclick = () => choose(true);
+    query(".ic-capture-none").onclick = () => choose(false);
+    list.onchange = update;
+    query(".ic-capture-close").onclick = () => dialog.close();
+    dialog.addEventListener("close", () => controller?.abort());
+    async function image(source, signal) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        let finished = false;
+        const finish = (value) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          signal.removeEventListener("abort", abort);
+          img.onload = img.onerror = null;
+          if (!value) img.removeAttribute("src");
+          resolve(value);
+        };
+        const abort = () => finish(null), timer = setTimeout(abort, 2500);
+        signal.addEventListener("abort", abort, { once: true });
+        img.crossOrigin = "anonymous";
+        img.referrerPolicy = "no-referrer";
+        img.onload = () => finish(img);
+        img.onerror = () => finish(null);
+        if (signal.aborted) abort();
+        else img.src = source;
+      });
+    }
+    function svgSource(badge) {
+      if (!badge.svg) return "";
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", badge.svg.viewBox);
+      svg.setAttribute("width", "20");
+      svg.setAttribute("height", "20");
+      svg.style.color = badge.svg.color;
+      for (const shape of badge.svg.shapes) {
+        const node = document.createElementNS(svg.namespaceURI, shape.tag);
+        for (const [key, value] of Object.entries(shape.attrs)) node.setAttribute(key, value);
+        svg.appendChild(node);
+      }
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+    }
+    async function exportPNG(items, signal) {
+      const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+      if (!ctx) throw Error("이미지 생성을 지원하지 않습니다.");
+      const width = 640, padding = 20, lineHeight = 24;
+      const draws = [];
+      let y = 56, x = padding;
+      const font = (bold, size = 13) => `${bold ? "700" : "400"} ${size}px sans-serif`;
+      function text(value, color, bold = false, size = 13) {
+        ctx.font = font(bold, size);
+        for (const char of value) {
+          if (char === "\n") {
+            x = padding;
+            y += lineHeight;
+            continue;
+          }
+          const w = ctx.measureText(char).width;
+          if (x + w > width - padding) {
+            x = padding;
+            y += lineHeight;
+          }
+          draws.push({ text: char, color, bold, size, x, y, width: w });
+          x += w;
+        }
+      }
+      function picture(source, alt, size = 20) {
+        if (!source) {
+          text(alt, "#c7d2df");
+          return;
+        }
+        if (x + size > width - padding) {
+          x = padding;
+          y += lineHeight;
+        }
+        draws.push({ source, text: alt, color: "#c7d2df", bold: false, size: 13, x, y, width: size });
+        x += size + 3;
+      }
+      for (const item of items) {
+        x = padding;
+        if (context.showTime() && item.time !== null) text(new Date(item.time).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) + " ", "#fffafa", false, 10.4);
+        if (!context.hideBadges()) for (const badge of item.badges) picture(badge.src || svgSource(badge), badge.alt, 16);
+        text(item.name, readableChatColor(item.nameColor || "#c7ddff"), true);
+        if (!context.hideBadges()) for (const badge of item.badgesAfter) picture(badge.src || svgSource(badge), badge.alt, 16);
+        text(" ", "#fffafa");
+        for (const part of item.segments) if (part.type === "image") picture(part.src, part.alt);
+        else text(part.text, readableChatColor(item.bodyColor || "#e4e9ef"));
+        y += lineHeight + 8;
+      }
+      const height = y + padding;
+      if (height > 16e3) throw Error("선택한 내용이 너무 깁니다. 메시지를 나누어 저장해 주세요.");
+      const sources = [...new Set(draws.flatMap((draw) => draw.source ? [draw.source] : []))].slice(0, 80), images = /* @__PURE__ */ new Map();
+      await Promise.all(Array.from({ length: Math.min(4, sources.length) }, async () => {
+        while (sources.length && !signal.aborted) {
+          const src = sources.shift(), img = await image(src, signal);
+          if (img) images.set(src, img);
+        }
+      }));
+      if (signal.aborted) throw new DOMException("캡처 취소", "AbortError");
+      canvas.width = width;
+      canvas.height = height;
+      ctx.fillStyle = "#1b1d20";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#fffafa";
+      ctx.font = "700 15px sans-serif";
+      ctx.fillText(`주요 채팅 · ${items.length}개`, padding, 30);
+      let missing = false;
+      for (const draw of draws) {
+        ctx.font = font(draw.bold, draw.size);
+        ctx.fillStyle = draw.color;
+        const img = draw.source ? images.get(draw.source) : null;
+        if (img) ctx.drawImage(img, draw.x, draw.y - 16, draw.width, draw.width);
+        else if (draw.source) {
+          missing = true;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(draw.x, draw.y - 16, draw.width, 20);
+          ctx.clip();
+          ctx.fillText(draw.text || "◇", draw.x, draw.y);
+          ctx.restore();
+        } else ctx.fillText(draw.text || "", draw.x, draw.y);
+      }
+      const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(Error("PNG 생성에 실패했습니다.")), "image/png"));
+      canvas.width = canvas.height = 0;
+      images.clear();
+      return { blob, missing };
+    }
+    save.onclick = async () => {
+      if (busy) return;
+      const items = checked().map((index) => snapshot[index]).filter(Boolean);
+      if (!items.length) return;
+      busy = true;
+      update();
+      status.textContent = "이미지 생성 중…";
+      controller = new AbortController();
+      try {
+        const { blob, missing } = await exportPNG(items, controller.signal);
+        if (disposed || controller.signal.aborted) return;
+        const link = document.createElement("a");
+        link.href = urls.create(blob, 3e4).url;
+        link.download = `CHZZK-chat-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.png`;
+        link.click();
+        context.notify(missing ? "저장했습니다. 불러오지 못한 이미지는 대체 표시했습니다." : "채팅 캡처를 저장했습니다.");
+        dialog.close();
+      } catch (error) {
+        if (!disposed && error.name !== "AbortError") {
+          status.textContent = error.message;
+          context.notify(status.textContent);
+        }
+      } finally {
+        busy = false;
+        if (!disposed) save.disabled = !checked().length;
+      }
+    };
+    return { open() {
+      if (disposed || busy) return;
+      snapshot = context.getItems();
+      list.replaceChildren();
+      snapshot.forEach((item, index) => {
+        const label = document.createElement("label"), input = document.createElement("input"), text = document.createElement("span");
+        input.type = "checkbox";
+        input.value = String(index);
+        input.checked = true;
+        text.textContent = `${item.name}  ${item.text}`;
+        label.append(input, text);
+        list.append(label);
+      });
+      update();
+      if (!dialog.open) dialog.showModal();
+    }, dispose() {
+      disposed = true;
+      controller?.abort();
+      urls.dispose();
+      dialog.remove();
+      snapshot = [];
+    } };
+  }
+
   // src/viewer/chat-renderer.ts
   function create(list) {
     const rendered = /* @__PURE__ */ new Map();
@@ -1389,7 +1767,7 @@
       };
       return img;
     }
-    function render(items) {
+    function render(items, hideBadges = false) {
       const scrollTop = list.scrollTop, atBottom = list.scrollHeight - scrollTop - list.clientHeight < 16;
       const ids = new Set(items.map((item) => item.id));
       for (const [id, entry] of rendered) if (!ids.has(id)) {
@@ -1398,7 +1776,7 @@
       }
       list.querySelector(".ic-empty")?.remove();
       items.forEach((item, index) => {
-        const signature = JSON.stringify(item);
+        const signature = JSON.stringify([item, hideBadges]);
         let entry = rendered.get(item.id);
         if (!entry || entry.signature !== signature) {
           const row = document.createElement("div");
@@ -1415,10 +1793,33 @@
           const author = document.createElement("strong");
           author.className = "ic-author";
           author.textContent = item.name;
+          if (item.nameColor) author.style.color = readableChatColor(item.nameColor);
           const text = document.createElement("span");
           text.className = "ic-message-text";
+          if (item.bodyColor) text.style.color = readableChatColor(item.bodyColor, "#e4e9ef");
           for (const part of item.segments) text.appendChild(part.type === "image" ? image(part.src, part.alt, "ic-emote") : document.createTextNode(part.text));
-          row.append(time, author, document.createTextNode(" "), text);
+          const badge = (value) => {
+            if (value.src) return image(value.src, value.alt, "ic-badge");
+            if (value.svg) {
+              const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              icon.classList.add("ic-badge");
+              icon.setAttribute("viewBox", value.svg.viewBox);
+              icon.setAttribute("role", "img");
+              icon.setAttribute("aria-label", value.alt);
+              icon.style.color = value.svg.color;
+              for (const shape of value.svg.shapes) {
+                const child = document.createElementNS("http://www.w3.org/2000/svg", shape.tag);
+                for (const [key, input] of Object.entries(shape.attrs)) child.setAttribute(key, input);
+                icon.appendChild(child);
+              }
+              return icon;
+            }
+            const label = document.createElement("span");
+            label.className = "ic-badge-label";
+            label.textContent = value.alt;
+            return label;
+          };
+          row.append(time, ...hideBadges ? [] : item.badges.map(badge), author, ...hideBadges ? [] : item.badgesAfter.map(badge), document.createTextNode(" "), text);
           entry?.node.replaceWith(row);
           entry = { node: row, signature };
           rendered.set(item.id, entry);
@@ -1448,11 +1849,13 @@
     panel.className = "important-chat-panel";
     panel.setAttribute("aria-label", "주요 채팅");
     panel.dataset.collapsed = "true";
-    panel.innerHTML = '<header class="ic-heading"><button type="button" class="ic-toggle" aria-expanded="false" aria-controls="cz-collected-chat-body">주요 채팅</button><button type="button" class="ic-header-settings" title="수집 설정·점검" aria-label="수집 설정·점검"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button></header><div id="cz-collected-chat-body" class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><form class="ic-exclude-form"><input class="ic-exclude-name" maxlength="40" placeholder="제외할 닉네임" aria-label="수집에서 제외할 닉네임"><button type="submit">제외</button></form><div class="ic-excluded-names ic-names"></div><p class="ic-exclude-help">제외 목록은 자동 포함·추가 목록보다 우선합니다.</p><footer class="ic-settings-footer"><button class="ic-clear" type="button">수집된 내용 초기화</button><details class="ic-debug"><summary>수집 점검</summary><p class="ic-diagnostics"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button></details></footer></div></dialog>';
+    panel.innerHTML = '<header class="ic-heading"><button type="button" class="ic-toggle" aria-expanded="false" aria-controls="cz-collected-chat-body">주요 채팅</button><button type="button" class="ic-header-capture" title="채팅 캡처" aria-label="채팅 캡처"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4Z"/><circle cx="12" cy="13" r="4"/></svg></button><button type="button" class="ic-header-settings" title="채팅 설정" aria-label="채팅 설정"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button></header><div id="cz-collected-chat-body" class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><div class="ic-settings-tabs" role="tablist" aria-label="채팅 설정 대상"><button type="button" class="ic-tab" id="icNativeTab" role="tab" data-tab="native" aria-controls="icNativeSettings" aria-selected="false">기본 채팅</button><button type="button" class="ic-tab" id="icCollectedTab" role="tab" data-tab="collected" aria-controls="icCollectedSettings" aria-selected="true">모아보기</button></div><section id="icNativeSettings" class="ic-native-settings" role="tabpanel" aria-labelledby="icNativeTab" hidden><p>배지 표시는 기본 채팅에만 적용합니다. 타임스탬프는 기본 채팅과 모아보기에 함께 적용합니다.</p><div class="ic-native-options"></div>              <div class="settings-feature">                <label class="settings-option"><span>채팅 타임스탬프 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>                <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>              </div></section><section id="icCollectedSettings" class="ic-collected-settings" role="tabpanel" aria-labelledby="icCollectedTab"><strong class="ic-settings-heading">표시</strong><div class="ic-collected-display-options"></div><strong class="ic-settings-heading">자동 수집</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><form class="ic-exclude-form"><input class="ic-exclude-name" maxlength="40" placeholder="제외할 닉네임" aria-label="수집에서 제외할 닉네임"><button type="submit">제외</button></form><div class="ic-excluded-names ic-names"></div><p class="ic-exclude-help">제외 목록은 자동 포함·추가 목록보다 우선합니다.</p><footer class="ic-settings-footer"><button class="ic-clear" type="button">수집된 내용 초기화</button><details class="ic-debug"><summary>수집 점검</summary><p class="ic-diagnostics"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button></details></footer></section></div></dialog>';
     chatPanel.insertBefore(panel, chatPanel.querySelector(".chat-frame-wrap"));
     const dialog = panel.querySelector(".ic-dialog"), $ = (selector) => panel.querySelector(selector) || dialog.querySelector(selector), handle = $(".ic-resizer");
     chatPanel.appendChild(dialog);
     const renderer = create($(".ic-list"));
+    const capture = createChatCapture({ host: chatPanel, getItems: () => model.items, hideBadges: () => filter.hideBadges, showTime: () => getState().chatTimestamps === true, notify });
+    $(".ic-header-capture").onclick = () => capture.open();
     $(".ic-toggle").title = "접혀 있어도 주요 채팅은 계속 수집됩니다";
     $(".ic-toggle").onclick = () => {
       expanded = !expanded;
@@ -1462,7 +1865,7 @@
       resize();
       if (expanded) $(".ic-list").scrollTop = $(".ic-list").scrollHeight;
     };
-    for (const [key, title] of [["streamers", "스트리머 자동 포함"], ["managers", "관리자 자동 포함"], ["partners", "파트너 자동 포함"]]) {
+    for (const [key, title] of [["nativeHideBadges", "배지 표시"], ["hideBadges", "배지 표시"], ["streamers", "스트리머 자동 수집"], ["managers", "관리자 자동 수집"], ["partners", "파트너 자동 수집"]]) {
       const label = document.createElement("label");
       label.className = "ic-option";
       label.dataset.role = key;
@@ -1481,14 +1884,34 @@
       track.setAttribute("aria-hidden", "true");
       toggle.append(input, track);
       label.append(text, toggle);
-      $(".ic-options").appendChild(label);
+      $(key === "nativeHideBadges" ? ".ic-native-options" : key === "hideBadges" ? ".ic-collected-display-options" : ".ic-options").appendChild(label);
     }
-    function openSettings() {
+    function selectTab(tab) {
+      for (const button of dialog.querySelectorAll(".ic-tab")) {
+        const selected = button.dataset.tab === tab;
+        button.setAttribute("aria-selected", String(selected));
+        button.tabIndex = selected ? 0 : -1;
+      }
+      $("#icNativeSettings").hidden = tab !== "native";
+      $("#icCollectedSettings").hidden = tab !== "collected";
+    }
+    for (const button of dialog.querySelectorAll(".ic-tab")) {
+      button.onclick = () => selectTab(button.dataset.tab);
+      button.onkeydown = (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const tab = event.key === "Home" ? "native" : event.key === "End" ? "collected" : button.dataset.tab === "native" ? "collected" : "native";
+        selectTab(tab);
+        dialog.querySelector('[data-tab="' + tab + '"]').focus();
+      };
+    }
+    function openSettings(tab = "collected") {
+      selectTab(tab);
       controls();
       if (!dialog.open) dialog.showModal();
       diagnostics();
     }
-    $(".ic-header-settings").onclick = openSettings;
+    $(".ic-header-settings").onclick = () => openSettings();
     $(".ic-debug").ontoggle = () => diagnostics();
     $(".ic-settings-close").onclick = () => dialog.close();
     dialog.addEventListener("click", (event) => {
@@ -1554,15 +1977,15 @@
       const frame = getFrame();
       if (!frame) return;
       const channel = getState().channels.find((c) => c.uid === getState().selectedUid);
-      const name = channel?.name || channel?.uid || "";
-      if (presented.get(frame) === name) return;
-      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "CHAT_PRESENTATION", name, height: 0 })) presented.set(frame, name);
+      const name = channel?.name || channel?.uid || "", signature = JSON.stringify([name, filter.nativeHideBadges]);
+      if (presented.get(frame) === signature) return;
+      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "CHAT_PRESENTATION", name, height: 0, hideBadges: filter.nativeHideBadges })) presented.set(frame, signature);
     }
     function diagnostics() {
       if (!dialog.open || !$(".ic-debug").open) return;
       const owner = owners.get(getState().selectedUid);
-      const number = (key) => Number.isFinite(stats?.[key]) ? Math.max(0, Math.floor(stats[key])) : 0;
-      $(".ic-diagnostics").textContent = (filter.enabled ? "수집 켜짐" : "수집 꺼짐") + " · 스트리머 확인: " + (owner?.name || (owner?.pending ? "조회 중" : "확인 안 됨")) + "\n" + (!stats ? "수집 프레임 응답 대기" : "읽은 항목 " + number("scanned") + " · 해석 " + number("parsed") + " · 대상 " + number("matched") + " · 전송 " + number("sent")) + " · 수신 " + received + " · 표시 " + model.items.length;
+      const number2 = (key) => Number.isFinite(stats?.[key]) ? Math.max(0, Math.floor(stats[key])) : 0;
+      $(".ic-diagnostics").textContent = (filter.enabled ? "수집 켜짐" : "수집 꺼짐") + " · 스트리머 확인: " + (owner?.name || (owner?.pending ? "조회 중" : "확인 안 됨")) + "\n" + (!stats ? "수집 프레임 응답 대기" : "읽은 항목 " + number2("scanned") + " · 해석 " + number2("parsed") + " · 대상 " + number2("matched") + " · 전송 " + number2("sent")) + " · 수신 " + received + " · 표시 " + model.items.length;
     }
     function resolveOwner() {
       const uid = getState().selectedUid;
@@ -1590,23 +2013,24 @@
       resolveOwner();
       const frame = getFrame();
       if (!ready || !frame || frame.dataset.playerReady !== "true") return;
-      const signature = JSON.stringify([frame.dataset.uid, filter, owners.get(frame.dataset.uid)?.name || ""]);
+      const { hideBadges, nativeHideBadges, ...collection } = filter;
+      const signature = JSON.stringify([frame.dataset.uid, collection, owners.get(frame.dataset.uid)?.name || ""]);
       if (configured.get(frame) === signature) return;
-      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "IMPORTANT_CHAT_CONFIG", settings: filter, streamerName: owners.get(frame.dataset.uid)?.name || "" })) configured.set(frame, signature);
+      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "IMPORTANT_CHAT_CONFIG", settings: collection, streamerName: owners.get(frame.dataset.uid)?.name || "" })) configured.set(frame, signature);
     }
     function render() {
       if (scope.isDisposed) return;
       panel.hidden = ready && !filter.enabled;
       present();
       panel.dataset.collectedCount = String(model.items.length);
-      if (expanded && !panel.hidden) renderer.render(model.items);
+      if (expanded && !panel.hidden) renderer.render(model.items, filter.hideBadges);
       diagnostics();
     }
     function controls() {
       [...panel.querySelectorAll("input,button"), ...dialog.querySelectorAll("input,button,select")].forEach((el) => el.disabled = !ready);
       enabledControl.checked = filter.enabled;
       enabledControl.disabled = !ready;
-      for (const key of ["streamers", "managers", "partners"]) $(".ic-" + key).checked = filter[key];
+      for (const key of ["streamers", "managers", "partners", "hideBadges", "nativeHideBadges"]) $(".ic-" + key).checked = key.includes("Badges") ? !filter[key] : filter[key];
       excludedControls();
       $(".ic-names").replaceChildren();
       filter.names.forEach((name, index) => {
@@ -1638,7 +2062,7 @@
       chrome.storage.local.set({ [CZImportantChat.KEY]: filter }).catch((error) => notify("채팅 설정 저장 실패: " + error.message));
     }
     enabledControl.onchange = (event) => save({ ...filter, enabled: event.target.checked });
-    for (const key of ["streamers", "managers", "partners"]) $(".ic-" + key).onchange = (event) => save({ ...filter, [key]: event.target.checked });
+    for (const key of ["streamers", "managers", "partners", "hideBadges", "nativeHideBadges"]) $(".ic-" + key).onchange = (event) => save({ ...filter, [key]: key.includes("Badges") ? !event.target.checked : event.target.checked });
     $(".ic-exclude-form").onsubmit = (event) => {
       event.preventDefault();
       const input = $(".ic-exclude-name");
@@ -1669,7 +2093,7 @@
       for (const key of ["scanned", "parsed", "matched", "sent", "restored"]) counts[key] = Number.isFinite(stats?.[key]) ? Math.max(0, Math.floor(stats[key])) : 0;
       const dom = { sourceTimeReader: String(stats?.dom?.sourceTimeReader || "").slice(0, 40), rowCandidates: Number(stats?.dom?.rowCandidates) || 0, nicknameCandidates: Number(stats?.dom?.nicknameCandidates) || 0, classes: Array.isArray(stats?.dom?.classes) ? stats.dom.classes.filter((value) => typeof value === "string").map((value) => value.slice(0, 160)).slice(-40) : [] };
       const roleSample = Array.isArray(stats?.roleSample) ? stats.roleSample.slice(0, 8).map((value) => ({ tag: String(value?.tag || "").slice(0, 20), labels: Array.isArray(value?.labels) ? value.labels.filter((item) => typeof item === "string").slice(0, 4).map((item) => item.slice(0, 80)) : [], markers: Array.isArray(value?.markers) ? value.markers.filter((item) => typeof item === "string").slice(0, 3).map((item) => item.slice(0, 120)) : [] })) : [];
-      const report = { dom, roleSample, historyEntries: Number(stats?.historyEntries) || 0, collectorRevision: typeof stats?.revision === "string" ? stats.revision.slice(0, 40) : "응답 없음", version: chrome.runtime.getManifest?.().version || "2.0.3", enabled: filter.enabled, streamers: filter.streamers, managers: filter.managers, partners: filter.partners, ownerKnown: !!owners.get(getState().selectedUid)?.name, frameReady: getFrame()?.dataset.playerReady === "true", counts, received, displayed: model.items.length, structure };
+      const report = { dom, roleSample, socketTimeSource: stats?.dom?.socketTimeSource || null, historyEntries: Number(stats?.historyEntries) || 0, collectorRevision: typeof stats?.revision === "string" ? stats.revision.slice(0, 40) : "응답 없음", version: chrome.runtime.getManifest?.().version || "확인 불가", enabled: filter.enabled, streamers: filter.streamers, managers: filter.managers, partners: filter.partners, ownerKnown: !!owners.get(getState().selectedUid)?.name, frameReady: getFrame()?.dataset.playerReady === "true", counts, received, displayed: model.items.length, structure };
       try {
         await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
         notify("채팅 내용 없이 점검 정보를 복사했습니다.");
@@ -1727,6 +2151,7 @@
       drag = null;
       enabledControl.onchange = null;
       if (dialog.open) dialog.close();
+      capture.dispose();
       model.clear();
       renderer.clear();
       owners.clear();
@@ -1788,11 +2213,12 @@
       for (const [uid, tile] of Array.from(tileMap.entries())) {
         if (visibleUids.has(uid)) continue;
         const iframe = tile.querySelector("iframe");
-        if (iframe) iframe.src = "about:blank";
+        tile.style.display = "none";
+        const released = releasePlayer(iframe, scope, uid);
         const hiddenChannel = state.channels.find((c) => c.uid === uid);
         if (hiddenChannel) hiddenChannel.muted = true;
         context.onRemove?.(uid);
-        tile.remove();
+        released.then(() => tile.remove());
         tileMap.delete(uid);
       }
       for (const channel of visibleChannels) {
@@ -1887,13 +2313,26 @@
     return { updateLayoutToggle, applyLayout, resizeFixedAspectGrid };
   }
 
+  // src/viewer/controllers/site-scroll.js
+  function lockPageScroll(doc) {
+    const names = ["overflow", "overflow-x", "overflow-y", "scrollbar-gutter", "overscroll-behavior", "overscroll-behavior-x", "overscroll-behavior-y"];
+    const saved = [doc.documentElement, doc.body].filter(Boolean).map((element) => ({ style: element.style, values: names.map((name) => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]) }));
+    for (const { style } of saved) for (const [name, value] of [["overflow", "hidden"], ["scrollbar-gutter", "auto"], ["overscroll-behavior", "none"]]) style.setProperty(name, value, "important");
+    return () => {
+      for (const { style, values } of saved) {
+        for (const name of names) style.removeProperty(name);
+        for (const [name, value, priority] of values) if (value) style.setProperty(name, value, priority);
+      }
+    };
+  }
+
   // src/viewer/template.ts
   var html = `
       <header class="mv-toolbar">
         <div class="toolbar-left">
           <details id="followingManager" class="favorite-manager"><summary>팔로잉</summary><div class="favorite-manager-panel"><div id="followingList"></div></div></details>
           <details id="favoriteManager" class="favorite-manager">
-            <summary>즐겨찾기</summary>
+            <summary title="즐겨찾기 · 단축키 F" aria-keyshortcuts="F">즐겨찾기</summary>
             <div class="favorite-manager-panel">
               <div class="favorite-manager-tools">
                 <button id="favoriteManageGroups" type="button">그룹 관리</button>
@@ -1934,7 +2373,7 @@
             </div>
           </details>
           <details id="volumeManager" class="volume-manager">
-            <summary>볼륨</summary>
+            <summary title="볼륨 조절 · 단축키 V" aria-keyshortcuts="V">볼륨</summary>
             <div class="volume-manager-panel">
               <div class="volume-row volume-master-row">
                 <div class="master-volume-top">
@@ -1954,44 +2393,52 @@
             </div>
           </details>
           <div id="layoutToggle" class="layout-toggle" role="group" aria-label="레이아웃">
-            <button type="button" class="layout-toggle-btn" data-layout="grid">그리드</button>
-            <button type="button" class="layout-toggle-btn" data-layout="main-sub">레이드</button>
+            <button type="button" class="layout-toggle-btn" data-layout="grid" title="그리드 배치 · 단축키 G" aria-keyshortcuts="G">그리드</button>
+            <button type="button" class="layout-toggle-btn" data-layout="main-sub" title="레이드 배치 · 단축키 G" aria-keyshortcuts="G">레이드</button>
           </div>
           <button id="chatSideBtn" class="icon-btn" type="button"></button>
-          <button id="chatToggleBtn" title="채팅 닫기/열기 (C)">채팅 닫기</button>
+          <button id="chatToggleBtn" title="채팅 닫기/열기 · 단축키 C" aria-keyshortcuts="C">채팅 닫기</button>
           <details id="settingsManager" class="viewer-settings">
             <summary title="설정">⚙ 설정</summary>
             <div class="settings-panel"><strong>설정</strong>
               <div class="settings-feature"><button id="settingsBackupBtn" type="button">설정 내보내기 / 불러오기</button><p>즐겨찾기와 멀티뷰 설정을 JSON 파일로 보관하거나 복원합니다.</p></div>
-              <div class="settings-feature">
+              <div class="settings-category-tabs" role="tablist" aria-label="설정 분야">
+                <button type="button" role="tab" id="settingsConvenienceTab" data-settings-tab="convenience" aria-controls="settingsConveniencePanel" aria-selected="true">편의기능</button>
+                <button type="button" role="tab" id="settingsMultiviewTab" data-settings-tab="multiview" aria-controls="settingsMultiviewPanel" aria-selected="false" tabindex="-1">멀티뷰</button>
+                <button type="button" role="tab" id="settingsPlayerTab" data-settings-tab="player" aria-controls="settingsPlayerPanel" aria-selected="false" tabindex="-1">플레이어</button>
+                <button type="button" role="tab" id="settingsChatTab" data-settings-tab="chat" aria-controls="settingsChatPanel" aria-selected="false" tabindex="-1">채팅</button>
+              </div>
+              <section id="settingsConveniencePanel" role="tabpanel" aria-labelledby="settingsConvenienceTab" data-settings-panel="convenience">              <div class="settings-feature">
+                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="powerRewardsDescription">각 라이브 타일에 실제로 존재하는 통나무 보너스 받기 버튼을 자동 클릭합니다. 화면 모드는 변경하지 않습니다. 실제 적립·수령은 치지직 조건과 버튼 제공 여부에 따릅니다. 기본 OFF입니다.</p>
+              </div>
+              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
+
+              </section>
+              <section id="settingsMultiviewPanel" role="tabpanel" aria-labelledby="settingsMultiviewTab" data-settings-panel="multiview" hidden>                <div class="settings-feature">
                 <label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
-              </div>
-              <div class="settings-feature">
-                <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><button id="importantChatSettings" class="settings-gear" type="button" title="수집 설정·점검" aria-label="수집 설정·점검"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
-                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
-              </div>
-              <div class="settings-feature">
+              </div><div class="settings-feature"><button id="settingsLayoutBtn" type="button">그리드 / 레이드 전환</button><p>현재 방송 목록과 음량을 유지하며 배치를 전환합니다.</p></div><div class="settings-feature"><button id="settingsScreenLockBtn" type="button">플레이어 조작 잠금 전환</button><p>플레이어의 클릭 조작을 잠그거나 해제합니다.</p></div></section>
+              <section id="settingsPlayerPanel" role="tabpanel" aria-labelledby="settingsPlayerTab" data-settings-panel="player" hidden><div class="settings-feature"><label class="settings-option"><span>되감기 바 표시</span><span class="settings-switch"><input id="rewindBarEnabled" type="checkbox" role="switch" aria-label="되감기 바 표시"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>멀티뷰의 방송 재생 위치 조절 바를 표시합니다. 방향키와 싱크 조절은 유지됩니다.</p></div><div class="settings-feature"><label class="settings-option"><span>자동 넓은 화면</span><span class="settings-switch"><input id="autoWideEnabled" type="checkbox" role="switch" aria-label="자동 넓은 화면"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>라이브·다시보기 진입 시 넓은 화면을 자동 적용합니다. 끄면 현재 화면 모드를 강제로 바꾸지 않습니다.</p></div>
+                <div class="settings-feature">
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
-              <div class="settings-feature">
-                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
+</section>
+              <section id="settingsChatPanel" role="tabpanel" aria-labelledby="settingsChatTab" data-settings-panel="chat" hidden>
+                <div class="settings-feature">
+                <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
+                <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
               </div>
-              <div class="settings-feature">
-                <label class="settings-option"><span>채팅 타임스탬프 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="chatTimestampsEnabled" type="checkbox" role="switch" aria-label="채팅 타임스탬프" aria-describedby="chatTimestampsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="chatTimestampsDescription">기본 OFF입니다. 켜면 확인 가능한 원본 작성 시각만 표시합니다. OFF 시 시각 읽기와 표시를 중단하며 채팅 모아보기 기록은 유지합니다.</p>
-              </div>
-              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
+                <div class="settings-feature"><label class="settings-option"><span>채팅창 펼치기</span><span class="settings-switch"><input id="settingsChatOpenEnabled" type="checkbox" role="switch" aria-label="채팅창 펼치기"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>끄면 채팅창을 접습니다. 상단 채팅 버튼과 같은 설정입니다.</p></div><div class="settings-feature"><label class="settings-option" for="settingsChatSide"><span>채팅창 위치</span><select id="settingsChatSide"><option value="left">왼쪽</option><option value="right">오른쪽</option></select></label></div><div class="settings-feature"><button id="openChatSettingsBtn" type="button">채팅 세부 설정</button><p>기본 채팅의 배지·타임스탬프와 모아보기 수집 설정을 관리합니다.</p></div></section>
             </div>
           </details>
         </div>
       </header>
 
       <div id="centerControls" class="center-controls">
-        <button id="screenLockBtn" class="center-btn" type="button" title="플레이어 조작 잠금">화면 잠금</button>
-        <button id="collapseBtn" class="center-btn center-collapse" type="button" title="멀티뷰 메뉴 접기" aria-label="멀티뷰 메뉴 접기"></button>
+        <button id="screenLockBtn" class="center-btn" type="button" title="플레이어 조작 잠금 · 단축키 H" aria-keyshortcuts="H">화면 잠금</button>
+        <button id="collapseBtn" class="center-btn center-collapse" type="button" title="멀티뷰 메뉴 접기 · 단축키 B" aria-keyshortcuts="B" aria-label="멀티뷰 메뉴 접기"></button>
       </div>
 
       <section class="mv-body">
@@ -2008,7 +2455,7 @@
 `;
 
   // src/viewer/controllers/view.js
-  function mount({ rootId: ROOT_ID, siteMode }) {
+  function mount({ rootId: ROOT_ID, siteMode, scope }) {
     if (document.getElementById(ROOT_ID)) {
       const existing = document.getElementById(ROOT_ID);
       existing.style.display = "block";
@@ -2018,6 +2465,7 @@
     host.id = ROOT_ID;
     document.body.appendChild(host);
     if (siteMode) {
+      scope.add(lockPageScroll(document));
       host.style.cssText = "position:fixed;inset:0;z-index:2147483647";
       document.querySelectorAll("video").forEach((video) => {
         video.muted = true;
@@ -2059,16 +2507,61 @@
       return el;
     }
     const settings = element("#settingsManager");
+    root.dataset.rewindBar = String(context.state.rewindBar !== false);
+    const tabs = [...root.querySelectorAll("[data-settings-tab]")];
+    function selectCategory(name) {
+      for (const tab of tabs) {
+        const selected = tab.dataset.settingsTab === name;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      }
+      for (const panel of root.querySelectorAll("[data-settings-panel]")) panel.hidden = panel.dataset.settingsPanel !== name;
+    }
+    tabs.forEach((tab, index) => {
+      scope.listen(tab, "click", () => selectCategory(tab.dataset.settingsTab));
+      scope.listen(tab, "keydown", (event) => {
+        const e = event;
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+        e.preventDefault();
+        const next = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (index + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+        selectCategory(tabs[next].dataset.settingsTab);
+        tabs[next].focus();
+      });
+    });
+    scope.listen(element("#openChatSettingsBtn"), "click", () => {
+      settings.open = false;
+      context.openChatSettings();
+    });
+    scope.listen(element("#settingsLayoutBtn"), "click", () => {
+      const next = context.state.layout === "grid" ? "main-sub" : "grid";
+      root.querySelector(`.layout-toggle-btn[data-layout="${next}"]`)?.click();
+    });
+    scope.listen(element("#settingsScreenLockBtn"), "click", () => element("#screenLockBtn").click());
+    for (const [selector, key] of [["#rewindBarEnabled", "rewindBar"], ["#autoWideEnabled", "autoWide"]]) {
+      const input = element(selector);
+      input.checked = context.state[key] !== false;
+      scope.listen(input, "change", () => {
+        context.state[key] = input.checked;
+        if (key === "rewindBar") root.dataset.rewindBar = String(input.checked);
+        else context.syncShortcuts();
+        context.save();
+      });
+    }
+    const chatOpen = element("#settingsChatOpenEnabled"), chatSide = element("#settingsChatSide");
+    const syncChat = () => {
+      chatOpen.checked = context.state.chatOpen !== false;
+      chatSide.value = context.state.chatSide;
+    };
+    syncChat();
+    scope.listen(settings, "toggle", syncChat);
+    scope.listen(chatOpen, "change", () => context.setChatOpen(chatOpen.checked));
+    scope.listen(chatSide, "change", () => context.setChatSide(chatSide.value));
     const shortcut = element("#shortcutsEnabled");
     shortcut.checked = context.state.shortcutsEnabled !== false;
     scope.listen(shortcut, "change", () => {
       context.state.shortcutsEnabled = shortcut.checked;
       context.syncShortcuts();
       context.save();
-    });
-    scope.listen(element("#importantChatSettings"), "click", () => {
-      settings.open = false;
-      context.openChatSettings();
     });
     scope.listen(element("#powerDiagnosticsBtn"), "click", () => {
       settings.open = false;
@@ -2149,7 +2642,9 @@
       scope,
       save: saveState,
       syncShortcuts: syncShortcutSettings,
-      openChatSettings: () => importantChat.openSettings(),
+      setChatOpen,
+      setChatSide,
+      openChatSettings: () => importantChat.openSettings("native"),
       openPowerDiagnostics: () => powerDiagnostics2.open()
     });
     volumePanel.bind();
@@ -2216,7 +2711,7 @@
         return;
       }
       if (data.type === "CHAT_SETTINGS_OPEN") {
-        importantChat?.openSettings();
+        importantChat?.openSettings("native");
         return;
       }
       if (data.type === "CHAT_HEADER") return;
@@ -2237,6 +2732,7 @@
         CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "SET_CHAT_MODE", visible: true });
       } else if (data.type === "PLAYER_READY") {
         frame.dataset.playerReady = "true";
+        CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "PLAYER_OPTIONS", autoWide: state.autoWide !== false });
         CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "MEDIA_SHORTCUTS", enabled: state.shortcutsEnabled !== false });
         CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "POWER_REWARDS_CONFIG", enabled: state.powerRewards === true });
         clearSyncState(data.uid);
@@ -2279,7 +2775,7 @@
         const buttons = [ui.querySelector("#screenLockBtn")].filter(Boolean);
         for (const btn of buttons) {
           btn.textContent = state.screenLocked ? "화면 잠금 해제" : "화면 잠금";
-          btn.title = state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금";
+          btn.title = (state.screenLocked ? "플레이어 조작 잠금 해제" : "플레이어 조작 잠금") + " · 단축키 H";
           btn.classList.toggle("lock-active", state.screenLocked);
         }
       }
@@ -2304,7 +2800,7 @@
       const btn = ui.querySelector("#collapseBtn");
       if (!btn) return;
       btn.innerHTML = toolbarCollapsed ? ICON_CHEVRON_DOWN : ICON_CHEVRON_UP;
-      btn.title = toolbarCollapsed ? "멀티뷰 메뉴 펼치기" : "멀티뷰 메뉴 접기";
+      btn.title = (toolbarCollapsed ? "멀티뷰 메뉴 펼치기" : "멀티뷰 메뉴 접기") + " · 단축키 B";
       btn.setAttribute("aria-label", btn.title);
     }
     function setChatSide(side, persist = true) {
@@ -2331,7 +2827,10 @@
       state.chatOpen = !!open;
       ui.classList.toggle("chat-closed", !state.chatOpen);
       const btn = ui.querySelector("#chatToggleBtn");
-      if (btn) btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
+      if (btn) {
+        btn.textContent = state.chatOpen ? "채팅 닫기" : "채팅 열기";
+        btn.title = btn.textContent + " · 단축키 C";
+      }
       updateChat();
       resizeFixedAspectGrid();
       saveState();
@@ -2518,10 +3017,11 @@
       tileMap.delete(uid);
       state.channels = state.channels.filter((c) => c.uid !== uid);
       const iframe = tile?.querySelector("iframe");
-      if (iframe) iframe.dataset.playerReady = "false";
+      if (tile) tile.style.display = "none";
+      const released = releasePlayer(iframe, context.scope, uid);
       mediaTools2.detach(uid);
       clearSyncState(uid);
-      tile?.remove();
+      released.then(() => tile?.remove());
       if (selectedChanged) {
         state.selectedUid = state.channels[0]?.uid || null;
         if (state.selectedUid && state.mainOnly) makeMainAudible();
@@ -2541,9 +3041,9 @@
       }
       for (const [uid, tile] of tileMap) {
         const iframe = tile.querySelector("iframe");
-        if (iframe) iframe.src = "about:blank";
+        tile.style.display = "none";
+        releasePlayer(iframe, context.scope, uid).then(() => tile.remove());
         mediaTools2.detach(uid);
-        tile.remove();
       }
       tileMap.clear();
       clearAllSyncState();
@@ -3077,7 +3577,7 @@
     });
     const { applyTileLock, setScreenLock, toggleScreenLock, toggleToolbar, updateToolbarToggleUI, setChatSide, toggleChatSide, setChatOpen, toggleChat, showNotice } = shell;
     function createUI() {
-      const mounted = mount({ rootId: ROOT_ID, siteMode: !!globalThis.CZ_SITE_VIEWER });
+      const mounted = mount({ rootId: ROOT_ID, scope, siteMode: !!globalThis.CZ_SITE_VIEWER });
       if (!mounted) return;
       ({ ui, videoGrid, chatPanel } = mounted);
       mediaTools2.bindSettings();
@@ -3167,7 +3667,7 @@
     function refreshVolumeManager() {
       volumePanel.refresh();
     }
-    const { isChannelVisibleInLayout, createTile, moveSelectedToFront, selectChannel, syncSelection } = players.create({ get mediaTools() {
+    const { isChannelVisibleInLayout, createTile, moveSelectedToFront, selectChannel, syncSelection } = players.create({ scope, get mediaTools() {
       return mediaTools2;
     }, get state() {
       return state;
@@ -3198,9 +3698,11 @@
     }, tileMap, showNotice, escapeHtml, displayChannelName });
     function syncShortcutSettings() {
       ui.dataset.chatTimestamps = String(state.chatTimestamps === true);
+      ui.dataset.rewindBar = String(state.rewindBar !== false);
       CZMessages.postToPlayer(chatFrame, { source: "chzzk-multiview", type: "CHAT_TIMESTAMP_CONFIG", enabled: state.chatTimestamps === true });
       CZMessages.postToPlayer(chatFrame, { source: "chzzk-multiview", type: "MEDIA_SHORTCUTS", enabled: state.shortcutsEnabled !== false });
       for (const tile of tileMap.values()) {
+        CZMessages.postToPlayer(tile.querySelector("iframe"), { source: "chzzk-multiview", type: "PLAYER_OPTIONS", autoWide: state.autoWide !== false });
         CZMessages.postToPlayer(tile.querySelector("iframe"), { source: "chzzk-multiview", type: "MEDIA_SHORTCUTS", enabled: state.shortcutsEnabled !== false });
         CZMessages.postToPlayer(tile.querySelector("iframe"), { source: "chzzk-multiview", type: "POWER_REWARDS_CONFIG", enabled: state.powerRewards === true });
       }

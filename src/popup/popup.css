@@ -922,6 +922,12 @@ button {
 .favorite-row.offline .favorite-main, .favorite-list-row.offline { min-height:40px; padding-top:8px; padding-bottom:8px; }
 
 .favorite-row.offline { padding-top:0; padding-bottom:0; }
+
+/* Keep spacing outside the hit area; paint the complete outlined row. */
+.favorite-row + .favorite-row, .favorite-list-row + .favorite-list-row { margin-top:4px; }
+.favorite-row.online:hover, .favorite-row.offline:hover, #favoriteManager .favorite-list-row:hover { background-color:#303638; }
+.favorite-row .favorite-main, .favorite-row .favorite-main:hover, .favorite-row .favorite-main:focus-visible,
+.favorite-list-row .favorite-list-add, .favorite-list-row .favorite-list-add:hover, .favorite-list-row .favorite-list-add:focus-visible { background:transparent; }
 /* Popup density: preserve shared columns/type while removing nested padding. */
 .favorite-row { padding:0 4px; }
 .favorite-row .favorite-main { min-height:46px; padding:4px 8px; gap:8px; }

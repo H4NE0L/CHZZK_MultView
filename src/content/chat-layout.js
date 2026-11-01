@@ -160,6 +160,98 @@
     return values.size === 1 ? [...values][0] : null;
   }
 
+  // src/content/chat/badge-presentation.js
+  function createBadgePresentation() {
+    const rows = '[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+    const names = '[data-chat-nickname],[class*="live_chatting_username_nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
+    let enabled = false;
+    const hidden = /* @__PURE__ */ new Map();
+    function restore(node) {
+      const original = hidden.get(node);
+      if (!original) return;
+      hidden.delete(node);
+      node.removeAttribute("data-cz-native-badge");
+      if (original.value) node.style.setProperty("display", original.value, original.priority);
+      else node.style.removeProperty("display");
+    }
+    function hide(node) {
+      if (!hidden.has(node)) hidden.set(node, { value: node.style.getPropertyValue("display"), priority: node.style.getPropertyPriority("display") });
+      node.setAttribute("data-cz-native-badge", "");
+      if (node.style.getPropertyValue("display") !== "none" || node.style.getPropertyPriority("display") !== "important") node.style.setProperty("display", "none", "important");
+    }
+    function mark(row) {
+      const targets = /* @__PURE__ */ new Set();
+      const nickname = [...row.querySelectorAll(names)].find((node) => !node.querySelector(names));
+      if (!nickname) return;
+      const bodies = [...row.querySelectorAll('[data-chat-text],[class*="live_chatting_message_text"]')];
+      for (const node of row.querySelectorAll('img,svg,[class*="badge" i],[data-user-role],[data-user-type]')) {
+        if (node.contains(nickname) || bodies.some((body) => body.contains(node))) continue;
+        const before = !!(node.compareDocumentPosition(nickname) & Node.DOCUMENT_POSITION_FOLLOWING);
+        let leading = false;
+        if (!before && !nickname.contains(node)) {
+          try {
+            const range = document.createRange();
+            range.setStartAfter(nickname);
+            range.setEndBefore(node);
+            leading = !range.toString().trim();
+          } catch (_) {
+          }
+        }
+        const known = node.matches('[class*="badge" i],[data-user-role],[data-user-type]') || /인증|공식|배지|verified|badge/i.test([node.getAttribute("alt"), node.getAttribute("aria-label"), node.getAttribute("src")].join(" "));
+        if (before || nickname.contains(node) || known || leading && node.matches("svg")) targets.add(node);
+      }
+      for (const node of [...targets]) {
+        let wrapper = node.parentElement;
+        for (let depth = 0; wrapper && wrapper !== row && depth < 3; depth++, wrapper = wrapper.parentElement) {
+          if (wrapper.contains(nickname) || ![...wrapper.childNodes].every((child) => child.nodeType === 3 ? !child.textContent.trim() : child.nodeType === 1 && targets.has(child))) break;
+          targets.add(wrapper);
+        }
+      }
+      row.querySelectorAll("[data-cz-native-badge]").forEach((node) => {
+        if (!targets.has(node)) restore(node);
+      });
+      targets.forEach(hide);
+    }
+    function scan(node) {
+      if (node.nodeType !== 1) node = node.parentElement;
+      if (!node || node.closest(".cz-native-chat-time")) return;
+      const row = node.closest(rows);
+      if (row) mark(row);
+      else [...node.querySelectorAll(rows)].slice(-200).forEach(mark);
+    }
+    const observer = new MutationObserver((records) => {
+      const nodes = /* @__PURE__ */ new Set();
+      for (const record of records) {
+        if (record.type === "childList") {
+          for (const node of record.addedNodes) nodes.add(node);
+          for (const node of record.removedNodes) if (node.nodeType === 1 && !node.isConnected) {
+            if (hidden.has(node)) restore(node);
+            node.querySelectorAll("[data-cz-native-badge]").forEach(restore);
+          }
+        } else nodes.add(record.target);
+      }
+      for (const node of nodes) scan(node);
+    });
+    function set(value) {
+      const next = value === true;
+      if (enabled === next) return;
+      enabled = next;
+      observer.disconnect();
+      document.documentElement.setAttribute("data-cz-hide-chat-badges", String(enabled));
+      if (enabled) {
+        scan(document.documentElement);
+        observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "src", "alt", "aria-label", "style"] });
+      } else for (const node of [...hidden.keys()]) restore(node);
+    }
+    function dispose() {
+      enabled = false;
+      observer.disconnect();
+      document.documentElement.removeAttribute("data-cz-hide-chat-badges");
+      for (const node of [...hidden.keys()]) restore(node);
+    }
+    return { set, dispose };
+  }
+
   // src/content/chat/header-style.js
   var headerStyles = `
 .cz-chat-only { border:0!important; border-radius:0!important; }
@@ -174,12 +266,14 @@
 #cz-chat-power { display:inline-flex!important; align-items:center!important; justify-content:center!important; flex:0 0 auto!important; height:24px!important; max-width:104px!important; gap:4px!important; padding:0 8px!important; margin:0!important; border:1px solid #365447!important; border-radius:4px!important; background:#16271f!important; color:#bfe9d4!important; font-family:Arial,"Noto Sans KR",sans-serif!important; font-size:12px!important; line-height:16px!important; font-weight:600!important; white-space:nowrap!important; box-sizing:border-box!important; }
 #cz-chat-power .cz-power-value { min-width:0!important; overflow:hidden!important; text-overflow:ellipsis!important; font-variant-numeric:tabular-nums!important; }
 #cz-chat-power[data-known="false"] { color:#acb6c3!important; border-color:#3b424b!important; background:#1e242a!important; }
-.cz-native-chat-time { display:inline!important; margin-right:6px!important; color:#a2afbd!important; font-size:10px!important; font-weight:400!important; line-height:inherit!important; white-space:nowrap!important; }
+html[data-cz-hide-chat-badges="true"] [data-cz-native-badge] { display:none!important; }
+.cz-native-chat-time { display:inline!important; margin-right:6px!important; color:#fffafa!important; font-size:80%!important; font-weight:400!important; line-height:inherit!important; white-space:nowrap!important; }
 @media(max-width:280px) { .cz-native-chat-header { gap:4px!important; padding-left:8px!important; padding-right:8px!important; } #cz-chat-power .cz-power-label { display:none!important; } #cz-chat-power { max-width:66px!important; } }
 `;
 
   // src/content/chat-layout.js
-  globalThis.CZChatLayout = /* @__PURE__ */ (() => {
+  globalThis.CZChatLayout = (() => {
+    const badgePresentation = createBadgePresentation();
     function findReplayChatRoot(doc) {
       const markers = Array.from(doc.querySelectorAll("body *")).filter((el) => {
         const text = String(el.textContent || "").replace(/\s+/g, " ").trim();
@@ -344,6 +438,7 @@
     let presentation = { name: "", height: 0 }, onHeader = null, nativeMenuOpen = false;
     const boundRoots = /* @__PURE__ */ new WeakSet();
     function setPresentation(value) {
+      badgePresentation.set(value.hideBadges);
       presentation = { name: String(value.name || "").slice(0, 160), height: 0 };
       prepare();
     }
@@ -653,6 +748,7 @@
       window.addEventListener("pagehide", () => {
         overlays?.disconnect();
         timestampObserver?.disconnect();
+        badgePresentation.dispose();
       }, { once: true });
       document.addEventListener("focusin", apply);
       document.addEventListener("focusout", () => queueMicrotask(apply));
