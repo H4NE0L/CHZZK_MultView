@@ -69,3 +69,10 @@ test('native badge display defaults visible in old backups and roundtrips indepe
  assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[C].nativeHideBadges,true);assert.equal(f.data[C].hideBadges,false);
  document.data.chat.nativeHideBadges='true';assert.throws(()=>f.api.parse(document));
 });
+
+test('player preferences default to existing behavior and roundtrip independently',async()=>{
+ const f=setup(),document=(await f.send('SETTINGS_BACKUP_EXPORT')).document;
+ for(const key of ['rewindBar','autoWide']){delete document.data.session[key];assert.equal(f.api.parse(document).data.session[key],true);document.data.session[key]=false;}
+ assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[S].rewindBar,false);assert.equal(f.data[S].autoWide,false);
+ document.data.session.autoWide='false';assert.throws(()=>f.api.parse(document));
+});

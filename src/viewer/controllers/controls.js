@@ -11,7 +11,7 @@ export function bind(context) {
     ui.querySelector("#chatToggleBtn").addEventListener("click", toggleChat);
     ui.querySelector("#chatSideBtn").addEventListener("click", toggleChatSide);
     ui.querySelector("#screenLockBtn").addEventListener("click", toggleScreenLock);
-    bindSettings({root:ui,get state(){return context.state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,
+    bindSettings({root:ui,get state(){return context.state;},scope,save:saveState,syncShortcuts:syncShortcutSettings,setChatOpen,setChatSide,
       openChatSettings:()=>importantChat.openSettings('native'),openPowerDiagnostics:()=>powerDiagnostics.open()});
     volumePanel.bind();
 

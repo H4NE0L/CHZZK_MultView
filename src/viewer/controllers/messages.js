@@ -20,6 +20,7 @@ export function bind(context) {
       CZMessages.postToPlayer(frame, {source: 'chzzk-multiview', type: 'SET_CHAT_MODE', visible: true});
     } else if (data.type === 'PLAYER_READY') {
       frame.dataset.playerReady = 'true';
+      CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'PLAYER_OPTIONS',autoWide:state.autoWide!==false});
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'POWER_REWARDS_CONFIG',enabled:state.powerRewards===true});
       clearSyncState(data.uid);

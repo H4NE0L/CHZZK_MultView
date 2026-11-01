@@ -3,7 +3,12 @@ module.exports=async page=>{
  await page.locator('#settingsManager > summary').click();
  assert.equal(await page.locator('.settings-panel > .settings-feature').first().locator('button').getAttribute('id'),'settingsBackupBtn');
  assert.deepEqual(await page.locator('[data-settings-tab]').allTextContents(),['편의기능','멀티뷰','플레이어','채팅']);
+ await page.locator('[data-settings-tab=multiview]').click();assert(await page.locator('#shortcutsEnabled').isVisible());assert.equal(await page.locator('#powerRewardsEnabled').isVisible(),false);
  await page.locator('[data-settings-tab=player]').click();assert(await page.locator('#recordingProfile').isVisible());assert.equal(await page.locator('#importantChatEnabled').isVisible(),false);
+ await page.locator('#rewindBarEnabled').uncheck();assert.equal(await page.locator('.media-transport').first().isVisible(),false);await page.locator('#rewindBarEnabled').check();
+ await page.locator('#autoWideEnabled').uncheck();assert.equal((await page.evaluate(()=>chrome.storage.local.get('chzzkMultiviewV09'))).chzzkMultiviewV09.autoWide,false);await page.locator('#autoWideEnabled').check();
+ await page.locator('[data-settings-tab=chat]').click();assert(await page.locator('#settingsChatSide').isVisible());await page.locator('#settingsChatSide').selectOption('left');assert(await page.locator('.mv-root').evaluate(el=>el.classList.contains('chat-left')));await page.locator('#settingsChatSide').selectOption('right');
+ await page.locator('[data-settings-tab=convenience]').click();assert(await page.locator('#powerRewardsEnabled').isVisible());
  const live=page.locator('.video-tile iframe[src*="/live/"]').first();
  if(await live.count()){
   const handle=await live.elementHandle(),frame=await handle.contentFrame();await handle.dispose();

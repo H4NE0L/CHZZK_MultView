@@ -72,7 +72,7 @@ import {create as createChannelList} from './controllers/channel-list.js';
   function syncVolumeUI(){volumePanel.sync();}
   function refreshVolumeManager(){volumePanel.refresh();}
 
-  const {isChannelVisibleInLayout,createTile,moveSelectedToFront,selectChannel,syncSelection} = CZPlayers.create({get mediaTools() {return mediaTools;}, get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
+  const {isChannelVisibleInLayout,createTile,moveSelectedToFront,selectChannel,syncSelection} = CZPlayers.create({scope,get mediaTools() {return mediaTools;}, get state() {return state;}, get videoGrid() {return videoGrid;}, get dragUid() {return dragUid;}, set dragUid(value) {dragUid = value;}, tileMap, escapeHtml: (...args) => escapeHtml(...args), displayChannelName: (...args) => displayChannelName(...args), removeChannel: (...args) => removeChannel(...args), showNotice: (...args) => showNotice(...args), applyLayout: (...args) => applyLayout(...args), updateChat: (...args) => updateChat(...args), refreshChannelManager: (...args) => refreshChannelManager(...args), saveState: (...args) => saveState(...args), applyTileLock: (...args) => applyTileLock(...args), syncVolumeUI: (...args) => syncVolumeUI(...args), clearSyncState: (...args) => clearSyncState(...args), sendTileVolume: (...args) => sendTileVolume(...args), makeMainAudible: (...args) => makeMainAudible(...args)});
 
   let unmuteRequest=null;
   function ensureViewerAudible(){
@@ -93,9 +93,11 @@ import {create as createChannelList} from './controllers/channel-list.js';
 
   function syncShortcutSettings() {
     ui.dataset.chatTimestamps=String(state.chatTimestamps===true);
+    ui.dataset.rewindBar=String(state.rewindBar!==false);
     CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'CHAT_TIMESTAMP_CONFIG',enabled:state.chatTimestamps===true});
     CZMessages.postToPlayer(chatFrame,{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
     for(const tile of tileMap.values()){
+      CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'PLAYER_OPTIONS',autoWide:state.autoWide!==false});
       CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'MEDIA_SHORTCUTS',enabled:state.shortcutsEnabled!==false});
       CZMessages.postToPlayer(tile.querySelector('iframe'),{source:'chzzk-multiview',type:'POWER_REWARDS_CONFIG',enabled:state.powerRewards===true});
     }

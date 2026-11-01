@@ -50,3 +50,7 @@
 [data-settings-panel][hidden] { display:none!important; }
 .ic-dialog .settings-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .ic-dialog .settings-feature p { color:#aeb7c4; font-size:11px; line-height:1.7; margin:8px 0 0; }
+
+.mv-root[data-rewind-bar="false"] .media-transport { display:none!important; }
+.tile-offline-refresh { width:max-content; max-width:calc(100% - 16px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:absolute; top:44px; left:50%; transform:translateX(-50%); z-index:30; padding:8px 12px; border:1px solid #00dc9b; border-radius:4px; background:#07513d; color:#fffafa; font-size:12px; cursor:pointer; }
+.tile-offline-refresh[hidden] { display:none!important; }

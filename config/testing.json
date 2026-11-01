@@ -86,5 +86,9 @@
   "src/viewer/chat-colors.js": [
     "CZChatColors",
     null
+  ],
+  "src/viewer/live-tracker.js": [
+    "CZLiveTracker",
+    null
   ]
 }

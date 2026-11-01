@@ -205,7 +205,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   const syncTimer=setInterval(reportSyncState, 1000);
 
   const powerRewards=chatMode?null:createPowerRewards({findVideo});
-  let theaterApplied = false;
+  let theaterApplied = false,autoWide=true;
   let theaterTimer = null;
 
   function getTheaterButton() {
@@ -230,7 +230,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   }
 
   function pressTheaterShortcut() {
-    if (chatMode || theaterApplied) return false;
+    if (chatMode || !autoWide || theaterApplied) return false;
     const video = findVideo();
     if (!video) return false;
 
@@ -255,7 +255,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   }
 
   function scheduleTheater() {
-    if (chatMode || powerRewards?.enabled || theaterApplied || theaterTimer) return;
+    if (chatMode || !autoWide || powerRewards?.enabled || theaterApplied || theaterTimer) return;
 
     let tries = 0;
     theaterTimer = setInterval(() => {
@@ -307,6 +307,7 @@ import {create as createPowerRewards} from './power-rewards.js';
       const reply=result=>window.parent.postMessage({source:'chzzk-multiview',type:'PLAYER_DISPOSED',uid:frameUid,requestId:event.data.requestId,details:{before,audio:result?.audio||null,error:result?.error||null}},PARENT_ORIGIN);
       Promise.all([mediaReleased,chrome.runtime.sendMessage({type:'PLAYER_AUDIO_TEARDOWN'}).catch(error=>({error:String(error)}))]).then(([,result])=>reply(result));return;
     }
+    if(event.data.type==='PLAYER_OPTIONS'&&!chatMode){autoWide=event.data.autoWide!==false;if(!autoWide){clearInterval(theaterTimer);theaterTimer=null;}else scheduleTheater();}
     if(event.data.type==='POWER_REWARDS_CONFIG' && powerRewards){
       clearInterval(theaterTimer);theaterTimer=null;powerRewards.configure(event.data.enabled);
       if(!powerRewards.enabled){theaterApplied=false;scheduleTheater();}

@@ -6,6 +6,8 @@ interface SettingsContext {
   scope: ResourceScope;
   save(): void;
   syncShortcuts(): void;
+  setChatOpen(value: boolean): void;
+  setChatSide(value: string): void;
   openChatSettings(): void;
   openPowerDiagnostics(): void;
 }
@@ -17,6 +19,7 @@ export function bind(context: SettingsContext) {
     return el;
   }
   const settings=element<HTMLDetailsElement>('#settingsManager');
+  root.dataset.rewindBar=String(context.state.rewindBar!==false);
   // New settings join a category through these data attributes.
   const tabs=[...root.querySelectorAll<HTMLButtonElement>('[data-settings-tab]')];
   function selectCategory(name: string){for(const tab of tabs){const selected=tab.dataset.settingsTab===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;}for(const panel of root.querySelectorAll<HTMLElement>('[data-settings-panel]'))panel.hidden=panel.dataset.settingsPanel!==name;}
@@ -24,6 +27,11 @@ export function bind(context: SettingsContext) {
   scope.listen(element('#openChatSettingsBtn'),'click',()=>{settings.open=false;context.openChatSettings();});
   scope.listen(element('#settingsLayoutBtn'),'click',()=>{const next=context.state.layout==='grid'?'main-sub':'grid';root.querySelector<HTMLButtonElement>(`.layout-toggle-btn[data-layout="${next}"]`)?.click();});
   scope.listen(element('#settingsScreenLockBtn'),'click',()=>element<HTMLButtonElement>('#screenLockBtn').click());
+  for(const [selector,key] of [['#rewindBarEnabled','rewindBar'],['#autoWideEnabled','autoWide']] as const){const input=element<HTMLInputElement>(selector);input.checked=context.state[key]!==false;scope.listen(input,'change',()=>{context.state[key]=input.checked;context.syncShortcuts();context.save();});}
+  const chatOpen=element<HTMLInputElement>('#settingsChatOpenEnabled'),chatSide=element<HTMLSelectElement>('#settingsChatSide');
+  const syncChat=()=>{chatOpen.checked=context.state.chatOpen!==false;chatSide.value=context.state.chatSide;};syncChat();
+  scope.listen(settings,'toggle',syncChat);
+  scope.listen(chatOpen,'change',()=>context.setChatOpen(chatOpen.checked));scope.listen(chatSide,'change',()=>context.setChatSide(chatSide.value));
   const shortcut=element<HTMLInputElement>('#shortcutsEnabled');
   shortcut.checked=context.state.shortcutsEnabled!==false;
   scope.listen(shortcut,'change',()=>{

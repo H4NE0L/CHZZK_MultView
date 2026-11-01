@@ -1,4 +1,6 @@
+import {createLiveTracker} from './live-tracker.js';
 export const players = {create(context) {
+  const liveTracker=context.scope?createLiveTracker({scope:context.scope,tileMap:context.tileMap,isRecording:uid=>context.mediaTools.isRecording?.(uid),notify:context.showNotice}):null;
   const {tileMap, escapeHtml, displayChannelName, removeChannel, showNotice, applyLayout, updateChat, refreshChannelManager, saveState, applyTileLock, syncVolumeUI, clearSyncState, sendTileVolume, makeMainAudible} = context;
   function isChannelVisibleInLayout(uid) {
     const index = context.state.channels.findIndex(c => c.uid === uid);
@@ -118,6 +120,9 @@ export const players = {create(context) {
       clearSyncState(channel.uid);
       try {
         CZMessages.postToPlayer(tileFrame, {
+          source: "chzzk-multiview", type: "PLAYER_OPTIONS", autoWide:context.state.autoWide!==false
+        });
+        CZMessages.postToPlayer(tileFrame, {
           source: "chzzk-multiview", type: "ENTER_THEATER"
         });
         CZMessages.postToPlayer(tileFrame, {
@@ -157,6 +162,7 @@ export const players = {create(context) {
     tileMap.set(channel.uid, tile);
     context.mediaTools.attachTile(channel.uid,tile);
     context.videoGrid.appendChild(tile);
+    liveTracker?.watch(channel,tile);
 
     updateTileMainUI(channel.uid);
     sendTileVolume(channel.uid);

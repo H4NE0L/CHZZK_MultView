@@ -79,29 +79,29 @@ export const html = `
                 <button type="button" role="tab" id="settingsPlayerTab" data-settings-tab="player" aria-controls="settingsPlayerPanel" aria-selected="false" tabindex="-1">플레이어</button>
                 <button type="button" role="tab" id="settingsChatTab" data-settings-tab="chat" aria-controls="settingsChatPanel" aria-selected="false" tabindex="-1">채팅</button>
               </div>
-              <section id="settingsConveniencePanel" role="tabpanel" aria-labelledby="settingsConvenienceTab" data-settings-panel="convenience">
-                <div class="settings-feature">
+              <section id="settingsConveniencePanel" role="tabpanel" aria-labelledby="settingsConvenienceTab" data-settings-panel="convenience">              <div class="settings-feature">
+                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
+                <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
+              </div>
+              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div>
+
+              </section>
+              <section id="settingsMultiviewPanel" role="tabpanel" aria-labelledby="settingsMultiviewTab" data-settings-panel="multiview" hidden>                <div class="settings-feature">
                 <label class="settings-option"><span>멀티뷰 단축키 사용</span><span class="settings-switch"><input id="shortcutsEnabled" type="checkbox" role="switch" aria-label="멀티뷰 단축키 사용" aria-describedby="shortcutsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
                 <p id="shortcutsDescription">즐겨찾기·화면 잠금·상단바·소리·배치·채팅 및 방향키 단축키를 켜거나 끕니다. 스크린샷 S와 녹화 R은 항상 사용할 수 있습니다.</p>
-              </div>
-              </section>
-              <section id="settingsMultiviewPanel" role="tabpanel" aria-labelledby="settingsMultiviewTab" data-settings-panel="multiview" hidden><div class="settings-feature"><button id="settingsLayoutBtn" type="button">그리드 / 레이드 전환</button><p>현재 방송 목록과 음량을 유지하며 배치를 전환합니다.</p></div><div class="settings-feature"><button id="settingsScreenLockBtn" type="button">플레이어 조작 잠금 전환</button><p>플레이어의 클릭 조작을 잠그거나 해제합니다.</p></div></section>
-              <section id="settingsPlayerPanel" role="tabpanel" aria-labelledby="settingsPlayerTab" data-settings-panel="player" hidden>
+              </div><div class="settings-feature"><button id="settingsLayoutBtn" type="button">그리드 / 레이드 전환</button><p>현재 방송 목록과 음량을 유지하며 배치를 전환합니다.</p></div><div class="settings-feature"><button id="settingsScreenLockBtn" type="button">플레이어 조작 잠금 전환</button><p>플레이어의 클릭 조작을 잠그거나 해제합니다.</p></div></section>
+              <section id="settingsPlayerPanel" role="tabpanel" aria-labelledby="settingsPlayerTab" data-settings-panel="player" hidden><div class="settings-feature"><label class="settings-option"><span>되감기 바 표시</span><span class="settings-switch"><input id="rewindBarEnabled" type="checkbox" role="switch" aria-label="되감기 바 표시"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>멀티뷰의 방송 재생 위치 조절 바를 표시합니다. 방향키와 싱크 조절은 유지됩니다.</p></div><div class="settings-feature"><label class="settings-option"><span>자동 넓은 화면</span><span class="settings-switch"><input id="autoWideEnabled" type="checkbox" role="switch" aria-label="자동 넓은 화면"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>라이브·다시보기 진입 시 넓은 화면을 자동 적용합니다. 끄면 현재 화면 모드를 강제로 바꾸지 않습니다. 통나무 수집 보조 사용 시 원본 채팅 유지를 우선합니다.</p></div>
                 <div class="settings-feature">
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
-              <div class="settings-feature">
-                <label class="settings-option"><span>통나무 수집 보조 <span class="settings-experimental">(실험)</span></span><span class="settings-switch"><input id="powerRewardsEnabled" type="checkbox" role="switch" aria-label="통나무 수집 보조" aria-describedby="powerRewardsDescription"><span class="settings-switch-track" aria-hidden="true"></span></span></label>
-                <p id="powerRewardsDescription">각 라이브 타일의 원본 채팅 구성요소를 유지하고 명확한 보너스 받기 버튼을 자동 클릭합니다. 메모리 사용이 늘 수 있으며 실제 적립·수령은 치지직 조건에 따릅니다. 기본 OFF입니다.</p>
-              </div>
-              <div class="settings-debug-panel"><button id="powerDiagnosticsBtn" type="button">통나무 파워 점검</button></div></section>
+</section>
               <section id="settingsChatPanel" role="tabpanel" aria-labelledby="settingsChatTab" data-settings-panel="chat" hidden>
                 <div class="settings-feature">
                 <div class="settings-option"><label for="importantChatEnabled">채팅 모아보기 사용</label><div class="settings-option-actions"><label class="settings-switch"><input id="importantChatEnabled" type="checkbox" role="switch" aria-label="채팅 모아보기 사용" aria-describedby="importantChatDescription"><span class="settings-switch-track" aria-hidden="true"></span></label></div></div>
                 <p id="importantChatDescription">주요 사용자의 채팅을 별도 영역에 모아 표시합니다.</p>
               </div>
-                <div class="settings-feature"><button id="openChatSettingsBtn" type="button">채팅 세부 설정</button><p>기본 채팅의 배지·타임스탬프와 모아보기 수집 설정을 관리합니다.</p></div></section>
+                <div class="settings-feature"><label class="settings-option"><span>채팅창 펼치기</span><span class="settings-switch"><input id="settingsChatOpenEnabled" type="checkbox" role="switch" aria-label="채팅창 펼치기"><span class="settings-switch-track" aria-hidden="true"></span></span></label><p>끄면 채팅창을 접습니다. 상단 채팅 버튼과 같은 설정입니다.</p></div><div class="settings-feature"><label class="settings-option" for="settingsChatSide"><span>채팅창 위치</span><select id="settingsChatSide"><option value="left">왼쪽</option><option value="right">오른쪽</option></select></label></div><div class="settings-feature"><button id="openChatSettingsBtn" type="button">채팅 세부 설정</button><p>기본 채팅의 배지·타임스탬프와 모아보기 수집 설정을 관리합니다.</p></div></section>
             </div>
           </details>
         </div>
