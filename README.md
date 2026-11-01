@@ -2,7 +2,7 @@
 
 여러 CHZZK 방송을 한 화면에서 시청하는 브라우저 확장 프로그램입니다.
 
-**v3.0.1 · Chrome 119 이상 권장**
+**v3.1.0 · Chrome 119 이상 권장**
 
 ## 주요 기능
 
@@ -14,7 +14,7 @@
 
 ## 설치 및 업데이트
 
-1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.0.1.zip)** 후 압축을 풉니다.
+1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.1.0.zip)** 후 압축을 풉니다.
 2. `chrome://extensions`에서 **개발자 모드 → 압축해제된 확장 프로그램을 로드**를 선택합니다.
 3. 압축을 푼 폴더 중 `manifest.json`이 있는 폴더를 지정합니다.
 
