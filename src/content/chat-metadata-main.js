@@ -5,7 +5,7 @@ import {sourceTimes} from '../shared/chat/source-times.js';
 // connections, network requests, React hooks or changes to site handlers.
 (() => {
   if(window.__CZ_CHAT_METADATA_V1__)return;
-  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261102-2');
+  window.__CZ_CHAT_METADATA_V1__=true;document.documentElement.setAttribute('data-cz-time-reader','20261102-3');
   const rows='[class*="live_chatting_list_item"],[data-chat-message],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
   const names='[data-chat-nickname],[class*="live_chatting_username_nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
   const own=(object,key)=>object && typeof object==='object'?Object.getOwnPropertyDescriptor(object,key)?.value:undefined;
@@ -93,16 +93,16 @@ import {sourceTimes} from '../shared/chat/source-times.js';
     else row.removeAttribute('data-cz-message-time');
     const schema=[...fields].join(',').slice(0,600);if(row.getAttribute('data-cz-time-fields')!==schema)row.setAttribute('data-cz-time-fields',schema);
   }
-  const pending=new Set();let timer=null,enabled=false,disposed=false;
+  const pending=new Set();let job=0,scheduled=false,enabled=false,disposed=false;
   function queue(node){
     if(!enabled||disposed)return;
     if(node.nodeType!==1)node=node.parentElement;if(!node||node.matches('.cz-native-chat-time'))return;
     const closest=node.closest(rows);if(closest)pending.add(closest);else [...node.querySelectorAll(rows)].slice(-200).forEach(row=>pending.add(row));
-    if(!timer&&pending.size)timer=setTimeout(()=>{timer=null;const batch=[...pending].slice(-200);pending.clear();batch.forEach(row=>{try{inspect(row);}catch(_){row.removeAttribute('data-cz-message-time');row.setAttribute('data-cz-time-fields','reader-error');}});},50);
+    if(!scheduled&&pending.size){scheduled=true;const current=job;queueMicrotask(()=>{if(current!==job)return;scheduled=false;const batch=[...pending].slice(-200);pending.clear();batch.forEach(row=>{try{inspect(row);}catch(_){row.removeAttribute('data-cz-message-time');row.setAttribute('data-cz-time-fields','reader-error');}});});}
   }
   const observer=new MutationObserver(records=>{for(const record of records){if(record.type==='characterData'||record.type==='attributes')queue(record.target);else for(const node of record.addedNodes)queue(node);}});
   function configure(){
-    observer.disconnect();clearTimeout(timer);timer=null;pending.clear();clearRetries();unsubscribe?.();unsubscribe=null;waiting.clear();
+    observer.disconnect();job++;scheduled=false;pending.clear();clearRetries();unsubscribe?.();unsubscribe=null;waiting.clear();
     enabled=!disposed && (document.documentElement.hasAttribute('data-cz-timestamps-enabled')?document.documentElement.getAttribute('data-cz-timestamps-enabled')==='true':new URLSearchParams(location.search).get('cz_timestamps')==='1');
     if(enabled){
       unsubscribe=sourceTimes.subscribe?.(({key,id})=>{for(const token of ['body:'+key,...(id?['id:'+id]:[])])for(const ref of waiting.get(token)||[]){const row=ref.deref();if(row?.isConnected)queue(row);}});
@@ -116,5 +116,5 @@ import {sourceTimes} from '../shared/chat/source-times.js';
   const imageLoaded=event=>{if(event.target instanceof HTMLImageElement)queue(event.target);};
   document.addEventListener('load',imageLoaded,true);
   document.addEventListener('cz-chat-timestamps-config',configure);configure();
-  window.addEventListener('pagehide',()=>{disposed=true;clearRetries();document.removeEventListener('load',imageLoaded,true);unsubscribe?.();waiting.clear();observer.disconnect();clearTimeout(timer);pending.clear();document.removeEventListener('cz-chat-timestamps-config',configure);},{once:true});
+  window.addEventListener('pagehide',()=>{disposed=true;clearRetries();document.removeEventListener('load',imageLoaded,true);unsubscribe?.();waiting.clear();observer.disconnect();job++;scheduled=false;pending.clear();document.removeEventListener('cz-chat-timestamps-config',configure);},{once:true});
 })();

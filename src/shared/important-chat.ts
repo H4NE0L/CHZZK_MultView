@@ -7,7 +7,7 @@ export const importantChat = (() => {
   const nameList=(value: unknown)=>[...new Map((Array.isArray(value)?value:[]).filter(n=>typeof n==='string').map(n=>clean(n).slice(0,40)).filter(Boolean).map(n=>[nameKey(n),n])).values()].slice(0,50);
   function settings(input: unknown={}): ChatSettings {
     const value=record(input);
-    return {hideBadges:value.hideBadges===true,enabled:value.enabled!==false,streamers:value.streamers!==false,managers:value.managers!==false,partners:value.partners!==false,
+    return {nativeHideBadges:value.nativeHideBadges===true,hideBadges:value.hideBadges===true,enabled:value.enabled!==false,streamers:value.streamers!==false,managers:value.managers!==false,partners:value.partners!==false,
       names:nameList(value.names),excludedNames:nameList(value.excludedNames)};
   }
   function imageUrl(value: unknown){

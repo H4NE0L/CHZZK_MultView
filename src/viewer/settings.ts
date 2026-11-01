@@ -23,7 +23,6 @@ export function bind(context: SettingsContext) {
     context.state.shortcutsEnabled=shortcut.checked;
     context.syncShortcuts();context.save();
   });
-  scope.listen(element('#importantChatSettings'),'click',()=>{settings.open=false;context.openChatSettings();});
   scope.listen(element('#powerDiagnosticsBtn'),'click',()=>{settings.open=false;context.openPowerDiagnostics();});
   scope.listen(element('#settingsBackupBtn'),'click',()=>{chrome.runtime.sendMessage({type:'OPEN_SETTINGS_BACKUP'}).catch(console.error);});
   const power=element<HTMLInputElement>('#powerRewardsEnabled');

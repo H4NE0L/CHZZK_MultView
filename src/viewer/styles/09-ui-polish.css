@@ -23,3 +23,22 @@
 .ic-message .ic-badge { display:inline-block; width:16px; height:16px; object-fit:contain; margin:0 2px; vertical-align:middle; }
 .ic-badge-label { display:inline-block; margin:0 2px; font-size:10px; color:#b6c1d1; vertical-align:middle; }
 .ic-message .ic-emote { display:inline-block; vertical-align:middle; object-fit:contain; }
+
+.ic-header-capture { display:inline-flex; align-items:center; justify-content:center; flex:0 0 32px; width:32px; height:32px; padding:4px; background:transparent; border:0; border-radius:4px; color:#c5c9d0; cursor:pointer; }
+.ic-header-capture:hover { background:#ffffff12; color:#fff; }
+.ic-settings-tabs { display:flex; gap:4px; margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid #444; }
+.ic-settings-tabs .ic-tab { flex:1; min-height:32px; }
+.ic-settings-tabs .ic-tab[aria-selected="true"] { color:#fffafa; background:#454a52; border-color:#7b838e; }
+.ic-native-settings[hidden],.ic-collected-settings[hidden] { display:none!important; }
+.ic-native-settings p,.ic-capture-dialog p { color:#aeb7c2; font-size:12px; line-height:1.5; }
+.ic-capture-tools { display:flex; gap:8px; margin:12px 0; }
+.ic-capture-list { display:grid; gap:4px; max-height:45vh; overflow:auto; }
+.ic-capture-list label { display:flex; align-items:flex-start; gap:8px; padding:8px; border-radius:4px; background:#24272c; font-size:12px; overflow-wrap:anywhere; }
+.ic-capture-list input { flex:0 0 auto; margin-top:2px; }
+.ic-capture-save { width:100%; min-height:32px; }
+.ic-message time { color:#fffafa; font-size:80%; }
+
+.ic-capture-dialog { color:#eee; background:#1b1d21; border:1px solid #444; border-radius:8px; padding:16px; width:min(440px,calc(100vw - 36px)); max-height:80vh; overflow:auto; }
+.ic-capture-dialog::backdrop { background:#0007; }
+.ic-capture-dialog>header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.ic-capture-dialog button { border:1px solid #444; border-radius:4px; color:#eee; background:#222428; padding:6px 8px; font-size:12px; cursor:pointer; }

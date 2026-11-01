@@ -1,3 +1,4 @@
+import {createChatCapture} from './chat-capture';
 import {create as createRenderer} from './chat-renderer';
 import {ResourceScope} from '../shared/runtime/scope';
 export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
@@ -6,22 +7,26 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   const owners=new Map(),presented=new WeakMap();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null,expanded=false;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');panel.dataset.collapsed='true';
-  panel.innerHTML='<header class="ic-heading"><button type="button" class="ic-toggle" aria-expanded="false" aria-controls="cz-collected-chat-body">주요 채팅</button><button type="button" class="ic-header-settings" title="수집 설정·점검" aria-label="수집 설정·점검"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button></header><div id="cz-collected-chat-body" class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><strong class="ic-settings-heading">주요 채팅 모음</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><form class="ic-exclude-form"><input class="ic-exclude-name" maxlength="40" placeholder="제외할 닉네임" aria-label="수집에서 제외할 닉네임"><button type="submit">제외</button></form><div class="ic-excluded-names ic-names"></div><p class="ic-exclude-help">제외 목록은 자동 포함·추가 목록보다 우선합니다.</p><footer class="ic-settings-footer"><button class="ic-clear" type="button">수집된 내용 초기화</button><details class="ic-debug"><summary>수집 점검</summary><p class="ic-diagnostics"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button></details></footer></div></dialog>';
+  panel.innerHTML='<header class="ic-heading"><button type="button" class="ic-toggle" aria-expanded="false" aria-controls="cz-collected-chat-body">주요 채팅</button><button type="button" class="ic-header-capture" title="채팅 캡처" aria-label="채팅 캡처"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4Z"/><circle cx="12" cy="13" r="4"/></svg></button><button type="button" class="ic-header-settings" title="채팅 설정" aria-label="채팅 설정"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-1.5v-3L20 9l-2-3-2 .5-2-1-.5-2Z"/><circle cx="11.5" cy="12" r="3"/></svg></button></header><div id="cz-collected-chat-body" class="ic-body"><div class="ic-list" tabindex="0" role="region" aria-label="수집된 채팅 목록"></div></div><div class="ic-resizer" role="separator" aria-label="주요 채팅 영역 높이" aria-orientation="horizontal" tabindex="0"></div><dialog class="ic-dialog" aria-labelledby="icSettingsTitle"><header><strong id="icSettingsTitle">채팅 설정</strong><button class="ic-settings-close" type="button" aria-label="채팅 설정 닫기">✕</button></header><div class="ic-settings"><div class="ic-settings-tabs" role="tablist" aria-label="채팅 설정 대상"><button type="button" class="ic-tab" id="icNativeTab" role="tab" data-tab="native" aria-controls="icNativeSettings" aria-selected="false">기본 채팅</button><button type="button" class="ic-tab" id="icCollectedTab" role="tab" data-tab="collected" aria-controls="icCollectedSettings" aria-selected="true">모아보기</button></div><section id="icNativeSettings" class="ic-native-settings" role="tabpanel" aria-labelledby="icNativeTab" hidden><p>기본 채팅창의 표시만 변경합니다. 모아보기 수집에는 영향을 주지 않습니다.</p><div class="ic-native-options"></div></section><section id="icCollectedSettings" class="ic-collected-settings" role="tabpanel" aria-labelledby="icCollectedTab"><strong class="ic-settings-heading">표시</strong><div class="ic-collected-display-options"></div><strong class="ic-settings-heading">자동 수집</strong><div class="ic-options"></div><p class="ic-role-help">역할 배지·표식을 우선 확인하고, 채팅 본문의 주황·파랑·초록색을 보조 기준으로 사용합니다. 닉네임 색은 사용하지 않습니다.</p><form class="ic-form"><input class="ic-name" maxlength="40" placeholder="추가할 닉네임" aria-label="주요 채팅 사용자 닉네임"><button type="submit">추가</button></form><div class="ic-names"></div><form class="ic-exclude-form"><input class="ic-exclude-name" maxlength="40" placeholder="제외할 닉네임" aria-label="수집에서 제외할 닉네임"><button type="submit">제외</button></form><div class="ic-excluded-names ic-names"></div><p class="ic-exclude-help">제외 목록은 자동 포함·추가 목록보다 우선합니다.</p><footer class="ic-settings-footer"><button class="ic-clear" type="button">수집된 내용 초기화</button><details class="ic-debug"><summary>수집 점검</summary><p class="ic-diagnostics"></p><button class="ic-copy-diagnostics" type="button">점검 정보 복사</button></details></footer></section></div></dialog>';
   chatPanel.insertBefore(panel,chatPanel.querySelector('.chat-frame-wrap'));
   const dialog=panel.querySelector('.ic-dialog'),$=selector=>panel.querySelector(selector)||dialog.querySelector(selector),handle=$('.ic-resizer');
   chatPanel.appendChild(dialog);
   const renderer=createRenderer($('.ic-list'));
+  const capture=createChatCapture({host:chatPanel,getItems:()=>model.items,hideBadges:()=>filter.hideBadges,showTime:()=>getState().chatTimestamps===true,notify});
+  $('.ic-header-capture').onclick=()=>capture.open();
   $('.ic-toggle').title='접혀 있어도 주요 채팅은 계속 수집됩니다';
   $('.ic-toggle').onclick=()=>{expanded=!expanded;panel.dataset.collapsed=String(!expanded);$('.ic-toggle').setAttribute('aria-expanded',String(expanded));render();resize();if(expanded)$('.ic-list').scrollTop=$('.ic-list').scrollHeight;};
-  for(const [key,title] of [['streamers','스트리머 자동 포함'],['managers','관리자 자동 포함'],['partners','파트너 자동 포함'],['hideBadges','배지 숨기기']]){
+  for(const [key,title] of [['nativeHideBadges','배지 표시'],['hideBadges','배지 표시'],['streamers','스트리머 자동 수집'],['managers','관리자 자동 수집'],['partners','파트너 자동 수집']]){
     const label=document.createElement('label');label.className='ic-option';label.dataset.role=key;
     const text=document.createElement('span');text.textContent=title;
     const toggle=document.createElement('span');toggle.className='settings-switch';
     const input=document.createElement('input');input.type='checkbox';input.className='ic-'+key;if(key==='enabled')input.id='importantChatEnabled';input.setAttribute('role','switch');input.setAttribute('aria-label',title);
-    const track=document.createElement('span');track.className='settings-switch-track';track.setAttribute('aria-hidden','true');toggle.append(input,track);label.append(text,toggle);$('.ic-options').appendChild(label);
+    const track=document.createElement('span');track.className='settings-switch-track';track.setAttribute('aria-hidden','true');toggle.append(input,track);label.append(text,toggle);$(key==='nativeHideBadges'?'.ic-native-options':key==='hideBadges'?'.ic-collected-display-options':'.ic-options').appendChild(label);
   }
-  function openSettings(){controls();if(!dialog.open)dialog.showModal();diagnostics();}
-  $('.ic-header-settings').onclick=openSettings;
+  function selectTab(tab){for(const button of dialog.querySelectorAll('.ic-tab')){const selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}$('#icNativeSettings').hidden=tab!=='native';$('#icCollectedSettings').hidden=tab!=='collected';}
+  for(const button of dialog.querySelectorAll('.ic-tab')){button.onclick=()=>selectTab(button.dataset.tab);button.onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const tab=event.key==='Home'?'native':event.key==='End'?'collected':button.dataset.tab==='native'?'collected':'native';selectTab(tab);dialog.querySelector('[data-tab="'+tab+'"]').focus();};}
+  function openSettings(tab='collected'){selectTab(tab);controls();if(!dialog.open)dialog.showModal();diagnostics();}
+  $('.ic-header-settings').onclick=()=>openSettings();
   $('.ic-debug').ontoggle=()=>diagnostics();
   $('.ic-settings-close').onclick=()=>dialog.close();
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom)dialog.close();});
@@ -42,7 +47,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   handle.onkeydown=event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();event.stopPropagation();const {min,max}=bounds(),step=event.shiftKey?50:10;desiredHeight=Math.max(min,Math.min(max,event.key==='Home'?min:event.key==='End'?max:Number(handle.getAttribute('aria-valuenow'))+(event.key==='ArrowDown'?step:-step)));resize();storeHeight();};
   const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(chatPanel);scope.observe(sizeObserver);resize();
   scope.listen(window,'pagehide',event=>{if(!event.persisted)dispose();});
-  function present(){if(scope.isDisposed)return;const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);const name=channel?.name||channel?.uid||'';if(presented.get(frame)===name)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name,height:0}))presented.set(frame,name);}
+  function present(){if(scope.isDisposed)return;const frame=getFrame();if(!frame)return;const channel=getState().channels.find(c=>c.uid===getState().selectedUid);const name=channel?.name||channel?.uid||'',signature=JSON.stringify([name,filter.nativeHideBadges]);if(presented.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'CHAT_PRESENTATION',name,height:0,hideBadges:filter.nativeHideBadges}))presented.set(frame,signature);}
   function diagnostics(){
     if(!dialog.open || !$('.ic-debug').open)return;
     const owner=owners.get(getState().selectedUid);
@@ -56,7 +61,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     const request=channel.type==='video'?CZChzzkApi.fetchVideoChannelName(channel.sourceId||uid.replace(/^video:/,'')):CZChzzkApi.fetchChannelName(channel.sourceId||uid);
     Promise.resolve(request).then(name=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:''});diagnostics();});
   }
-  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const {hideBadges,...collection}=filter;const signature=JSON.stringify([frame.dataset.uid,collection,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:collection,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
+  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const {hideBadges,nativeHideBadges,...collection}=filter;const signature=JSON.stringify([frame.dataset.uid,collection,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:collection,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
   function render(){
     if(scope.isDisposed)return;
     panel.hidden=ready && !filter.enabled;
@@ -70,7 +75,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   function controls(){
     [...panel.querySelectorAll('input,button'),...dialog.querySelectorAll('input,button,select')].forEach(el=>el.disabled=!ready);
     enabledControl.checked=filter.enabled;enabledControl.disabled=!ready;
-    for(const key of ['streamers','managers','partners','hideBadges'])$('.ic-'+key).checked=filter[key];
+    for(const key of ['streamers','managers','partners','hideBadges','nativeHideBadges'])$('.ic-'+key).checked=key.includes('Badges')?!filter[key]:filter[key];
     excludedControls();
     $('.ic-names').replaceChildren();
     filter.names.forEach((name,index)=>{const button=document.createElement('button');button.type='button';button.textContent=name+' ×';button.title='추가 목록에서 삭제';button.onclick=()=>save({...filter,names:filter.names.filter((_,i)=>i!==index)});$('.ic-names').appendChild(button);});
@@ -81,7 +86,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
   }
   function save(value){filter=CZImportantChat.settings(value);model.applySettings(filter);controls();configure();render();chrome.storage.local.set({[CZImportantChat.KEY]:filter}).catch(error=>notify('채팅 설정 저장 실패: '+error.message));}
   enabledControl.onchange=event=>save({...filter,enabled:event.target.checked});
-  for(const key of ['streamers','managers','partners','hideBadges'])$('.ic-'+key).onchange=event=>save({...filter,[key]:event.target.checked});
+  for(const key of ['streamers','managers','partners','hideBadges','nativeHideBadges'])$('.ic-'+key).onchange=event=>save({...filter,[key]:key.includes('Badges')?!event.target.checked:event.target.checked});
   $('.ic-exclude-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-exclude-name');if(!input.value.trim())return;if(filter.excludedNames.length>=50){notify('제외 사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,excludedNames:[...filter.excludedNames,input.value]});input.value='';};
   $('.ic-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-name');if(!input.value.trim())return;if(filter.names.length>=50){notify('사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,names:[...filter.names,input.value]});input.value='';};
   $('.ic-copy-diagnostics').onclick=async()=>{
@@ -104,7 +109,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     chatPanel.classList.remove('ic-resizing');drag=null;
     enabledControl.onchange=null;
     if(dialog.open)dialog.close();
-    model.clear();renderer.clear();owners.clear();
+    capture.dispose();model.clear();renderer.clear();owners.clear();
     panel.remove();dialog.remove();
   }
   controls();render();

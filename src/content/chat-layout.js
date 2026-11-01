@@ -1,7 +1,9 @@
 import {create as createPowerApi} from './chat/power-api.js';
 import {readPowerBalance} from './chat/power-balance.js';
+import {createBadgePresentation} from './chat/badge-presentation.js';
 import {headerStyles} from './chat/header-style.js';
 globalThis.CZChatLayout = (() => {
+  const badgePresentation=createBadgePresentation();
   function findReplayChatRoot(doc) {
     const markers = Array.from(doc.querySelectorAll("body *")).filter(el => {
       const text = String(el.textContent || "").replace(/\s+/g, " ").trim();
@@ -195,7 +197,7 @@ globalThis.CZChatLayout = (() => {
   let lastPowerBalance=null,powerChannel='',powerReader=null,powerApiFresh=false;
   let presentation={name:'',height:0},onHeader=null,nativeMenuOpen=false;
   const boundRoots=new WeakSet();
-  function setPresentation(value){presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
+  function setPresentation(value){badgePresentation.set(value.hideBadges);presentation={name:String(value.name||'').slice(0,160),height:0};prepare();}
   const managedHeaders=new WeakSet();
   function isNativeHeader(header){
     if(managedHeaders.has(header))return true;
@@ -383,7 +385,7 @@ globalThis.CZChatLayout = (() => {
     const overlays=onHeader?new MutationObserver(report):null;overlays?.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','open','aria-hidden','aria-expanded']});
     document.addEventListener('click',event=>{const header=document.querySelector('.cz-native-chat-header');if(header && !header.contains(event.target))nativeMenuOpen=false;report();},true);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'){nativeMenuOpen=false;report();}},true);
-    window.addEventListener('pagehide',()=>{overlays?.disconnect();timestampObserver?.disconnect();},{once:true});
+    window.addEventListener('pagehide',()=>{overlays?.disconnect();timestampObserver?.disconnect();badgePresentation.dispose();},{once:true});
     document.addEventListener('focusin',apply);document.addEventListener('focusout',()=>queueMicrotask(apply));document.addEventListener('input',apply);
     // DOM hydration can replace the replay/chat root after its first appearance.
     setInterval(apply, 1000);

@@ -12,6 +12,11 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
   await evaluate("CZChatLayout.start();CZChatLayout.setTimestamps(true);document.documentElement.setAttribute('data-cz-timestamps-enabled','true')");assert.equal(await page.locator('.cz-native-chat-time').count(),0,'no observation-time fallback');
   await page.addScriptTag({content:fs.readFileSync('src/content/chat-metadata-main.js','utf8')});
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:56.000Z');
+  const firstPaint=await page.evaluate(async()=>{
+   const previous=document.querySelector('#message'),row=previous.cloneNode(true);row.querySelector('time').remove();row.removeAttribute('data-cz-message-time');row.__reactProps$fixture=previous.__reactProps$fixture;row.style.fontSize='20px';previous.replaceWith(row);
+   return new Promise(resolve=>requestAnimationFrame(()=>{const stamp=row.querySelector('.cz-native-chat-time');resolve({time:stamp?.dateTime,color:stamp?getComputedStyle(stamp).color:'',ratio:stamp?parseFloat(getComputedStyle(stamp).fontSize)/parseFloat(getComputedStyle(row).fontSize):0});}));
+  });
+  assert.equal(firstPaint.time,'2026-10-28T12:34:56.000Z','available source time is attached before the next paint');assert.equal(firstPaint.color,'rgb(255, 250, 250)');assert.equal(firstPaint.ratio,.8);
   await page.evaluate(()=>{Date.now=()=>Date.parse('2026-10-29T18:00:00Z');const old=document.querySelector('#message'),row=old.cloneNode(true);row.querySelector('time').remove();row.removeAttribute('data-cz-message-time');row.__reactProps$fixture=old.__reactProps$fixture;old.replaceWith(row);});
   await page.waitForFunction(()=>document.querySelector('#message .cz-native-chat-time')?.dateTime==='2026-10-28T12:34:56.000Z');
   // A different source sender/content must never supply the timestamp.

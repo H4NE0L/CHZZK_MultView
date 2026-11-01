@@ -61,3 +61,11 @@ test('badge display setting defaults for old backups and roundtrips without chan
  document.data.chat.hideBadges=true;assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[C].hideBadges,true);assert.deepEqual(plain(f.data[C].names),['추가']);
  document.data.chat.hideBadges='true';assert.throws(()=>f.api.parse(document));
 });
+
+test('native badge display defaults visible in old backups and roundtrips independently',async()=>{
+ const f=setup(),document=(await f.send('SETTINGS_BACKUP_EXPORT')).document;
+ delete document.data.chat.nativeHideBadges;assert.equal(f.api.parse(document).data.chat.nativeHideBadges,false);
+ document.data.chat.nativeHideBadges=true;document.data.chat.hideBadges=false;
+ assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[C].nativeHideBadges,true);assert.equal(f.data[C].hideBadges,false);
+ document.data.chat.nativeHideBadges='true';assert.throws(()=>f.api.parse(document));
+});

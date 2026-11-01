@@ -7,7 +7,7 @@ export function bind(context) {
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
     if(data.type==='POWER_DIAGNOSTICS_RESULT'){powerDiagnostics.receive(data);return;}
-    if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings();return;}
+    if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings('native');return;}
     if(data.type==='CHAT_HEADER')return;
     if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}
     if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}

@@ -11,6 +11,7 @@ export const headerStyles=`
 #cz-chat-power { display:inline-flex!important; align-items:center!important; justify-content:center!important; flex:0 0 auto!important; height:24px!important; max-width:104px!important; gap:4px!important; padding:0 8px!important; margin:0!important; border:1px solid #365447!important; border-radius:4px!important; background:#16271f!important; color:#bfe9d4!important; font-family:Arial,"Noto Sans KR",sans-serif!important; font-size:12px!important; line-height:16px!important; font-weight:600!important; white-space:nowrap!important; box-sizing:border-box!important; }
 #cz-chat-power .cz-power-value { min-width:0!important; overflow:hidden!important; text-overflow:ellipsis!important; font-variant-numeric:tabular-nums!important; }
 #cz-chat-power[data-known="false"] { color:#acb6c3!important; border-color:#3b424b!important; background:#1e242a!important; }
-.cz-native-chat-time { display:inline!important; margin-right:6px!important; color:#a2afbd!important; font-size:10px!important; font-weight:400!important; line-height:inherit!important; white-space:nowrap!important; }
+html[data-cz-hide-chat-badges="true"] [data-cz-native-badge] { display:none!important; }
+.cz-native-chat-time { display:inline!important; margin-right:6px!important; color:#fffafa!important; font-size:80%!important; font-weight:400!important; line-height:inherit!important; white-space:nowrap!important; }
 @media(max-width:280px) { .cz-native-chat-header { gap:4px!important; padding-left:8px!important; padding-right:8px!important; } #cz-chat-power .cz-power-label { display:none!important; } #cz-chat-power { max-width:66px!important; } }
 `;

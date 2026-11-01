@@ -1,6 +1,6 @@
 export type ChatRole = 'streamer' | 'manager' | 'partner' | '';
 export interface ChatSettings {
-  hideBadges: boolean; enabled: boolean; streamers: boolean; managers: boolean; partners: boolean;
+  nativeHideBadges: boolean; hideBadges: boolean; enabled: boolean; streamers: boolean; managers: boolean; partners: boolean;
   names: string[]; excludedNames: string[];
 }
 export type ChatSegment = {type: 'text'; text: string} | {type: 'image'; src: string; alt: string};
