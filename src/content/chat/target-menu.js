@@ -7,6 +7,22 @@ export function createTargetMenu({send}){
  const author=node=>{const copy=node.cloneNode(true);copy.querySelectorAll('img,svg,[hidden],[aria-hidden=true],[class*=blind i],[class*=badge i]').forEach(node=>node.remove());return text(copy);};
  const tracked=name=>filter.names.some(value=>nameKey(value)===nameKey(name))&&!filter.excludedNames.some(value=>nameKey(value)===nameKey(name));
  function paint(button,name){button.disabled=false;button.setAttribute('aria-pressed',String(tracked(name)));const label=tracked(name)?'자동 수집 대상 삭제':'자동 수집 대상 추가';if(button.textContent!==label)button.textContent=label;button.title=name+' · 수동 수집 목록 관리';}
+ const rows='[data-chat-message],[class*="live_chatting_list_item"],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+ const names='[class*="name_text"],[data-chat-nickname],[class*="live_chatting_username_nickname"],[class^="_nickname_"],[class*=" _nickname_"]';
+ function markRow(row){
+  if(row.querySelector(rows))return;
+  const nickname=[...row.querySelectorAll(names)].find(node=>!node.querySelector(names));
+  const own=row.querySelector('.cz-native-target-dot');
+  if(!nickname||!tracked(author(nickname))){own?.remove();return;}
+  const dot=own||document.createElement('span');
+  if(!own){dot.className='cz-native-target-dot';dot.title='자동 수집 대상';dot.setAttribute('aria-hidden','true');}
+  const time=row.querySelector('.cz-native-chat-time'),parent=time?.parentElement||row,previous=time||null;
+  if(dot.parentElement!==parent||dot.previousSibling!==previous)parent.insertBefore(dot,previous?previous.nextSibling:parent.firstChild);
+ }
+ function markMessages(node){
+  if(node.nodeType!==1)node=node.parentElement;if(!node||node.closest('[data-cz-collection-profile]'))return;
+  const row=node.closest(rows);if(row)markRow(row);else node.querySelectorAll(rows).forEach(markRow);
+ }
  function profileName(panel){const heading=[...panel.querySelectorAll('[data-profile-nickname],[class*=nickname],strong,h2,h3')].find(node=>text(node)&&!node.querySelector('[class*=nickname]'));return heading?author(heading):'';}
  function scan(node){
   if(disposed)return;for(const [button,entry]of buttons){if(!button.isConnected){buttons.delete(button);continue;}const current=profileName(entry.panel);if(current&&current.length<=40&&current!==entry.name){entry.name=current;paint(button,current);}}
@@ -30,9 +46,9 @@ export function createTargetMenu({send}){
  }
  const click=event=>{const nickname=event.target.closest?.('[data-chat-nickname],[class*="_nickname_"],[class*="live_chatting_username_nickname"]');if(nickname){clicked=author(nickname);clickedAt=Date.now();}};
  document.addEventListener('click',click,true);
- const observer=new MutationObserver(records=>{for(const [button]of buttons)if(!button.isConnected)buttons.delete(button);const nodes=new Set();for(const record of records){if(record.type==='childList')for(const node of record.addedNodes)nodes.add(node);else nodes.add(record.target);}for(let node of nodes){if(node.nodeType!==1)node=node.parentElement;if(!node||node.closest('[data-chat-message],[class*=chatting_message],[class*=live_chatting_list_item]'))continue;for(let depth=0;node&&node!==document.body&&depth<5;depth++,node=node.parentElement)scan(node);}});
+ const observer=new MutationObserver(records=>{for(const [button]of buttons)if(!button.isConnected)buttons.delete(button);const nodes=new Set();for(const record of records){if(record.type==='childList')for(const node of record.addedNodes)nodes.add(node);else nodes.add(record.target);}for(let node of nodes){markMessages(node);if(node.nodeType!==1)node=node.parentElement;if(!node||node.closest('[data-chat-message],[class*=chatting_message],[class*=live_chatting_list_item]'))continue;for(let depth=0;node&&node!==document.body&&depth<5;depth++,node=node.parentElement)scan(node);}});
  observer.observe(document.body,{childList:true,subtree:true,characterData:true});
- function dispose(){if(disposed)return;disposed=true;observer.disconnect();document.removeEventListener('click',click,true);for(const [button,entry]of buttons){entry.panel.removeAttribute('data-cz-collection-profile');if(button.parentElement?.matches('li')&&button.parentElement.childNodes.length===1)button.parentElement.remove();else button.remove();}buttons.clear();}
+ function dispose(){if(disposed)return;disposed=true;observer.disconnect();document.querySelectorAll('.cz-native-target-dot').forEach(node=>node.remove());document.removeEventListener('click',click,true);for(const [button,entry]of buttons){entry.panel.removeAttribute('data-cz-collection-profile');if(button.parentElement?.matches('li')&&button.parentElement.childNodes.length===1)button.parentElement.remove();else button.remove();}buttons.clear();}
  window.addEventListener('pagehide',dispose,{once:true});
- return {configure(settings){filter=settings;for(const [button,entry]of buttons){if(button.isConnected)paint(button,entry.name);else buttons.delete(button);}scan(document.body);},dispose};
+ return {configure(settings){filter=settings;markMessages(document.body);for(const [button,entry]of buttons){if(button.isConnected)paint(button,entry.name);else buttons.delete(button);}scan(document.body);},dispose};
 }
