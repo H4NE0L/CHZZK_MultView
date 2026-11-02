@@ -234,3 +234,12 @@
 
 .open-multiview-actions { display:flex; gap:8px; margin-top:12px; }
 .open-multiview-actions .primary { flex:1; min-width:0; width:auto; margin:0; white-space:nowrap; }
+
+/* Fit the closed-following view inside the extension popup's 600px limit.
+   Reserve scrolling for the lists; opening following may scroll the page. */
+.popup { max-height:600px; }
+.popup > .favorite-list { min-height:0; flex:0 1 220px; }
+.popup > .popup-following, .open-multiview-actions { flex:0 0 auto; }
+.status:empty { display:none; }
+.popup:has(.popup-following[open]) { max-height:none; }
+body:has(.popup-following[open]) { max-height:600px; overflow-y:auto; }
