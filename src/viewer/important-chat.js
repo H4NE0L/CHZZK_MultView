@@ -1,3 +1,4 @@
+import {nameKey} from '../shared/chat/roles';
 import {createChatCapture} from './chat-capture';
 import {create as createRenderer} from './chat-renderer';
 import {ResourceScope} from '../shared/runtime/scope';
@@ -69,7 +70,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     // Collapse affects presentation only: receive() keeps the full collection
     // collecting while hidden; expand flushes the current snapshot once.
     panel.dataset.collectedCount=String(model.size);
-    if(expanded && !panel.hidden)renderer.render(model.items,filter.hideBadges);
+    if(expanded && !panel.hidden)renderer.render(model.items,filter.hideBadges,filter.names.filter(name=>!filter.excludedNames.some(excluded=>nameKey(excluded)===nameKey(name))));
     diagnostics();
   }
   function controls(){

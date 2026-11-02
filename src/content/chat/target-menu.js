@@ -6,7 +6,7 @@ export function createTargetMenu({send}){
  const text=node=>String(node?.textContent||'').normalize('NFC').replace(/\s+/g,' ').trim();
  const author=node=>{const copy=node.cloneNode(true);copy.querySelectorAll('img,svg,[hidden],[aria-hidden=true],[class*=blind i],[class*=badge i]').forEach(node=>node.remove());return text(copy);};
  const tracked=name=>filter.names.some(value=>nameKey(value)===nameKey(name))&&!filter.excludedNames.some(value=>nameKey(value)===nameKey(name));
- function paint(button,name){button.disabled=false;const label=tracked(name)?'자동 수집 대상 삭제':'자동 수집 대상 추가';if(button.textContent!==label)button.textContent=label;button.title=name+' · 수동 수집 목록 관리';}
+ function paint(button,name){button.disabled=false;button.setAttribute('aria-pressed',String(tracked(name)));const label=tracked(name)?'자동 수집 대상 삭제':'자동 수집 대상 추가';if(button.textContent!==label)button.textContent=label;button.title=name+' · 수동 수집 목록 관리';}
  function profileName(panel){const heading=[...panel.querySelectorAll('[data-profile-nickname],[class*=nickname],strong,h2,h3')].find(node=>text(node)&&!node.querySelector('[class*=nickname]'));return heading?author(heading):'';}
  function scan(node){
   if(disposed)return;for(const [button,entry]of buttons){if(!button.isConnected){buttons.delete(button);continue;}const current=profileName(entry.panel);if(current&&current.length<=40&&current!==entry.name){entry.name=current;paint(button,current);}}

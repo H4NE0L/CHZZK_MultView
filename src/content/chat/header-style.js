@@ -14,6 +14,8 @@ export const headerStyles=`
 html[data-cz-hide-chat-badges="true"] [data-cz-native-badge] { display:none!important; }
 [data-cz-collection-target] { transition:background-color .12s ease,color .12s ease; }
 [data-cz-collection-target]:hover:not(:disabled) { background:#34363d!important; color:#fff!important; }
+[data-cz-collection-target][aria-pressed="true"] { background:#153a2e!important; color:#00dc9b!important; box-shadow:inset 3px 0 #00dc9b; }
+[data-cz-collection-target][aria-pressed="true"]:hover:not(:disabled) { background:#205340!important; }
 [data-cz-collection-target]:focus-visible { outline:2px solid #00dc9b; outline-offset:-2px; }
 .cz-native-chat-time { display:inline!important; margin-right:6px!important; color:#fffafa!important; font-size:80%!important; font-weight:400!important; line-height:inherit!important; white-space:nowrap!important; }
 @media(max-width:280px) { .cz-native-chat-header { gap:4px!important; padding-left:8px!important; padding-right:8px!important; } #cz-chat-power .cz-power-label { display:none!important; } #cz-chat-power { max-width:66px!important; } }
