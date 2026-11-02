@@ -1,3 +1,4 @@
+import {createTargetMenu} from './chat/target-menu.js';
 import {create as createPowerRewards} from './power-rewards.js';
 /* CHZZK live iframe helper for MultiView. */
 (() => {
@@ -294,6 +295,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   }
 
   const importantCollector=chatMode?CZChatCollector.create({status:stats=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_STATUS',uid:frameUid,stats},PARENT_ORIGIN),send:messages=>window.parent.postMessage({source:'chzzk-multiview',type:'IMPORTANT_CHAT_BATCH',uid:frameUid,messages},PARENT_ORIGIN)}):null;
+  const targetMenu=chatMode?createTargetMenu({send:data=>window.parent.postMessage({source:'chzzk-multiview',uid:frameUid,...data},PARENT_ORIGIN)}):null;
   bindObserver();
   if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
@@ -318,7 +320,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:{...result.diagnostics,audio:audio.snapshot()}}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
     if(event.data.type==='CHAT_TIMESTAMP_CONFIG' && chatMode)configureTimestamps(event.data.enabled);
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
-    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode)importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName});
+    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode){importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName,since:event.data.since});targetMenu?.configure(CZImportantChat.settings(event.data.settings));}
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {

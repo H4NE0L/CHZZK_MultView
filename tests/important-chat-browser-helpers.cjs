@@ -185,7 +185,7 @@ module.exports=async function checkImportantChat(page){
    collector.configure({enabled:true},{streamerName:'테스트 방송'});await new Promise(resolve=>setTimeout(resolve,300));collector.stop();row.dataset.messageId='owner-1';
    return batches.map(batch=>batch.find(item=>item.name==='방송인')?.id);
  });
- assert.equal(stableIds.length,2);assert.equal(stableIds[0],stableIds[1],'API identity refresh must not duplicate existing chat rows');
+ assert.equal(stableIds.length,0,'configuration and owner refresh never backfill existing messages');
  const replacementResult=await frame.evaluate(async()=>{
    const captured=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch)}),host=document.querySelector('aside.live_chat');
    collector.configure({enabled:true,streamers:false,managers:false,partners:false,names:['중복 검사']});
@@ -223,8 +223,7 @@ module.exports=async function checkImportantChat(page){
  assert.notEqual(scrollingResult.ids[0],scrollingResult.ids[1]);
  const reorderedCaptured=await frame.evaluate(async()=>{
    const row=document.createElement('div');row.dataset.chatMessage='';row.style.cssText='position:fixed;top:500px;height:24px';row.innerHTML='<span data-chat-nickname>범위 점검 사용자</span><span data-chat-text>DOM 순서와 화면 순서가 다른 채팅</span>';
-   document.querySelector('.cz-native-chat-header').before(row);
-   const captured=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch)});collector.configure({enabled:true,names:['범위 점검 사용자']});await new Promise(resolve=>setTimeout(resolve,300));collector.stop();row.remove();
+   const captured=[],collector=CZChatCollector.create({send:batch=>captured.push(...batch)});collector.configure({enabled:true,names:['범위 점검 사용자']});document.querySelector('.cz-native-chat-header').before(row);await new Promise(resolve=>setTimeout(resolve,300));collector.stop();row.remove();
    return captured.some(item=>item.name==='범위 점검 사용자');
  });
  assert(reorderedCaptured,'a visually lower chat row must not be rejected just because it precedes the header in DOM order');
@@ -245,7 +244,7 @@ module.exports=async function checkImportantChat(page){
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__chatDiagnosticCopy=JSON.parse(text);}}}));
  await settings.locator('.ic-copy-diagnostics').click();
  const copiedDiagnostic=await page.evaluate(()=>window.__chatDiagnosticCopy);
- assert.equal(copiedDiagnostic.collectorRevision,'refactor-stage3-1');
+ assert.equal(copiedDiagnostic.collectorRevision,'collection-forward-1');
  assert(copiedDiagnostic.counts.parsed>0);assert(copiedDiagnostic.received>0);assert.equal(copiedDiagnostic.displayed,2);
  assert(copiedDiagnostic.structure.row.length>0,'diagnostics identifies the latest parsed row');
  assert(!JSON.stringify(copiedDiagnostic).includes('스트리머 메시지'),'diagnostic copy omits chat content');
@@ -288,7 +287,8 @@ module.exports=async function checkImportantChat(page){
  await add('지정 사용자','제외 우선 검사','스트리머','excluded-manual-role');await page.waitForTimeout(350);
  assert(!(await panel.locator('.ic-list').textContent()).includes('제외 우선 검사'),'exclusion overrides manual inclusion and streamer role');
  await settings.locator('.ic-excluded-names button').click();
- await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('제외 우선 검사'));
+ await page.waitForTimeout(300);assert(!(await panel.locator('.ic-list').textContent()).includes('제외 우선 검사'),'removing exclusion does not backfill old messages');
+ await add('지정 사용자','제외 해제 후 새 메시지','','after-exclusion');await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('제외 해제 후 새 메시지'));
  await frame.locator('[data-message-id=excluded-manual-role]').evaluate(el=>el.remove());await settings.locator('.ic-clear').click();
 
  const imageUrl='https://ssl.pstatic.net/__cz_collected_chat_test.png';
@@ -331,6 +331,16 @@ module.exports=async function checkImportantChat(page){
  await capture.waitFor({state:'hidden'});assert.equal(await panel.locator('.ic-message').count(),captureCount,'selective PNG export preserves collected history');
  await panel.locator('.ic-header-capture').click();await capture.locator('.ic-capture-all').click();assert.equal(await capture.locator('input:checked').count(),captureCount);await capture.locator('.ic-capture-close').click();
  await panel.locator('.ic-header-settings').click();
+ await closeSettings();
+ await add('메뉴 대상','추가하기 전의 메시지','','menu-old');
+ await frame.evaluate(()=>{const popup=document.createElement('section');popup.id='native-profile-collection-test';popup.style.cssText='position:fixed;top:80px;left:4px;width:260px;z-index:2000;background:#202124;padding:12px';popup.innerHTML='<strong class="_nickname_profile_80">메뉴 대상</strong><button type="button">메시지 신고</button><button type="button">사용자 차단</button>';document.body.append(popup);});
+ const menuTarget=frame.locator('#native-profile-collection-test [data-cz-collection-target]');await menuTarget.waitFor();assert.equal(await menuTarget.textContent(),'자동 수집 대상 추가');await menuTarget.click();await menuTarget.filter({hasText:'삭제'}).waitFor();
+ await add('메뉴 대상','추가한 뒤의 메시지','','menu-new');await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('추가한 뒤의 메시지'));
+ assert(!(await panel.locator('.ic-list').textContent()).includes('추가하기 전의 메시지'),'adding a profile target does not backfill the old row');
+ await menuTarget.click();await menuTarget.filter({hasText:'추가'}).waitFor();await add('메뉴 대상','삭제한 뒤의 메시지','','menu-removed');await page.waitForTimeout(350);assert(!(await panel.locator('.ic-list').textContent()).includes('삭제한 뒤의 메시지'));assert((await panel.locator('.ic-list').textContent()).includes('추가한 뒤의 메시지'),'target removal retains its previous messages');
+ await frame.locator('#native-profile-collection-test strong').evaluate(node=>node.textContent='다른 메뉴 대상');await frame.waitForFunction(()=>document.querySelector('#native-profile-collection-test [data-cz-collection-target]')?.title.startsWith('다른 메뉴 대상'));await menuTarget.click();await menuTarget.filter({hasText:'삭제'}).waitFor();assert(await page.locator('.ic-names button').filter({hasText:'다른 메뉴 대상'}).count());await menuTarget.click();await menuTarget.filter({hasText:'추가'}).waitFor();
+ await frame.evaluate(()=>{window.__detachedProfile=document.querySelector('#native-profile-collection-test');__detachedProfile.remove();});await page.waitForTimeout(20);await frame.evaluate(()=>{__detachedProfile.querySelector('strong').textContent='재사용 메뉴 대상';document.body.append(__detachedProfile);});await frame.waitForFunction(()=>document.querySelector('#native-profile-collection-test [data-cz-collection-target]')?.title.startsWith('재사용 메뉴 대상'));await menuTarget.click();await menuTarget.filter({hasText:'삭제'}).waitFor();assert(await page.locator('.ic-names button').filter({hasText:'재사용 메뉴 대상'}).count());await menuTarget.click();await menuTarget.filter({hasText:'추가'}).waitFor();
+ await frame.locator('#native-profile-collection-test').evaluate(node=>node.remove());await openSettings();
  const retainedEmote=await emote.elementHandle();
  await add('지정 사용자','새 채팅에도 기존 이미지 유지','','retain-rich');
  await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.ic-list').textContent.includes('새 채팅에도 기존 이미지 유지'));
@@ -371,7 +381,7 @@ module.exports=async function checkImportantChat(page){
      const text=document.createElement('span');text.dataset.chatText='';text.textContent='제한 검사 '+i;row.append(nick,text);host.appendChild(row);
    }
  });
- await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message').length===100);
+ await page.waitForFunction(()=>document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelectorAll('.ic-message').length===125);
  assert((await panel.locator('.ic-message').last().textContent()).includes('제한 검사 124'));
  await settings.locator('.ic-clear').click();
  assert.equal(await panel.locator('.ic-message').count(),0);
@@ -386,5 +396,5 @@ module.exports=async function checkImportantChat(page){
  await closeSettings();await page.locator('#chatToggleBtn').click();assert.equal(await settings.isVisible(),false);
  assert.equal(await page.locator('.chat-frame').count(),0);assert.equal(await panel.locator('.ic-message').count(),0);
  await page.locator('#chatToggleBtn').click();
- console.log('PASS: important chat roles, exact nicknames, safe text, vertical resize, settings dialog, global toggle, 100-message cap and chat teardown.');
+ console.log('PASS: important chat roles, exact nicknames, safe text, vertical resize, settings dialog, global toggle, unlimited history and chat teardown.');
 };

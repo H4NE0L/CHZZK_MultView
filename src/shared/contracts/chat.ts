@@ -10,5 +10,5 @@ export interface ChatMessage {
   id: string; name: string; text: string; updateOnly: boolean;
   segments: ChatSegment[]; badges: ChatBadge[];
   badgesAfter: ChatBadge[]; nameColor: string; bodyColor: string;
-  role: ChatRole; time: number | null;
+  role: ChatRole; time: number | null; order: number | null;
 }

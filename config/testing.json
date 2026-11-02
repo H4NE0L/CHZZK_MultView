@@ -90,5 +90,9 @@
   "src/viewer/live-tracker.js": [
     "CZLiveTracker",
     null
+  ],
+  "src/viewer/chat-renderer.js": [
+    "CZChatRenderer",
+    null
   ]
 }

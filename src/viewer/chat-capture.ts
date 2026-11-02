@@ -2,7 +2,7 @@ import type {ChatMessage,ChatBadge} from '../shared/contracts/chat';
 import {readableChatColor} from './chat-colors';
 import {ObjectURLs} from '../shared/media/object-urls';
 interface Context {host: HTMLElement;getItems(): ChatMessage[];hideBadges(): boolean;showTime(): boolean;notify(message: string): void}
-/** Snapshot the bounded collection; selection/export never changes the live history. */
+/** Snapshot the current collection; selection/export never changes the live history. */
 export function createChatCapture(context: Context){
  const urls=new ObjectURLs(),dialog=document.createElement('dialog');dialog.className='ic-capture-dialog';dialog.setAttribute('aria-label','모아보기 채팅 캡처');
  dialog.innerHTML='<header><strong>채팅 캡처</strong><button type="button" class="ic-capture-close" aria-label="캡처 닫기">✕</button></header><p>저장할 메시지를 선택하세요. 현재 수집된 목록을 기준으로 저장합니다.</p><div class="ic-capture-tools"><button type="button" class="ic-capture-all">전체 선택</button><button type="button" class="ic-capture-none">선택 해제</button></div><div class="ic-capture-list"></div><p class="ic-capture-status" role="status"></p><button type="button" class="ic-capture-save">PNG 저장</button>';
@@ -40,7 +40,7 @@ export function createChatCapture(context: Context){
   }
   const height=y+padding;if(height>16000)throw Error('선택한 내용이 너무 깁니다. 메시지를 나누어 저장해 주세요.');
   const sources=[...new Set(draws.flatMap(draw=>draw.source?[draw.source]:[]))].slice(0,80),images=new Map<string,HTMLImageElement>();
-  // A few workers keep image decoding bounded even for a full 100-message capture.
+  // A few workers keep image decoding bounded for a large capture.
   await Promise.all(Array.from({length:Math.min(4,sources.length)},async()=>{while(sources.length&&!signal.aborted){const src=sources.shift()!,img=await image(src,signal);if(img)images.set(src,img);}}));
   if(signal.aborted)throw new DOMException('캡처 취소','AbortError');
   canvas.width=width;canvas.height=height;ctx.fillStyle='#1b1d20';ctx.fillRect(0,0,width,height);ctx.fillStyle='#fffafa';ctx.font='700 15px sans-serif';ctx.fillText(`주요 채팅 · ${items.length}개`,padding,30);

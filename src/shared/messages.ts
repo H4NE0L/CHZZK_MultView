@@ -2,7 +2,7 @@ import type {PlayerEnvelope} from './contracts/protocol';
 export const messages = (() => {
   const SOURCE = 'chzzk-multiview';
   const CHZZK_ORIGIN = 'https://chzzk.naver.com';
-  const playerTypes = new Set(['POWER_DIAGNOSTICS_RESULT', 'PLAYER_READY', 'CHAT_READY', 'CHAT_SETTINGS_OPEN', 'CHAT_HEADER', 'IMPORTANT_CHAT_BATCH', 'IMPORTANT_CHAT_STATUS', 'VIDEO_STATE', 'SYNC_STATE', 'SYNC_RESULT', 'MEDIA_RESULT', 'MEDIA_STATE', 'MEDIA_TIME', 'MEDIA_KEY']);
+  const playerTypes = new Set(['POWER_DIAGNOSTICS_RESULT', 'PLAYER_READY', 'CHAT_READY', 'CHAT_SETTINGS_OPEN', 'CHAT_HEADER', 'IMPORTANT_CHAT_TARGET_TOGGLE','IMPORTANT_CHAT_BATCH', 'IMPORTANT_CHAT_STATUS', 'VIDEO_STATE', 'SYNC_STATE', 'SYNC_RESULT', 'MEDIA_RESULT', 'MEDIA_STATE', 'MEDIA_TIME', 'MEDIA_KEY']);
   const commandTypes = new Set(['PLAYER_OPTIONS','PLAYER_DISPOSE','CHAT_TIMESTAMP_CONFIG', 'POWER_REWARDS_CONFIG', 'POWER_DIAGNOSTICS', 'CHAT_PRESENTATION', 'IMPORTANT_CHAT_CONFIG', 'SET_NAV_VISIBLE', 'SET_CHAT_MODE', 'SET_CHAT_VISIBLE', 'SET_MUTED', 'SET_VOLUME', 'ENTER_THEATER', 'SYNC_SEEK', 'MEDIA_SCREENSHOT', 'MEDIA_RECORD', 'MEDIA_STOP', 'MEDIA_SEEK','MEDIA_SHORTCUTS']);
   function isPlayerMessage(event: MessageEvent<unknown>, frame: HTMLIFrameElement | null): boolean {
     const data = event?.data as PlayerEnvelope | undefined;

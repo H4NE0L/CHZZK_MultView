@@ -75,7 +75,13 @@ export function create({getOwnerName}) {
     for(const child of node.childNodes)richParts(child,parts);return parts;
   }
   function rowForName(nickname){
-    if(nickname.closest('.cz-native-chat-header,[role="menu"],#cz-chat-settings'))return null;
+    if(nickname.closest('.cz-native-chat-header,[role="menu"],[role="dialog"],[data-cz-collection-profile],#cz-chat-settings'))return null;
+    // Profile headings reuse nickname classes but are not posted messages.
+    for(let panel=nickname.parentElement,depth=0;panel&&panel!==document.body&&depth<6;depth++,panel=panel.parentElement){
+      if(panel.matches(rows)||panel.querySelector(rows)||leafNames(panel).length>1)break;
+      const actions=[...panel.querySelectorAll('button,a,[role=button],[role=menuitem]')].map(node=>String(node.textContent||'').replace(/\s+/g,''));
+      if(actions.includes('메시지신고')&&actions.includes('사용자차단'))return null;
+    }
     const known=nickname.closest(rows);if(known)return known;
     let row=nickname.parentElement;
     for(let depth=0;row && row!==document.body && depth<7;depth++,row=row.parentElement){

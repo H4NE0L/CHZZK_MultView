@@ -3,12 +3,13 @@ export function bind(context) {
   scope.listen(window,"message", event => {
     const {chatFrame,importantChat,state}=context;
     const data = event.data;
-    const fromChat=['CHAT_READY','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
+    const fromChat=['CHAT_READY','IMPORTANT_CHAT_TARGET_TOGGLE','IMPORTANT_CHAT_BATCH','IMPORTANT_CHAT_STATUS','CHAT_SETTINGS_OPEN','CHAT_HEADER'].includes(data?.type) || data?.type==='MEDIA_KEY' && event.source===chatFrame?.contentWindow;
     const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector('iframe');
     if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid!==chatFrame?.dataset.uid) return;
     if(data.type==='POWER_DIAGNOSTICS_RESULT'){powerDiagnostics.receive(data);return;}
     if(data.type==='CHAT_SETTINGS_OPEN'){importantChat?.openSettings('native');return;}
     if(data.type==='CHAT_HEADER')return;
+    if(data.type==='IMPORTANT_CHAT_TARGET_TOGGLE'){importantChat?.toggleTarget(data);return;}
     if(data.type==='IMPORTANT_CHAT_STATUS'){importantChat?.status(data.stats);return;}
     if(data.type==='IMPORTANT_CHAT_BATCH'){importantChat?.receive(data);return;}
     if (data.type === 'CHAT_READY') {

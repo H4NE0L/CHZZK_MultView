@@ -3,56 +3,60 @@ import {create as createHistory,hash} from '../shared/chat/history';
 import {ResourceScope} from '../shared/runtime/scope';
 // Observe visible markup only; parsing, role rules and bounded history are separate.
 globalThis.CZChatCollector = {create({send,status=()=>{}}) {
-  let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0;
+  let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0,lastOrder=0,baseline=false,configuredOnce=false,canActivate=false,since=Infinity;
+  const session=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),orders=new WeakMap(),blockedRows=new WeakSet(),bornLive=new WeakSet();
+  function orderFor(row,fresh=false){if(fresh||!orders.has(row)){lastOrder=Math.max(lastOrder+1,Date.now()*1000);orders.set(row,lastOrder);}return orders.get(row);}
   const history=createHistory();let identities=new WeakMap(),liveTails=new WeakMap();let liveInserts=new WeakSet();let replacements=new WeakMap();let seen=new WeakMap(),observed=new WeakSet(),ownerName='',statusTimer=null;let counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};let structure=null;const pending=new Map();
   const scope=new ResourceScope();let releaseObserver=null;
   const dom=createDOM({getOwnerName:()=>ownerName});
   const {rows,names,leafNames,rowForName}=dom;
   const readingHistory=row=>dom.readingHistory(row);
-  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'refactor-stage3-1',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
-  function flush(){timer=null;if(pending.size){const batch=Array.from(pending.values());send(batch);counts.sent+=batch.length;pending.clear();report();}}
+  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'collection-forward-1',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
+  function flush(){timer?.();timer=null;if(pending.size){const batch=Array.from(pending.values()).sort((a,b)=>a.order-b.order);for(let i=0;i<batch.length;i+=CZImportantChat.BATCH_SIZE)send(batch.slice(i,i+CZImportantChat.BATCH_SIZE));counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
-    row=dom.normalizeRow(row);
-    if(leafNames(row).length>1){for(const child of [...row.querySelectorAll(rows)].slice(-200))if(leafNames(child).length===1)read(child);return;}
+    row=dom.normalizeRow(row);if(!row.isConnected)return;
+    if(leafNames(row).length>1){for(const child of [...row.querySelectorAll(rows)])if(leafNames(child).length===1)read(child);return;}
     if(!observed.has(row)){observed.add(row);counts.scanned++;report();}
+    if(!orders.has(row)&&!baseline)bornLive.add(row);orderFor(row);if(baseline)blockedRows.add(row);
     if(dom.aboveHeader(row))return;
     const parsed=dom.read(row);structure=parsed.structure;report();
     if(!parsed.message)return;
     const {name,text,segments,nativeTime,sourceId,badges,badgesAfter,nameColor,bodyColor,role}=parsed.message;
-    const fingerprint=JSON.stringify([name,text]),hint=replacements.get(row);
+    const fingerprint=JSON.stringify([name,text]),shape=JSON.stringify([name,segments.map(part=>part.type==='image'?{type:'image',src:part.src}:part)]),hint=replacements.get(row);
     const historyKey=sourceId?'native:'+sourceId:hash(JSON.stringify([name,text,segments,nativeTime]));
-    const existing=identities.get(row),sameExisting=existing?.fingerprint===fingerprint && (!sourceId || existing.id===sourceId);
+    const existing=identities.get(row),sameExisting=!!existing && (sourceId?existing.id===sourceId:existing.fingerprint===fingerprint||existing.shape===shape);
     const cached=history.get(historyKey),restored=cached && !sameExisting && (sourceId || !liveInserts.has(row) && readingHistory(row))?cached:null;
     const previous=(sameExisting?existing:null)||((hint?.fingerprint===fingerprint && (!sourceId || sourceId===hint.id))?hint:null)||(restored?{...restored,fingerprint}:null);
-    const id=String(sourceId || (previous?.fingerprint===fingerprint?previous.id:++sequence)).slice(0,160);
-    const item=CZImportantChat.message({id,name,text,segments,badges,badgesAfter,nameColor,bodyColor,role,time:CZImportantChat.timestamp(nativeTime)??(previous?.fingerprint===fingerprint?previous.time:null)});
+    const id=String(sourceId || previous?.id || 'local:'+session+':'+(++sequence)).slice(0,160);
+    if(existing&&!sameExisting&&!previous){orderFor(row,true);bornLive.add(row);}
+    const activated=baseline&&canActivate&&bornLive.has(row)&&orderFor(row)>=since*1000;
+    const historical=!activated&&(blockedRows.has(row)||baseline||sameExisting&&existing.historical||!existing&&!liveInserts.has(row)&&readingHistory(row));blockedRows.delete(row);
+    const item=CZImportantChat.message({id,name,text,segments,badges,badgesAfter,nameColor,bodyColor,role,order:previous?.order??orderFor(row),time:CZImportantChat.timestamp(nativeTime)??previous?.time??null});
     if(!item)return;
-    if(existing?.historical && !liveInserts.has(row))item.updateOnly=true;
+    if(historical)item.updateOnly=true;
     if(liveInserts.has(row) || !readingHistory(row))liveTails.set(row.parentElement,new WeakRef(row));
     const signature=JSON.stringify(item);
-    if(sameExisting && existing.historical && cached?.matched && !liveInserts.has(row)){
-      const identity={...existing,signature};identities.set(row,identity);seen.set(row,identity);return;
-    }
     if(restored && restored.id===id && (restored.matched || restored.signature===hash(signature))){
-      const identity={fingerprint,id,time:item.time,signature,historical:true};identities.set(row,identity);seen.set(row,identity);counts.restored++;history.remember(historyKey,identity,signature,restored.matched || CZImportantChat.matches(item,filter));report();return;
+      const identity={fingerprint,shape,id,time:item.time,order:item.order,signature,historical:true};identities.set(row,identity);seen.set(row,identity);counts.restored++;history.remember(historyKey,identity,signature,restored.matched || CZImportantChat.matches(item,filter));report();return;
     }
     if(replacements.has(row) && previous?.signature===signature){identities.set(row,previous);seen.set(row,previous);return;}
     if(seen.get(row)?.signature===signature)return;
     counts.parsed++;report();
-    const identity={fingerprint,id,time:item.time,signature};identities.set(row,identity);seen.set(row,identity);
-    const matched=CZImportantChat.matches(item,filter);history.remember(historyKey,identity,signature,matched);
-    if(!matched)return;
+    const matched=CZImportantChat.matches(item,filter);
+    const identity={fingerprint,shape,id,time:item.time,order:item.order,signature,historical:!!historical,collected:previous?.collected===true||matched&&!historical};identities.set(row,identity);seen.set(row,identity);
+    history.remember(historyKey,identity,signature,matched||!!historical);
+    if(!matched||historical&&!previous?.collected)return;
     counts.matched++;
-    pending.set(id,item);if(pending.size>CZImportantChat.LIMIT)pending.delete(pending.keys().next().value);
+    pending.set(id,item);
     if(!timer)timer=scope.timeout(flush,250);
   }
   function scan(node) {
     const el=node.nodeType===1?node:node.parentElement;if(!el)return;
     const closest=el.closest(rows);if(closest){read(closest);return;}
-    else Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
+    else Array.from(el.querySelectorAll(rows)).forEach(read);
     // CSS module changes can remove every known row marker. Seed discovery
     // from nicknames instead, including mutations to an unknown message body.
-    const candidates=new Set([...el.querySelectorAll(names)].slice(-200).filter(nickname=>!nickname.closest(rows)));
+    const candidates=new Set([...el.querySelectorAll(names)].filter(nickname=>!nickname.closest(rows)));
     const own=el.closest(names);if(own)candidates.add(own);
     let ancestor=el;
     for(let depth=0;ancestor && ancestor!==document.body && depth<5;depth++,ancestor=ancestor.parentElement){
@@ -64,10 +68,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   function stop(){releaseObserver?.();releaseObserver=null;observer=null;timer?.();timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();statusTimer?.();statusTimer=null;}
   function configure(value,identity={}) {
     if(scope.isDisposed)return;
-    stop();dom.resetScroll();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
+    if(pending.size)flush();stop();canActivate=configuredOnce;configuredOnce=true;since=typeof identity.since==='number'&&Number.isFinite(identity.since)?identity.since:Date.now();dom.resetScroll();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
     observer=new MutationObserver(records=>{
       dom.resetScroll();replacements=new WeakMap();
-      const messageRows=node=>node.nodeType===1?[...(node.matches(rows)?[node]:[]),...node.querySelectorAll(rows)].slice(0,200):[];
+      const messageRows=node=>node.nodeType===1?[...(node.matches(rows)?[node]:[]),...node.querySelectorAll(rows)]:[];
       liveInserts=new WeakSet();
       for(const record of records){
         if(record.type!=='childList' || !record.addedNodes.length || record.nextSibling!==null || record.previousSibling!==liveTails.get(record.target)?.deref())continue;
@@ -95,11 +99,11 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
       }
       const candidates=new Set();
       for(const record of records){if(record.type==='childList' && record.addedNodes.length && [...record.addedNodes].every(node=>node.nodeType===1 && node.matches('.cz-native-chat-time')))continue;if(record.type==='childList' && !record.addedNodes.length && !record.target.closest(rows))continue;if(record.type==='attributes' && ['class','style'].includes(record.attributeName) && !record.target.closest(rows))continue;if(record.type!=='childList' || !record.addedNodes.length)candidates.add(record.target);for(const node of record.addedNodes)candidates.add(node);}
-      for(const node of candidates)scan(node);
+      const ordered=[...candidates].sort((a,b)=>a===b?0:a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1);for(const node of ordered)scan(node);
     });
     releaseObserver=scope.observe(observer);
     observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','class','style','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
-    scan(document.body);
+    baseline=true;try{scan(document.body);}finally{baseline=false;}
   }
   function dispose(){stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}
   scope.listen(document,'load',event=>{if(filter.enabled && event.target?.matches?.('img'))scan(event.target);},true);

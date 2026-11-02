@@ -14,7 +14,7 @@ test('important chat bounds message data and deduplicates IDs without dropping r
  assert(buffer.add('A',[item],filter));assert(!buffer.add('A',[item],filter));
  buffer.add('A',[{...item,id:'two'}],filter);assert.equal(buffer.items.length,2);
  for(let i=0;i<150;i++)buffer.add('A',[{...item,id:'m'+i}],filter);
- assert.equal(buffer.items.length,100);assert.equal(buffer.items[0].id,'m50');
+ assert.equal(buffer.items.length,152);assert.equal(buffer.items[0].id,'one');
  assert(!buffer.add('B',[item],filter));buffer.reset('B');assert.equal(buffer.items.length,0);
  assert.equal(api.message({id:'x',name:'n',text:'a'.repeat(2000),role:'admin'}).text.length,1000);
  assert.equal(api.message({id:'x',name:'n',text:'t',role:'admin'}).role,'');
@@ -76,4 +76,20 @@ test('emote-only messages derive readable text and badge display remains a separ
 test('native badge shapes cannot carry script, events, links or external paint sources',()=>{
  const api=setup(),item=api.message({id:'badge',name:'owner',text:'body',badges:[{alt:'인증',svg:{viewBox:'0 0 16 16',color:'url(https://evil.invalid)',shapes:[{tag:'script',attrs:{onload:'alert(1)'}},{tag:'path',attrs:{d:'M1 1L15 1L8 15Z',fill:'url(https://evil.invalid)',href:'javascript:alert(1)',onload:'alert(1)',stroke:'rgb(0, 255, 0)'}}]}}]});
  const svg=item.badges[0].svg;assert.equal(svg.shapes.length,1);assert.equal(svg.color,'');assert.equal(svg.shapes[0].tag,'path');assert.equal(svg.shapes[0].attrs.fill,undefined);assert.equal(svg.shapes[0].attrs.href,undefined);assert.equal(svg.shapes[0].attrs.onload,undefined);assert.equal(svg.shapes[0].attrs.stroke,'rgb(0, 255, 0)');
+});
+
+test('collection keeps all batches and positions late metadata by original observed order',()=>{
+ const api=setup(),buffer=api.create(),filter=api.settings({names:['A']});buffer.reset('channel');
+ const item=(id,order)=>({id,name:'A',text:id,order});
+ buffer.add('channel',[item('second',20),item('third',30)],filter);buffer.add('channel',[item('first',10)],filter);
+ assert.deepEqual(Array.from(buffer.items,item=>item.id),['first','second','third']);
+ buffer.add('channel',[{...item('second',999),time:123}],filter);assert.deepEqual(Array.from(buffer.items,item=>item.id),['first','second','third']);
+ buffer.add('channel',Array.from({length:1200},(_,i)=>item('more'+i,1000+i)),filter);assert.equal(buffer.items.length,1203);assert.equal(buffer.items.at(-1).id,'more1199');
+});
+
+test('late updates from before clear cannot repopulate history',()=>{
+ const api=setup(),buffer=api.create(),filter=api.settings({names:['A']});buffer.reset('A');
+ const order=Date.now()*1000;buffer.add('A',[{id:'before',name:'A',text:'before',order}],filter);buffer.clear();
+ buffer.add('A',[{id:'before',name:'A',text:'late metadata',order}],filter);assert.equal(buffer.size,0);
+ buffer.add('A',[{id:'after',name:'A',text:'after',order:Date.now()*1000+1000}],filter);assert.equal(buffer.size,1);
 });

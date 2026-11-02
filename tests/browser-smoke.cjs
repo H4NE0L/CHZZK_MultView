@@ -151,6 +151,7 @@ async function run() {
     assert.equal(manifest.action.default_title, manifest.name);
     assert.equal(writes, 0, 'opening popup must never write favorites');
     await checkCompactFavorites(popup, 'favorite');
+    assert.equal(await popup.locator('#settingsBackupBtn').count(),0,'settings backup belongs to multiview settings, not the popup');
     console.log('Checked popup initial read and compact favorite layout');
     await popup.locator('#uidInput').fill('https://chzzk.naver.com/live/cccccc');
     await popup.locator('#addList').click();

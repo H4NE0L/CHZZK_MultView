@@ -3,7 +3,7 @@ import {create as createRenderer} from './chat-renderer';
 import {ResourceScope} from '../shared/runtime/scope';
 export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,getState,notify}) {
   const scope=new ResourceScope();
-  const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false;const configured=new WeakMap();
+  const model=CZImportantChat.create();let filter=CZImportantChat.settings(),ready=false,collectionSince=Date.now();const configured=new WeakMap();
   const owners=new Map(),presented=new WeakMap();let stats=null,received=0;
   const HEIGHT_KEY='chzzkImportantChatHeightV1';let desiredHeight=200,drag=null,expanded=false;
   const panel=document.createElement('section');panel.className='important-chat-panel';panel.setAttribute('aria-label','주요 채팅');panel.dataset.collapsed='true';
@@ -52,7 +52,7 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     if(!dialog.open || !$('.ic-debug').open)return;
     const owner=owners.get(getState().selectedUid);
     const number=key=>Number.isFinite(stats?.[key])?Math.max(0,Math.floor(stats[key])):0;
-    $('.ic-diagnostics').textContent=(filter.enabled?'수집 켜짐':'수집 꺼짐')+' · 스트리머 확인: '+(owner?.name|| (owner?.pending?'조회 중':'확인 안 됨'))+'\n'+(!stats?'수집 프레임 응답 대기':'읽은 항목 '+number('scanned')+' · 해석 '+number('parsed')+' · 대상 '+number('matched')+' · 전송 '+number('sent'))+' · 수신 '+received+' · 표시 '+model.items.length;
+    $('.ic-diagnostics').textContent=(filter.enabled?'수집 켜짐':'수집 꺼짐')+' · 스트리머 확인: '+(owner?.name|| (owner?.pending?'조회 중':'확인 안 됨'))+'\n'+(!stats?'수집 프레임 응답 대기':'읽은 항목 '+number('scanned')+' · 해석 '+number('parsed')+' · 대상 '+number('matched')+' · 전송 '+number('sent'))+' · 수신 '+received+' · 표시 '+model.size;
   }
   function resolveOwner(){
     const uid=getState().selectedUid;if(!ready || getState().chatOpen===false || !uid || owners.has(uid) || !filter.enabled)return;
@@ -61,14 +61,14 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     const request=channel.type==='video'?CZChzzkApi.fetchVideoChannelName(channel.sourceId||uid.replace(/^video:/,'')):CZChzzkApi.fetchChannelName(channel.sourceId||uid);
     Promise.resolve(request).then(name=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:typeof name==='string'?name:''});if(getState().selectedUid===uid){configure();diagnostics();}}).catch(()=>{if(scope.isDisposed)return;owners.set(uid,{pending:false,name:''});diagnostics();});
   }
-  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const {hideBadges,nativeHideBadges,...collection}=filter;const signature=JSON.stringify([frame.dataset.uid,collection,owners.get(frame.dataset.uid)?.name||'']);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:collection,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
+  function configure(){if(scope.isDisposed)return;present();resolveOwner();const frame=getFrame();if(!ready || !frame || frame.dataset.playerReady!=='true')return;const {hideBadges,nativeHideBadges,...collection}=filter;const signature=JSON.stringify([frame.dataset.uid,collection,owners.get(frame.dataset.uid)?.name||'',collectionSince]);if(configured.get(frame)===signature)return;if(CZMessages.postToPlayer(frame,{source:'chzzk-multiview',type:'IMPORTANT_CHAT_CONFIG',settings:collection,since:collectionSince,streamerName:owners.get(frame.dataset.uid)?.name||''}))configured.set(frame,signature);}
   function render(){
     if(scope.isDisposed)return;
     panel.hidden=ready && !filter.enabled;
     present();
-    // Collapse affects presentation only: receive() keeps the bounded model
+    // Collapse affects presentation only: receive() keeps the full collection
     // collecting while hidden; expand flushes the current snapshot once.
-    panel.dataset.collectedCount=String(model.items.length);
+    panel.dataset.collectedCount=String(model.size);
     if(expanded && !panel.hidden)renderer.render(model.items,filter.hideBadges);
     diagnostics();
   }
@@ -84,7 +84,8 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     $('.ic-excluded-names').replaceChildren();
     filter.excludedNames.forEach((name,index)=>{const button=document.createElement('button');button.type='button';button.textContent=name+' ×';button.title='수집 제외 해제';button.onclick=()=>save({...filter,excludedNames:filter.excludedNames.filter((_,i)=>i!==index)});$('.ic-excluded-names').appendChild(button);});
   }
-  function save(value){filter=CZImportantChat.settings(value);model.applySettings(filter);controls();configure();render();chrome.storage.local.set({[CZImportantChat.KEY]:filter}).catch(error=>notify('채팅 설정 저장 실패: '+error.message));}
+  function collectionKey(value){const {hideBadges,nativeHideBadges,...collection}=value;return JSON.stringify(collection);}
+  function save(value){const next=CZImportantChat.settings(value);if(collectionKey(next)!==collectionKey(filter))collectionSince=Date.now();filter=next;model.applySettings(filter);controls();configure();render();chrome.storage.local.set({[CZImportantChat.KEY]:filter}).catch(error=>notify('채팅 설정 저장 실패: '+error.message));}
   enabledControl.onchange=event=>save({...filter,enabled:event.target.checked});
   for(const key of ['streamers','managers','partners','hideBadges','nativeHideBadges'])$('.ic-'+key).onchange=event=>save({...filter,[key]:key.includes('Badges')?!event.target.checked:event.target.checked});
   $('.ic-exclude-form').onsubmit=event=>{event.preventDefault();const input=$('.ic-exclude-name');if(!input.value.trim())return;if(filter.excludedNames.length>=50){notify('제외 사용자는 최대 50명까지 지정할 수 있습니다.');return;}save({...filter,excludedNames:[...filter.excludedNames,input.value]});input.value='';};
@@ -95,12 +96,12 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     const counts={};for(const key of ['scanned','parsed','matched','sent','restored'])counts[key]=Number.isFinite(stats?.[key])?Math.max(0,Math.floor(stats[key])):0;
     const dom={sourceTimeReader:String(stats?.dom?.sourceTimeReader||'').slice(0,40),rowCandidates:Number(stats?.dom?.rowCandidates)||0,nicknameCandidates:Number(stats?.dom?.nicknameCandidates)||0,classes:Array.isArray(stats?.dom?.classes)?stats.dom.classes.filter(value=>typeof value==='string').map(value=>value.slice(0,160)).slice(-40):[]};
     const roleSample=Array.isArray(stats?.roleSample)?stats.roleSample.slice(0,8).map(value=>({tag:String(value?.tag||'').slice(0,20),labels:Array.isArray(value?.labels)?value.labels.filter(item=>typeof item==='string').slice(0,4).map(item=>item.slice(0,80)):[],markers:Array.isArray(value?.markers)?value.markers.filter(item=>typeof item==='string').slice(0,3).map(item=>item.slice(0,120)):[]})):[];
-    const report={dom,roleSample,socketTimeSource:stats?.dom?.socketTimeSource||null,historyEntries:Number(stats?.historyEntries)||0,collectorRevision:typeof stats?.revision==='string'?stats.revision.slice(0,40):'응답 없음',version:chrome.runtime.getManifest?.().version||'확인 불가',enabled:filter.enabled,streamers:filter.streamers,managers:filter.managers,partners:filter.partners,ownerKnown:!!owners.get(getState().selectedUid)?.name,frameReady:getFrame()?.dataset.playerReady==='true',counts,received,displayed:model.items.length,structure};
+    const report={dom,roleSample,socketTimeSource:stats?.dom?.socketTimeSource||null,historyEntries:Number(stats?.historyEntries)||0,collectorRevision:typeof stats?.revision==='string'?stats.revision.slice(0,40):'응답 없음',version:chrome.runtime.getManifest?.().version||'확인 불가',enabled:filter.enabled,streamers:filter.streamers,managers:filter.managers,partners:filter.partners,ownerKnown:!!owners.get(getState().selectedUid)?.name,frameReady:getFrame()?.dataset.playerReady==='true',counts,received,displayed:model.size,structure};
     try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));notify('채팅 내용 없이 점검 정보를 복사했습니다.');}catch(_){notify('점검 정보 복사 실패: 아래 수치를 직접 복사해주세요.');}
   };
   $('.ic-clear').onclick=()=>{model.clear();render();};
   chrome.storage.local.get([CZImportantChat.KEY,HEIGHT_KEY]).then(value=>{if(scope.isDisposed)return;const height=Number(value[HEIGHT_KEY]);if(Number.isFinite(height) && height>=64 && height<=1600)desiredHeight=height;resize();filter=CZImportantChat.settings(value[CZImportantChat.KEY]);ready=true;controls();configure();render();}).catch(error=>{if(scope.isDisposed)return;ready=true;controls();configure();render();notify('채팅 설정 불러오기 실패: '+error.message);});
-  const onStorageChanged=(changes,area)=>{if(scope.isDisposed)return;if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;filter=next;model.applySettings(filter);controls();configure();render();};
+  const onStorageChanged=(changes,area)=>{if(scope.isDisposed)return;if(area!=='local')return;if(changes[HEIGHT_KEY]){const height=Number(changes[HEIGHT_KEY].newValue);if(Number.isFinite(height) && height>=64 && height<=1600){desiredHeight=height;resize();}}if(!changes[CZImportantChat.KEY])return;const next=CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);if(JSON.stringify(next)===JSON.stringify(filter))return;if(collectionKey(next)!==collectionKey(filter))collectionSince=Date.now();filter=next;model.applySettings(filter);controls();configure();render();};
   chrome.storage.onChanged.addListener(onStorageChanged);
   scope.add(()=>chrome.storage.onChanged.removeListener?.(onStorageChanged));
   function dispose(){
@@ -113,5 +114,5 @@ export const importantChatPanel = {create({chatPanel,enabledControl,getFrame,get
     panel.remove();dialog.remove();
   }
   controls();render();
-  return {dispose,openSettings,sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame()){configured.delete(getFrame());presented.delete(getFrame());}const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=Math.min(100,data.messages.length);if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
+  return {dispose,openSettings,toggleTarget(data){if(!ready||typeof data.name!=='string'||!data.name.trim()||data.name.length>40||typeof data.add!=='boolean')return;const name=data.name.normalize('NFC').trim(),same=value=>value.toLocaleLowerCase('ko-KR')===name.toLocaleLowerCase('ko-KR');if(data.add){if(filter.names.length>=50&&!filter.names.some(same)){notify('사용자는 최대 50명까지 지정할 수 있습니다.');if(getFrame())configured.delete(getFrame());configure();return;}save({...filter,names:[...filter.names.filter(value=>!same(value)),name],excludedNames:filter.excludedNames.filter(value=>!same(value))});notify('자동 수집 대상에 추가했습니다. 추가 이후의 새 채팅부터 수집합니다.');}else{save({...filter,names:filter.names.filter(value=>!same(value))});notify('수동 수집 대상에서 삭제했습니다. 역할 자동 수집 설정은 유지됩니다.');}},sync(force=false){if(getState().chatOpen===false && dialog.open)dialog.close();if(force && getFrame()){configured.delete(getFrame());presented.delete(getFrame());}const uid=getState().chatOpen!==false?getState().selectedUid:null;if(model.uid!==uid){model.reset(uid);stats=null;received=0;}configure();render();},status(value){stats=value && typeof value==='object'?value:null;diagnostics();},receive(data){if(Array.isArray(data.messages))received+=data.messages.length;if(ready && model.add(data.uid,data.messages,filter))render();else diagnostics();},panel};
 }};
