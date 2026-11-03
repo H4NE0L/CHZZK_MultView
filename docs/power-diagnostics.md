@@ -29,3 +29,5 @@ API를 읽지 못하면 원본 프로필의 ‘내 통나무 파워 300’ 표�
 2026-11-01 테스트 브랜치 점검은 `browser`·`tabAudio.audible`·`viewerAudio`, 채널별 `mediaElements`와 `playbackProbe`(500ms 간격), `audioRuntime`을 포함합니다. `audioRuntime.available:false`이면 페이지 생성 시 관찰기가 설치되지 않은 상태라 확인되지 않은 것이며, 오디오 컨텍스트가 없다는 뜻은 아닙니다. `playerTeardowns`는 최근 8개 삭제의 응답·시간 초과와 삭제 직전 상태를 보관합니다. 점검은 오디오 재생을 시작하거나 컨텍스트를 재개하지 않습니다. 현재 타일 삭제는 `releaseMode:frame-detach`로 기록하며, 영상 소스 초기화·load·AudioContext 강제 종료 없이 브라우저의 프레임 해제에 맡깁니다. 이전 방식은 삭제한 타일에 한해서 컨텍스트를 직접 종료했습니다. 실제 웨일 출력 장애가 해결됐는지는 현장 검증이 필요합니다.
 
 `audioRuntime.contexts`가 비어 있으면 관찰된 컨텍스트가 없다는 뜻이며, 브라우저 내부 오디오 경로가 없다는 확정은 아닙니다. 재발 시 소리를 켠 상태와 전체 음소거 상태의 점검을 각각 복사하면 재생 진행량을 비교할 수 있습니다.
+
+`audioRuntime.playbackTrace`는 검증된 영상 타일에서 최근 96개 play/pause/load/fastSeek·currentTime 변경 호출·미디어 이벤트·visibility 변경을 기록합니다. 호출 스택의 URL은 제거합니다. MAIN-world의 `call:pause`는 사이트 JavaScript 호출 단서이며, 호출 없이 발생한 `event:pause`는 브라우저 또는 다른 실행 세계의 호출일 수 있어 브라우저 원인으로 단정하지 않습니다. 타일마다 로컬 시퀀스인 elementId는 해당 playbackTrace 안에서만 비교합니다. 기록기는 재생·일시정지·복구를 실행하지 않습니다. 새 확장 로드 후 새로 연 멀티뷰에서 적용됩니다.

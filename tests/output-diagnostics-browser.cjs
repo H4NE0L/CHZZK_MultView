@@ -7,6 +7,15 @@ const {chromium}=require('playwright'),fs=require('node:fs'),vm=require('node:vm
  const sender={id:'own',url:'https://chzzk.naver.com/live/probe',frameId:7,tab:{id:3}},request=type=>new Promise(resolve=>handler({type},sender,resolve));
  const beforeState=await frame.evaluate(()=>__context.state),normal=await request('POWER_DIAGNOSTICS');assert(normal.ok);assert.equal(normal.diagnostics.audioRuntime.available,true);assert.equal(normal.diagnostics.audioRuntime.contexts.length,1);assert.equal(await frame.evaluate(()=>__context.state),beforeState,'snapshot never resumes/closes native context');assert.equal(normal.diagnostics.playbackProbe.sameElement,true);assert(normal.diagnostics.playbackProbe.currentTimeDelta>.2);assert(normal.diagnostics.playbackProbe.elapsedMs>=450);
  await frame.evaluate(()=>{Object.defineProperty(document.querySelector('video'),'currentTime',{configurable:true,get:()=>10});});const stalled=await request('POWER_DIAGNOSTICS');assert.equal(stalled.diagnostics.playbackProbe.currentTimeDelta,0);
+ await frame.evaluate(()=>{document.documentElement.setAttribute('data-cz-playback-trace','true');document.dispatchEvent(new Event('cz-playback-trace-enable'));window.__traceVideo=document.createElement('video');document.body.append(__traceVideo);__traceVideo.pause();__traceVideo.load();__traceVideo.currentTime=2;});
+ const traced=await request('POWER_DIAGNOSTICS'),entries=traced.diagnostics.audioRuntime.playbackTrace.entries;
+ assert(entries.some(entry=>entry.kind==='call:pause'));assert(entries.some(entry=>entry.kind==='call:load'));assert(entries.some(entry=>entry.kind==='call:currentTime'&&entry.target===2));
+ assert(entries.every(entry=>!/(?:https?|chrome-extension):\/\//.test(entry.stack||'')),'trace strips script URLs');
+ await frame.evaluate(()=>{for(let i=0;i<120;i++)__traceVideo.pause();});
+ assert((await request('POWER_DIAGNOSTICS')).diagnostics.audioRuntime.playbackTrace.entries.length<=96,'trace retention is bounded');
+ await frame.evaluate(()=>document.documentElement.removeAttribute('data-cz-playback-trace'));
+ const count=await frame.evaluate(()=>__CZAudioRuntime.snapshot().playbackTrace.entries.length);
+ await frame.evaluate(()=>__traceVideo.pause());assert.equal(await frame.evaluate(()=>__CZAudioRuntime.snapshot().playbackTrace.entries.length),count,'ordinary frames stay inert');
  const released=await request('PLAYER_AUDIO_TEARDOWN');assert(released.ok);assert.equal(await frame.evaluate(()=>__context.state),'closed');await frame.evaluate(()=>clearInterval(__draw));
  console.log('PASS: real two-sample diagnostics distinguish moving/stalled media, select video after audio element, preserve AudioContext until explicit authorized teardown.');
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

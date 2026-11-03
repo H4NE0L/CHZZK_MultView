@@ -39,6 +39,8 @@ import {create as createPowerRewards} from './power-rewards.js';
     PARENT_ORIGIN='https://chzzk.naver.com';
   }
 
+  if(!chatMode){document.documentElement.setAttribute('data-cz-playback-trace','true');document.dispatchEvent(new Event('cz-playback-trace-enable'));}
+
   function findVideo() {
     return document.querySelector("video");
   }
