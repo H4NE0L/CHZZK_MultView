@@ -17,6 +17,12 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
    if(fixture.expectedImageSources)assert.deepEqual(actual.message.segments.filter(part=>part.type==='image').map(part=>part.src),fixture.expectedImageSources);
    if(fixture.discovery)assert(actual.discovered,fixture.id);
   }
+  const images=await page.evaluate(()=>{
+   document.body.innerHTML='<div data-chat-message><span data-chat-nickname>대상</span><span data-chat-text><img alt="웃음" data-src="//ssl.pstatic.net/actual.png" src="https://ssl.pstatic.net/placeholder.png" srcset="https://ssl.pstatic.net/placeholder-2.png 2x"><img alt="하트" data-srcset="https://ssl.pstatic.net/heart.png 1x, https://ssl.pstatic.net/heart-2.png 2x"></span></div>';
+   const before=document.body.innerHTML,adapter=CZChatDOM.create({getOwnerName:()=>''});
+   return {sources:adapter.read(document.querySelector('[data-chat-message]')).message.segments.filter(part=>part.type==='image').map(part=>part.src),unchanged:document.body.innerHTML===before};
+  });
+  assert.deepEqual(images.sources,['https://ssl.pstatic.net/actual.png','https://ssl.pstatic.net/heart.png']);assert(images.unchanged);
   assert.deepEqual(errors,[]);console.log(`PASS: ${fixtures.length} native chat markup fixtures preserve author/body/role/time and do not mutate native DOM.`);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

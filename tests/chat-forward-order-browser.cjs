@@ -19,5 +19,14 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
  await page.locator('.ic-pagination button').last().click();assert.equal(await page.locator('.ic-message-text').last().textContent(),'채팅 649');
  assert(await page.evaluate(()=>__batches.every(batch=>batch.length<=200)),'transport chunks do not discard history');
  await page.evaluate(()=>{__model.clear();__renderer.render([]);__make('after-clear','대상','초기화 후');});await page.waitForFunction(()=>__model.items.length===1);assert.equal(await page.locator('.ic-message-text').last().textContent(),'초기화 후');
+ await page.evaluate(()=>{
+  const row=__make('mention','대상','앞 ');const mention=document.createElement('span');mention.dataset.chatNickname='';mention.textContent='언급된 사용자';row.querySelector('[data-chat-text]').append(mention,' 뒤');
+  const emote=__make('lazy-emote','대상','');const img=document.createElement('img');img.alt='웃음';emote.querySelector('[data-chat-text]').append(img);
+ });
+ await page.waitForFunction(()=>__model.items.some(item=>item.id==='mention')&&__model.items.some(item=>item.id==='lazy-emote'));
+ assert.equal(await page.evaluate(()=>__model.items.find(item=>item.id==='mention').name),'대상','body mentions are not extra authors');
+ await page.evaluate(()=>document.querySelector('[data-message-id=lazy-emote] img').setAttribute('data-src','//ssl.pstatic.net/lazy-emote.png'));
+ await page.waitForFunction(()=>__model.items.find(item=>item.id==='lazy-emote').segments.some(part=>part.type==='image'&&part.src==='https://ssl.pstatic.net/lazy-emote.png'));
+ assert.equal(await page.evaluate(()=>__model.items.filter(item=>item.id==='lazy-emote').length),1,'late image resolution updates rather than duplicates the message');
  await page.evaluate(()=>{__collector.dispose();__renderer.clear();});console.log('PASS: forward-only registration, late parse ordering, delayed old metadata, unlimited retention, 300-row paging, full-batch delivery and clear.');
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

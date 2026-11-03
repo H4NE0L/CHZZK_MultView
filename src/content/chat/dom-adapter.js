@@ -20,7 +20,8 @@ export function create({getOwnerName}) {
   }
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
     // A scoped message has one author; later nickname components may be mentions.
-    return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]')?found.slice(0,1):found;};
+    const messageRows='[data-chat-message],[class*="live_chatting_list_item"],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+    return node.matches?.(messageRows)&&!node.querySelector(messageRows)?found.slice(0,1):found;};
   const decorations='[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i],svg,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
   const isDecoration=node=>node.matches?.(decorations) && !node.matches('button[class*="button_chatting"]');
   function authorBoundary(row,nickname){
@@ -41,8 +42,12 @@ export function create({getOwnerName}) {
     return /인증\s*(?:마크|배지)|공식\s*(?:마크|배지)|(?:파트너|스트리머|관리자)\s*(?:마크|배지)|verified|verification|certified|certification|official\s*(?:mark|badge)/i.test(label) || /(?:^|[/_.-])(?:badge|verified|verification|certified)(?:[/_.-]|$)/i.test(asset.split('?')[0]);
   }
   const bodyIgnored=node=>node.matches?.('script,style,time,[hidden],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i]');
-  const imageSource=image=>[image.currentSrc,image.getAttribute('data-src'),image.src,image.getAttribute('srcset')?.split(/\s+/)[0]].find(source=>typeof source==='string'&&/^https:\/\//.test(source))||image.currentSrc||image.src||'';
-  function copyImageSources(originals,copies){originals.forEach((image,index)=>{const source=imageSource(image);if(source&&copies[index])copies[index].setAttribute('src',source);});}
+  const imageSource=image=>{
+    const candidates=[image.getAttribute('data-src'),image.getAttribute('data-srcset')?.split(/[\s,]+/)[0],image.currentSrc,image.getAttribute('src'),image.getAttribute('srcset')?.split(/[\s,]+/)[0]];
+    for(const candidate of candidates){if(!candidate?.trim())continue;try{const url=new URL(candidate.startsWith('//')?'https:'+candidate:candidate,document.baseURI);if(url.protocol==='https:')return url.href;}catch(_){}}
+    return '';
+  };
+  function copyImageSources(originals,copies){originals.forEach((image,index)=>{const source=imageSource(image);if(copies[index]){copies[index].removeAttribute('srcset');copies[index].removeAttribute('sizes');if(source)copies[index].setAttribute('src',source);else copies[index].removeAttribute('src');}});}
   function cloneBody(node){const copy=node.cloneNode(true);copyImageSources(node.matches?.('img')?[node]:[...node.querySelectorAll('img')],copy.matches?.('img')?[copy]:[...copy.querySelectorAll('img')]);return cleanBody(copy,false);}
   function cleanBody(fragment,authorSuffix=true){
     fragment.querySelectorAll('script,style,time,[hidden],[class*=blind i],[class*=sr_only i],[class*=screen_reader i],[class*=visually_hidden i]').forEach(el=>el.remove());

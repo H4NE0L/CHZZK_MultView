@@ -22,7 +22,7 @@ export const importantChat = (() => {
       if(!part || remaining<=0)continue;
       if(part.type==='image'){
         const alt=clean(part.alt).slice(0,80)||'[이모티콘]',src=imageUrl(part.src);
-        if(src && images<8){result.push({type:'image',src,alt});images++;remaining-=alt.length;continue;}
+        if(src && images<64){result.push({type:'image',src,alt});images++;remaining-=alt.length;continue;}
         result.push({type:'text',text:alt.slice(0,remaining)});remaining-=alt.length;
       }else if(part.type==='text' && typeof part.text==='string'){
         const text=part.text.slice(0,remaining);if(text)result.push({type:'text',text});remaining-=text.length;

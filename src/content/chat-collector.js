@@ -11,7 +11,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   const dom=createDOM({getOwnerName:()=>ownerName});
   const {rows,names,leafNames,rowForName}=dom;
   const readingHistory=row=>dom.readingHistory(row);
-  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'collection-forward-1',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
+  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'collection-emotes-2',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
   function flush(){timer?.();timer=null;if(pending.size){const batch=Array.from(pending.values()).sort((a,b)=>a.order-b.order);for(let i=0;i<batch.length;i+=CZImportantChat.BATCH_SIZE)send(batch.slice(i,i+CZImportantChat.BATCH_SIZE));counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
     row=dom.normalizeRow(row);if(!row.isConnected)return;
@@ -102,7 +102,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
       const ordered=[...candidates].sort((a,b)=>a===b?0:a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1);for(const node of ordered)scan(node);
     });
     releaseObserver=scope.observe(observer);
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','class','style','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','data-src','data-srcset','data-message-id','data-chat-id','class','style','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
     baseline=true;try{scan(document.body);}finally{baseline=false;}
   }
   function dispose(){stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}
