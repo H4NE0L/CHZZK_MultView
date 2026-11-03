@@ -32,13 +32,25 @@ module.exports=async function checkAudioIsolation(page){
  await ending.evaluate(()=>{const video=document.querySelector('video');Object.defineProperty(video,'ended',{get:()=>true});video.pause();video.volume=0;video.muted=true;});
  await frame.evaluate(()=>{window.__nativeAudioStorage=0;window.__otherStorage=0;window.addEventListener('storage',event=>{if(event.key==='player-volume'){window.__nativeAudioStorage++;document.querySelector('video').muted=true;}if(event.key==='theme-test')window.__otherStorage++;});window.dispatchEvent(new StorageEvent('storage',{key:'theme-test',newValue:'dark'}));window.dispatchEvent(new StorageEvent('storage',{key:'player-volume',newValue:'0'}));document.querySelector('video').volume=0;document.querySelector('video').muted=true;});
 
+ await page.evaluate(()=>{window.__removedPipelineCalls=null;window.addEventListener('message',event=>{if(event.data?.source==='test-pipeline-release')window.__removedPipelineCalls=event.data.calls;});});
+ await ending.evaluate(()=>{__teardownCalls=[];window.addEventListener('message',event=>{if(event.data?.type==='PLAYER_DISPOSE')window.parent.postMessage({source:'test-pipeline-release',calls:__teardownCalls},'*');});});
  await frame.evaluate(()=>{window.__removalCommands=[];window.addEventListener('message',event=>{if(['SET_VOLUME','SET_CHAT_VISIBLE'].includes(event.data?.type))window.__removalCommands.push(event.data.type);});});
  await page.locator('.video-tile[data-uid="audiotest"] .remove-btn').click();await playing();assert(!frame.isDetached());
  assert.equal(await frame.evaluate(()=>window.__nativeAudioStorage),0,'sibling preference changes cannot reach native audio storage handlers');
  assert.equal(await frame.evaluate(()=>window.__otherStorage),1,'unrelated native storage events still work');
  await page.locator('.video-tile[data-uid="audiotest"]').waitFor({state:'detached'});
- const teardown=await page.evaluate(()=>globalThis.__CZPlayerLifecycleV1.history.find(entry=>entry.uid==='audiotest'));assert.equal(teardown.status,'acknowledged','frame acknowledges media shutdown before detaching');assert.equal(teardown.details.before.actual.ended,true);
+ const teardown=await page.evaluate(()=>globalThis.__CZPlayerLifecycleV1.history.find(entry=>entry.uid==='audiotest'));assert.equal(teardown.status,'acknowledged','frame acknowledges media shutdown before detaching');assert.equal(teardown.details.before.actual.ended,true);assert.equal(teardown.details.releaseMode,'frame-detach');await page.waitForFunction(()=>window.__removedPipelineCalls!==null);assert.deepEqual(await page.evaluate(()=>window.__removedPipelineCalls),[],'disposal must not explicitly pause/reload the native media pipeline');
  assert.deepEqual(await frame.evaluate(()=>window.__removalCommands),[],'unrelated tile removal sends no volume or chat reset commands to surviving player');
+ // The same removal path must preserve a sibling for an active broadcast too.
+ await page.locator('#uidInput').fill('audiolive');await page.locator('#addBtn').click();
+ const liveHandle=await page.locator('.video-tile[data-uid="audiolive"] iframe').elementHandle(),live=await liveHandle.contentFrame();await liveHandle.dispose();
+ await live.waitForFunction(()=>document.querySelector('video')?.dataset.chzzkMvBound==='1');
+ await frame.evaluate(()=>{window.__removalCommands=[];});
+ await page.locator('.video-tile[data-uid="audiolive"] .remove-btn').click();await page.locator('.video-tile[data-uid="audiolive"]').waitFor({state:'detached'});await playing();
+ assert(!frame.isDetached(),'live tile removal preserves the surviving iframe');
+ const liveRelease=await page.evaluate(()=>globalThis.__CZPlayerLifecycleV1.history.find(entry=>entry.uid==='audiolive'));
+ assert.equal(liveRelease.status,'acknowledged');assert.equal(liveRelease.details.before.actual.ended,false);assert.equal(liveRelease.details.releaseMode,'frame-detach');
+ assert.deepEqual(await frame.evaluate(()=>window.__removalCommands),[],'live removal sends no commands to siblings');
  await page.locator('#volumeManager > summary').click();
  await page.locator('#masterMuteBtn').click();
  await frame.waitForFunction(()=>document.querySelector('video').volume===0 && document.querySelector('video').muted);

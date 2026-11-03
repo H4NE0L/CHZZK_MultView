@@ -305,13 +305,10 @@ import {create as createPowerRewards} from './power-rewards.js';
     if(disposing)return;
     if(event.data.type==='PLAYER_DISPOSE'){
       disposing=true;const before=audio.snapshot();videoObserver?.disconnect();uiObserver?.disconnect();clearInterval(syncTimer);clearInterval(theaterTimer);audio.dispose();powerRewards?.dispose();media?.dispose();
-      const mediaReleased=Promise.all([...document.querySelectorAll('video,audio')].map(element=>new Promise(resolve=>{
-        let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);element.removeEventListener('emptied',finish);resolve();};
-        const timer=setTimeout(finish,120);element.addEventListener('emptied',finish,{once:true});
-        try{const empty=element.networkState===0;element.pause();element.srcObject=null;element.removeAttribute('src');element.querySelectorAll('source').forEach(source=>source.remove());element.load();if(empty)finish();}catch(_){finish();}
-      })));
-      const reply=result=>window.parent.postMessage({source:'chzzk-multiview',type:'PLAYER_DISPOSED',uid:frameUid,requestId:event.data.requestId,details:{before,audio:result?.audio||null,error:result?.error||null}},PARENT_ORIGIN);
-      Promise.all([mediaReleased,chrome.runtime.sendMessage({type:'PLAYER_AUDIO_TEARDOWN'}).catch(error=>({error:String(error)}))]).then(([,result])=>reply(result));return;
+      // Let iframe removal release its native pipeline. Resetting MediaSource
+      // and explicitly closing AudioContexts before detach adds a second shutdown
+      // path while sibling players share the browser audio output service.
+      window.parent.postMessage({source:'chzzk-multiview',type:'PLAYER_DISPOSED',uid:frameUid,requestId:event.data.requestId,details:{before,releaseMode:'frame-detach'}},PARENT_ORIGIN);return;
     }
     if(event.data.type==='PLAYER_OPTIONS'&&!chatMode){const next=event.data.autoWide!==false;if(next!==autoWide){autoWide=next;if(!autoWide){clearInterval(theaterTimer);theaterTimer=null;}else{theaterApplied=false;scheduleTheater();}}}
     if(event.data.type==='POWER_REWARDS_CONFIG' && powerRewards){
