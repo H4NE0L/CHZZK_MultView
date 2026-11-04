@@ -94,5 +94,9 @@
   "src/viewer/chat-renderer.js": [
     "CZChatRenderer",
     null
+  ],
+  "src/content/player-video.js": [
+    "CZPlayerVideo",
+    null
   ]
 }

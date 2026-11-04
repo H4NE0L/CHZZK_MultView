@@ -1,3 +1,4 @@
+import {findPlaybackVideo} from './player-video.js';
 import {createTargetMenu} from './chat/target-menu.js';
 import {create as createPowerRewards} from './power-rewards.js';
 /* CHZZK live iframe helper for MultiView. */
@@ -42,7 +43,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   if(!chatMode){document.documentElement.setAttribute('data-cz-playback-trace','true');document.dispatchEvent(new Event('cz-playback-trace-enable'));}
 
   function findVideo() {
-    return document.querySelector("video");
+    return findPlaybackVideo();
   }
 
   function isVideoMuted(video) {
@@ -64,11 +65,16 @@ import {create as createPowerRewards} from './power-rewards.js';
 
   const audio=CZPlayerAudio.create({findVideo,report:reportVideoState});
   const setMuted=audio.setMuted,setVolume=audio.setVolume;
+  let readyVideo=null;
   function bindVideo(video) {
-    if (!video || video.dataset.chzzkMvBound === "1") return;
-    video.dataset.chzzkMvBound = "1";
-    if(!chatMode){audio.bind(video);for(const event of ['loadeddata','playing'])video.addEventListener(event,scheduleTheater);}
-    if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
+    if(!video)return;
+    if(video.dataset.chzzkMvBound!=="1"){
+      video.dataset.chzzkMvBound="1";
+      if(!chatMode){audio.bind(video);for(const event of ['loadeddata','playing'])video.addEventListener(event,()=>{scheduleTheater();bindVideo(video);});}
+    }
+    if(chatMode||video!==findVideo()||readyVideo===video)return;
+    readyVideo=video;
+    window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 
   function bindObserver() {
@@ -76,6 +82,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     videoObserver = new MutationObserver(records => {
       // Native chat can mutate hundreds of times a second. Inspect added
       // subtrees only instead of searching the complete page for every chat.
+      if(readyVideo&&!readyVideo.isConnected){readyVideo=null;bindVideo(findVideo());}
       for(const record of records)for(const node of record.addedNodes){
         if(node.nodeType!==1)continue;
         const controls='.pzp-pc__viewmode-button,button[aria-label*="넓은"],button[title*="넓은"],video';
