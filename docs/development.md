@@ -47,7 +47,7 @@ Chrome 확장 관리에서 **dist 폴더**를 압축 해제된 확장으로 로�
 
 ## 저장소와 배포 파일
 
-GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v3.0.1.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
+GitHub main은 개발 소스입니다. `dist/`, `.test-build/`, `node_modules/`, `artifacts/`, 개인 `.backup` JSON은 Git에서 제외합니다. 설치용 ZIP은 `artifacts/CZ-Control-Room-v<manifest.version>.zip`에 생성하며 소스·검사·계측 자료를 포함하지 않습니다. GitHub Actions는 main에서 검사 후 ZIP artifact를 생성하고 설치 전용 release 브랜치를 갱신합니다. main과 release 두 브랜치를 유지합니다. GitHub Releases API로 Release를 등록하는 방식은 아닙니다. README의 직접 다운로드 링크는 release 브랜치의 설치 ZIP을 가리킵니다. release에는 SOURCE_COMMIT으로 빌드 기준 main 커밋을 기록합니다.
 
 완료된 단계별 계획 문서와 이전 Python 패키징 진입점은 정리했습니다. 이전 문서는 Git 이력에 남아 있습니다. 검사·측정 스크립트, vendor 라이선스, 개인 백업은 유지합니다. 파일 수 감소를 실행 메모리 감소로 해석하지 않습니다.
 
@@ -79,6 +79,8 @@ npm run clean -- --branches
 `clean`은 `.test-build`와 artifacts 안의 구버전 CZ-Control-Room ZIP만 삭제합니다. 현재 버전 ZIP·dist·.backup·소스·node_modules와 알 수 없는 파일은 유지합니다. `--branches`는 main에 포함된 로컬 브랜치만 삭제하며 main/release/현재 브랜치를 제외합니다. 원격 브랜치를 삭제하는 명령은 아닙니다. 다음 테스트는 npm test가 필요한 테스트 산출물을 다시 생성합니다.
 
 ## 설치 파일 게시
+
+main 반영 전에는 버전 올림/유지와 테스트 브랜치 병합·로컬/원격 정리 여부를 확인합니다. 문서를 현재 동작에 맞추되 README에는 최근 업데이트 목록을 추가하지 않습니다. 설치 ZIP을 별도로 전달할 필요는 없으며 설치 파일은 release 브랜치에서 제공합니다. 오디오 출력 장애와 같이 실환경에서 미해결인 항목은 변경 이력에 해결 완료로 기록하지 않습니다.
 
 검사를 마치고 main에 커밋·push한 뒤 `npm run publish:install`을 실행합니다. 기존 HTTPS Git 인증을 사용하며 API 토큰을 따로 읽지 않습니다. main 커밋의 깨끗한 소스로 재빌드하고 별도 임시 Git index에서 설치 트리를 만들어 release에 게시합니다. 기본 작업 트리·개인 백업은 변경하지 않습니다. 갱신 전 main 기준과 release의 기존 SHA를 확인해 오래된 배포가 덮어쓰지 않도록 합니다. `-- --dry-run`으로 원격 게시 없이 트리를 점검할 수 있습니다.
 

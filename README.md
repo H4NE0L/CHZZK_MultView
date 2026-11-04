@@ -2,7 +2,7 @@
 
 여러 CHZZK 방송을 한 화면에서 시청하는 브라우저 확장 프로그램입니다.
 
-**v3.1.0 · Chrome 119 이상 권장**
+**v3.1.1 · Chrome 119 이상 권장**
 
 ## 주요 기능
 
@@ -14,13 +14,13 @@
 
 ## 설치 및 업데이트
 
-1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.1.0.zip)** 후 압축을 풉니다.
+1. **[설치용 ZIP 다운로드](https://github.com/H4NE0L/CHZZK_MultView/raw/refs/heads/release/CZ-Control-Room-v3.1.1.zip)** 후 압축을 풉니다.
 2. `chrome://extensions`에서 **개발자 모드 → 압축해제된 확장 프로그램을 로드**를 선택합니다.
 3. 압축을 푼 폴더 중 `manifest.json`이 있는 폴더를 지정합니다.
 
 업데이트는 먼저 설정을 백업하고 **기존 설치 폴더**에 파일을 교체한 뒤 확장을 다시 로드하세요. 다른 폴더에 새로 등록하면 저장 데이터 이전이 필요할 수 있습니다.
 
-GitHub **main은 개발 소스**, **release는 빌드된 설치 파일**입니다. main의 Code → Download ZIP은 바로 설치할 수 없습니다. 완성된 설치 ZIP은 Node.js나 별도 서버 없이 사용할 수 있습니다.
+GitHub **main은 개발 소스**, **release는 빌드된 설치 파일**입니다. main의 Code → Download ZIP은 바로 설치할 수 없습니다. release 브랜치의 Code → Download ZIP으로 받아도 설치할 수 있습니다. 설치 파일은 Node.js나 별도 서버 없이 사용할 수 있습니다.
 
 ## 사용 방법
 
