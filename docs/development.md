@@ -129,3 +129,5 @@ API 조사와 타임스탬프 참고 구현 비교: [chzzk-api-research.md](chzz
 비교 대상은 [Chzzk-Platter의 005baccc](https://github.com/lirpa62/Chzzk-Platter/tree/005baccc81587366ceaca7fefb9372ff087b2cb8)입니다. `multiviewWatch.js`의 `dropChannel`은 삭제한 프레임을 about:blank로 바꾸고 해당 셀을 제거합니다. 플레이어를 보관하는 구조가 아니므로 iframe 제거 자체를 장애 원인으로 확정할 근거는 없습니다. `content.js`의 기본 영상 연결에는 첫 video 조회도 있으며, 별도 `audioMixer.js`는 플레이어 영역·이벤트 대상·가시성을 구분합니다. 참조 구현을 통째로 복사하지 않고 실제 영상 선택 기준을 독립 구현했습니다.
 
 영상 타일과 MAIN-world 점검은 표시 여부·재생 준비 상태·플레이어 영역으로 실제 영상을 선택합니다. 광고·대기 영상은 방송의 준비 신호를 반복 발생시키지 않습니다. 음량 이벤트 격리는 여전히 원본 UI의 갱신을 막을 수 있어, 네이티브 음소거 아이콘만으로 실제 `muted` 값을 판정하지 않습니다. 이 변경은 전체 탭 오디오 장애의 원인이 밝혀졌거나 해결됐음을 뜻하지 않습니다.
+
+사이트 모드의 원본 스크롤 잠금은 html/body의 overflow·scrollbar 속성을 MutationObserver로 유지합니다. 원본 재렌더링이 스타일을 덮어써도 복구하며, Shadow DOM 내부 목록은 잠그지 않습니다. 멀티뷰 종료 시 관찰자와 전용 스타일을 해제하고 원래 인라인 속성을 복원합니다.
