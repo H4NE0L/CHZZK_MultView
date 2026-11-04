@@ -34,7 +34,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     const item=CZImportantChat.message({id,name,text,segments,badges,badgesAfter,nameColor,bodyColor,role,order:previous?.order??orderFor(row),time:CZImportantChat.timestamp(nativeTime)??previous?.time??null});
     if(!item)return;
     if(historical)item.updateOnly=true;
-    if(liveInserts.has(row) || !readingHistory(row))liveTails.set(row.parentElement,new WeakRef(row));
+    if(!row.nextElementSibling || liveInserts.has(row) || !readingHistory(row))liveTails.set(row.parentElement,new WeakRef(row));
     const signature=JSON.stringify(item);
     if(restored && restored.id===id && (restored.matched || restored.signature===hash(signature))){
       const identity={fingerprint,shape,id,time:item.time,order:item.order,signature,historical:true};identities.set(row,identity);seen.set(row,identity);counts.restored++;history.remember(historyKey,identity,signature,restored.matched || CZImportantChat.matches(item,filter));report();return;
@@ -102,7 +102,7 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
       const ordered=[...candidates].sort((a,b)=>a===b?0:a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING?-1:1);for(const node of ordered)scan(node);
     });
     releaseObserver=scope.observe(observer);
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','data-src','data-srcset','data-message-id','data-chat-id','class','style','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','data-src','data-srcset','data-message-id','data-chat-id','class','style','data-cz-source-role','data-cz-source-role-id','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
     baseline=true;try{scan(document.body);}finally{baseline=false;}
   }
   function dispose(){stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}

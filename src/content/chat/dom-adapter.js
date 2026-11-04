@@ -110,11 +110,12 @@ export function create({getOwnerName}) {
   }
   let roleSample=[];
   function role(row,textElements,nickname,suffix=new Set()) {
+    const source=row.getAttribute('data-cz-source-role'),nativeId=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id');if(['streamer','manager','partner'].includes(source)&&(!nativeId||row.getAttribute('data-cz-source-role-id')===nativeId))return source;
     if(getOwnerName() && nameKey(authorName(nickname))===nameKey(getOwnerName()))return 'streamer';
     let author=authorBoundary(row,nickname);
     for(let node=author,depth=0;node && node!==row && depth<4;node=node.parentElement,depth++)if(/username|nickname|author/.test(String(node.className)))author=node;
     let detected='';roleSample=[];
-    const candidates=row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]');
+    const candidates=[row,...row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]')];
     for(const badge of candidates){
       if(textElements.some(el=>el===badge || el.contains(badge)))continue;
       const beforeName=!!(badge.compareDocumentPosition(nickname)&Node.DOCUMENT_POSITION_FOLLOWING);

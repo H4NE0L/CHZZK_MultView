@@ -131,3 +131,5 @@ API 조사와 타임스탬프 참고 구현 비교: [chzzk-api-research.md](chzz
 영상 타일과 MAIN-world 점검은 표시 여부·재생 준비 상태·플레이어 영역으로 실제 영상을 선택합니다. 광고·대기 영상은 방송의 준비 신호를 반복 발생시키지 않습니다. 음량 이벤트 격리는 여전히 원본 UI의 갱신을 막을 수 있어, 네이티브 음소거 아이콘만으로 실제 `muted` 값을 판정하지 않습니다. 이 변경은 전체 탭 오디오 장애의 원인이 밝혀졌거나 해결됐음을 뜻하지 않습니다.
 
 사이트 모드의 원본 스크롤 잠금은 html/body의 overflow·scrollbar 속성을 MutationObserver로 유지합니다. 원본 재렌더링이 스타일을 덮어써도 복구하며, Shadow DOM 내부 목록은 잠그지 않습니다. 멀티뷰 종료 시 관찰자와 전용 스타일을 해제하고 원래 인라인 속성을 복원합니다.
+
+채팅 역할 판독은 Badge Moa의 `profile.userRoleCode`·`profile.badge.imageUrl`·`verifiedMark` 기준을 참고하되 독립 구현합니다. MAIN-world에서 해당 행 소유의 chatMessage/chattingMessage만 제한된 범위로 읽고 역할 enum만 DOM에 전달합니다. 인접 행·목록 프로필은 사용하지 않으며 시각 기능 OFF에서도 역할 수집은 동작합니다. 지연 props는 행별 최대 3회·동시 128개만 재확인하고 수집 OFF·pagehide 시 정리합니다. 헤더 집계는 메시지 ID별 갱신을 중복 계산하지 않고 초기화·제외·채널 변경과 함께 갱신합니다.

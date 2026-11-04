@@ -68,3 +68,8 @@
 
 .ic-pagination { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:6px 4px; background:#303338; color:#cbd0d8; font-size:11px; }
 .ic-pagination button { border:1px solid #555; border-radius:4px; background:#25282d; color:#fffafa; padding:4px 8px; cursor:pointer; }
+
+.ic-heading .ic-toggle { flex:0 0 auto; width:auto; }
+.ic-summary { display:flex; flex:1 1 0; min-width:0; align-items:center; gap:6px; overflow:hidden; white-space:nowrap; color:#aeb7c2; font-size:11px; }
+.ic-summary-entry { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.ic-summary-name { color:#91baff; }

@@ -145,9 +145,9 @@ module.exports=async function checkImportantChat(page){
  const expandedFrameHeight=(await page.locator('.chat-frame').boundingBox()).height;
  const collectedBeforeCollapse=await panel.locator('.ic-message').count();
  await panel.locator('.ic-toggle').click();
- await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='collapsed-collection-test';row.innerHTML='<span data-chat-nickname>테스트 방송</span><span data-chat-text>접힌 동안 수집 유지</span>';document.querySelector('aside.live_chat').append(row);});
+ await frame.evaluate(()=>{const row=document.createElement('div');row.dataset.chatMessage='';row.id='collapsed-collection-test';row.innerHTML='<span data-chat-nickname style="color:rgb(100,200,150)">테스트 방송</span><span data-chat-text>접힌 동안 수집 유지</span>';document.querySelector('aside.live_chat').append(row);});
  await page.waitForFunction(before=>Number(document.querySelector('#__chzzk_multiview_v09__').shadowRoot.querySelector('.important-chat-panel').dataset.collectedCount)>before,collectedBeforeCollapse);
- assert.equal(await panel.locator('.ic-message').count(),collectedBeforeCollapse,'collapsed collection updates the model without rendering hidden rows');
+ assert.equal(await panel.locator('.ic-message').count(),collectedBeforeCollapse,'collapsed collection updates the model without rendering hidden rows');assert((await panel.locator('.ic-summary').textContent()).includes('테스트 방송'),'collapsed header includes the collected author');assert.equal(await panel.locator('.ic-summary-name').first().evaluate(el=>getComputedStyle(el).color),'rgb(100, 200, 150)','header preserves readable native nickname color');assert((await panel.locator('.ic-summary').textContent()).includes('2'),'collapsed header updates the author count');
  assert((await page.locator('.chat-frame').boundingBox()).height>expandedFrameHeight,'collapse gives space back to native chat');
  await panel.locator('.ic-toggle').click();assert(await panel.locator('.ic-message').filter({hasText:'접힌 동안 수집 유지'}).isVisible());
  await frame.locator('#collapsed-collection-test').evaluate(el=>el.remove());

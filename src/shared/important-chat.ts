@@ -63,17 +63,19 @@ export const importantChat = (() => {
   }
   function create() {
     let uid: string | null=null,items: ChatMessage[]=[],clock=0,minimumOrder=0,lastExclusions='';
+    const authors=new Map<string,{name:string;nameColor:string;count:number}>();
+    function countAuthor(item:ChatMessage,delta:number){const key=nameKey(item.name),current=authors.get(key),count=(current?.count||0)+delta;if(count<=0)authors.delete(key);else authors.set(key,{name:item.name,nameColor:item.nameColor||current?.nameColor||'',count});}
     const byId=new Map<string,ChatMessage>(),positions=new Map<string,number>();
-    function clear(reset=false){minimumOrder=reset?0:Math.max(clock+1,Date.now()*1000);items=[];byId.clear();positions.clear();clock=0;}
-    return {reset(next: string | null){uid=next;clear(true);},get uid(){return uid;},get size(){return items.length;},get items(){return items.slice();},clear,applySettings(filter: ChatSettings){const key=JSON.stringify(filter.excludedNames);if(key===lastExclusions)return;lastExclusions=key;items=items.filter(item=>{const keep=!(filter.excludedNames||[]).some(name=>nameKey(name)===nameKey(item.name));if(!keep){byId.delete(item.id);positions.delete(item.id);}return keep;});},
+    function clear(reset=false){minimumOrder=reset?0:Math.max(clock+1,Date.now()*1000);items=[];byId.clear();positions.clear();authors.clear();clock=0;}
+    return {reset(next: string | null){uid=next;clear(true);},get uid(){return uid;},get size(){return items.length;},get authors(){return Array.from(authors.values(),value=>({...value}));},get items(){return items.slice();},clear,applySettings(filter: ChatSettings){const key=JSON.stringify(filter.excludedNames);if(key===lastExclusions)return;lastExclusions=key;items=items.filter(item=>{const keep=!(filter.excludedNames||[]).some(name=>nameKey(name)===nameKey(item.name));if(!keep){countAuthor(item,-1);byId.delete(item.id);positions.delete(item.id);}return keep;});},
       add(channel: string,batch: unknown,filter: ChatSettings){
         if(channel!==uid || !filter.enabled || !Array.isArray(batch))return false;
         let changed=false;
         for(const raw of batch){
           const item=message(raw);if(!item || !matches(item,filter)||item.order!==null&&item.order<minimumOrder)continue;
           const existing=byId.get(item.id);if(!existing&&item.updateOnly)continue;
-          if(existing){if(JSON.stringify(existing)===JSON.stringify(item))continue;items[items.indexOf(existing)]=item;}
-          else{const order=item.order??clock+1;clock=Math.max(clock,order);positions.set(item.id,order);let low=0,high=items.length;while(low<high){const middle=(low+high)>>>1;if(positions.get(items[middle]!.id)!<=order)low=middle+1;else high=middle;}items.splice(low,0,item);}
+          if(existing){if(JSON.stringify(existing)===JSON.stringify(item))continue;items[items.indexOf(existing)]=item;if(nameKey(existing.name)!==nameKey(item.name)){countAuthor(existing,-1);countAuthor(item,1);}else{const summary=authors.get(nameKey(item.name));if(summary&&item.nameColor)summary.nameColor=item.nameColor;}}
+          else{const order=item.order??clock+1;clock=Math.max(clock,order);positions.set(item.id,order);let low=0,high=items.length;while(low<high){const middle=(low+high)>>>1;if(positions.get(items[middle]!.id)!<=order)low=middle+1;else high=middle;}items.splice(low,0,item);countAuthor(item,1);}
           byId.set(item.id,item);changed=true;
         }
         return changed;
