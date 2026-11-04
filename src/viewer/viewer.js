@@ -1404,7 +1404,7 @@
   function summarize(details) {
     if (!details || typeof details !== "object") return null;
     const before = details.before, actual = before?.actual, desired = before?.desired;
-    return { before: before ? { revision: typeof before.revision === "string" ? before.revision.slice(0, 64) : null, earlyCapture: before.earlyCapture === true, desired: desired ? { volume: number(desired.volume), muted: desired.muted === true } : null, actual: actual ? { volume: number(actual.volume), muted: actual.muted === true, paused: actual.paused === true, ended: actual.ended === true, readyState: number(actual.readyState), errorCode: number(actual.errorCode) } : null, counts: Object.fromEntries(["commands", "corrections", "reports", "nativeChanges"].map((key) => [key, number(before.counts?.[key])])) } : null, audio: details.audio ? { observed: number(details.audio.observed), states: Array.isArray(details.audio.states) ? details.audio.states.slice(0, 16).map((context) => ({ id: number(context?.id), state: typeof context?.state === "string" ? context.state.slice(0, 24) : null, currentTime: number(context?.currentTime) })) : [] } : null, error: typeof details.error === "string" ? details.error.slice(0, 300) : null };
+    return { releaseMode: details.releaseMode === "frame-detach" ? "frame-detach" : null, before: before ? { revision: typeof before.revision === "string" ? before.revision.slice(0, 64) : null, earlyCapture: before.earlyCapture === true, desired: desired ? { volume: number(desired.volume), muted: desired.muted === true } : null, actual: actual ? { volume: number(actual.volume), muted: actual.muted === true, paused: actual.paused === true, ended: actual.ended === true, readyState: number(actual.readyState), errorCode: number(actual.errorCode) } : null, counts: Object.fromEntries(["commands", "corrections", "reports", "nativeChanges"].map((key) => [key, number(before.counts?.[key])])) } : null, audio: details.audio ? { observed: number(details.audio.observed), states: Array.isArray(details.audio.states) ? details.audio.states.slice(0, 16).map((context) => ({ id: number(context?.id), state: typeof context?.state === "string" ? context.state.slice(0, 24) : null, currentTime: number(context?.currentTime) })) : [] } : null, error: typeof details.error === "string" ? details.error.slice(0, 300) : null };
   }
   var recentPlayerTeardowns = () => history2.map((entry) => ({ ...entry }));
   function releasePlayer(frame, scope, uid) {
@@ -1749,6 +1749,36 @@
 
   // src/viewer/chat-renderer.ts
   function create(list) {
+    const PAGE = 300;
+    let latest = [], hiddenBadges = false, follow = true, end = 0, anchor = null;
+    const pager = document.createElement("div");
+    pager.className = "ic-pagination";
+    const older = document.createElement("button"), newer = document.createElement("button"), newest = document.createElement("button"), status = document.createElement("span");
+    older.textContent = "이전";
+    newer.textContent = "다음";
+    newest.textContent = "최신";
+    for (const button of [older, newer, newest]) button.type = "button";
+    pager.append(older, status, newer, newest);
+    older.onclick = () => {
+      follow = false;
+      end = Math.max(1, end - PAGE);
+      anchor = null;
+      render(latest, hiddenBadges);
+      list.scrollTop = 0;
+    };
+    newer.onclick = () => {
+      end = Math.min(latest.length, end + PAGE);
+      follow = end === latest.length;
+      anchor = null;
+      render(latest, hiddenBadges);
+      list.scrollTop = 0;
+    };
+    newest.onclick = () => {
+      follow = true;
+      anchor = null;
+      render(latest, hiddenBadges);
+      list.scrollTop = list.scrollHeight;
+    };
     const rendered = /* @__PURE__ */ new Map();
     function image(src, alt, className) {
       const img = document.createElement("img");
@@ -1768,14 +1798,36 @@
       return img;
     }
     function render(items, hideBadges = false) {
+      latest = items;
+      hiddenBadges = hideBadges;
       const scrollTop = list.scrollTop, atBottom = list.scrollHeight - scrollTop - list.clientHeight < 16;
-      const ids = new Set(items.map((item) => item.id));
+      if (!items.length) {
+        follow = true;
+        end = 0;
+        anchor = null;
+      }
+      if (follow) end = items.length;
+      else if (anchor) {
+        const index = items.findIndex((item) => item.id === anchor);
+        if (index >= 0) end = index + 1;
+      }
+      end = Math.min(items.length, Math.max(0, end));
+      const start = Math.max(0, end - PAGE), page = items.slice(start, end);
+      anchor = page.at(-1)?.id || null;
+      if (items.length > PAGE) {
+        if (!pager.isConnected) list.prepend(pager);
+        older.disabled = start === 0;
+        newer.disabled = end === items.length;
+        status.textContent = `${start + 1}–${end} / ${items.length}`;
+      } else pager.remove();
+      const offset = pager.isConnected ? 1 : 0;
+      const ids = new Set(page.map((item) => item.id));
       for (const [id, entry] of rendered) if (!ids.has(id)) {
         entry.node.remove();
         rendered.delete(id);
       }
       list.querySelector(".ic-empty")?.remove();
-      items.forEach((item, index) => {
+      page.forEach((item, index) => {
         const signature = JSON.stringify([item, hideBadges]);
         let entry = rendered.get(item.id);
         if (!entry || entry.signature !== signature) {
@@ -1824,11 +1876,16 @@
           entry = { node: row, signature };
           rendered.set(item.id, entry);
         }
-        if (list.children[index] !== entry.node) list.insertBefore(entry.node, list.children[index] || null);
+        if (list.children[index + offset] !== entry.node) list.insertBefore(entry.node, list.children[index + offset] || null);
       });
       list.scrollTop = atBottom ? list.scrollHeight : scrollTop;
     }
     function clear() {
+      latest = [];
+      follow = true;
+      end = 0;
+      anchor = null;
+      pager.remove();
       for (const entry of rendered.values()) entry.node.remove();
       rendered.clear();
     }
@@ -1839,7 +1896,7 @@
   var importantChatPanel = { create({ chatPanel, enabledControl, getFrame, getState, notify }) {
     const scope = new ResourceScope();
     const model = CZImportantChat.create();
-    let filter = CZImportantChat.settings(), ready = false;
+    let filter = CZImportantChat.settings(), ready = false, collectionSince = Date.now();
     const configured = /* @__PURE__ */ new WeakMap();
     const owners = /* @__PURE__ */ new Map(), presented = /* @__PURE__ */ new WeakMap();
     let stats = null, received = 0;
@@ -1985,7 +2042,7 @@
       if (!dialog.open || !$(".ic-debug").open) return;
       const owner = owners.get(getState().selectedUid);
       const number2 = (key) => Number.isFinite(stats?.[key]) ? Math.max(0, Math.floor(stats[key])) : 0;
-      $(".ic-diagnostics").textContent = (filter.enabled ? "수집 켜짐" : "수집 꺼짐") + " · 스트리머 확인: " + (owner?.name || (owner?.pending ? "조회 중" : "확인 안 됨")) + "\n" + (!stats ? "수집 프레임 응답 대기" : "읽은 항목 " + number2("scanned") + " · 해석 " + number2("parsed") + " · 대상 " + number2("matched") + " · 전송 " + number2("sent")) + " · 수신 " + received + " · 표시 " + model.items.length;
+      $(".ic-diagnostics").textContent = (filter.enabled ? "수집 켜짐" : "수집 꺼짐") + " · 스트리머 확인: " + (owner?.name || (owner?.pending ? "조회 중" : "확인 안 됨")) + "\n" + (!stats ? "수집 프레임 응답 대기" : "읽은 항목 " + number2("scanned") + " · 해석 " + number2("parsed") + " · 대상 " + number2("matched") + " · 전송 " + number2("sent")) + " · 수신 " + received + " · 표시 " + model.size;
     }
     function resolveOwner() {
       const uid = getState().selectedUid;
@@ -2014,15 +2071,15 @@
       const frame = getFrame();
       if (!ready || !frame || frame.dataset.playerReady !== "true") return;
       const { hideBadges, nativeHideBadges, ...collection } = filter;
-      const signature = JSON.stringify([frame.dataset.uid, collection, owners.get(frame.dataset.uid)?.name || ""]);
+      const signature = JSON.stringify([frame.dataset.uid, collection, owners.get(frame.dataset.uid)?.name || "", collectionSince]);
       if (configured.get(frame) === signature) return;
-      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "IMPORTANT_CHAT_CONFIG", settings: collection, streamerName: owners.get(frame.dataset.uid)?.name || "" })) configured.set(frame, signature);
+      if (CZMessages.postToPlayer(frame, { source: "chzzk-multiview", type: "IMPORTANT_CHAT_CONFIG", settings: collection, since: collectionSince, streamerName: owners.get(frame.dataset.uid)?.name || "" })) configured.set(frame, signature);
     }
     function render() {
       if (scope.isDisposed) return;
       panel.hidden = ready && !filter.enabled;
       present();
-      panel.dataset.collectedCount = String(model.items.length);
+      panel.dataset.collectedCount = String(model.size);
       if (expanded && !panel.hidden) renderer.render(model.items, filter.hideBadges);
       diagnostics();
     }
@@ -2053,8 +2110,14 @@
         $(".ic-excluded-names").appendChild(button);
       });
     }
+    function collectionKey(value) {
+      const { hideBadges, nativeHideBadges, ...collection } = value;
+      return JSON.stringify(collection);
+    }
     function save(value) {
-      filter = CZImportantChat.settings(value);
+      const next = CZImportantChat.settings(value);
+      if (collectionKey(next) !== collectionKey(filter)) collectionSince = Date.now();
+      filter = next;
       model.applySettings(filter);
       controls();
       configure();
@@ -2093,7 +2156,7 @@
       for (const key of ["scanned", "parsed", "matched", "sent", "restored"]) counts[key] = Number.isFinite(stats?.[key]) ? Math.max(0, Math.floor(stats[key])) : 0;
       const dom = { sourceTimeReader: String(stats?.dom?.sourceTimeReader || "").slice(0, 40), rowCandidates: Number(stats?.dom?.rowCandidates) || 0, nicknameCandidates: Number(stats?.dom?.nicknameCandidates) || 0, classes: Array.isArray(stats?.dom?.classes) ? stats.dom.classes.filter((value) => typeof value === "string").map((value) => value.slice(0, 160)).slice(-40) : [] };
       const roleSample = Array.isArray(stats?.roleSample) ? stats.roleSample.slice(0, 8).map((value) => ({ tag: String(value?.tag || "").slice(0, 20), labels: Array.isArray(value?.labels) ? value.labels.filter((item) => typeof item === "string").slice(0, 4).map((item) => item.slice(0, 80)) : [], markers: Array.isArray(value?.markers) ? value.markers.filter((item) => typeof item === "string").slice(0, 3).map((item) => item.slice(0, 120)) : [] })) : [];
-      const report = { dom, roleSample, socketTimeSource: stats?.dom?.socketTimeSource || null, historyEntries: Number(stats?.historyEntries) || 0, collectorRevision: typeof stats?.revision === "string" ? stats.revision.slice(0, 40) : "응답 없음", version: chrome.runtime.getManifest?.().version || "확인 불가", enabled: filter.enabled, streamers: filter.streamers, managers: filter.managers, partners: filter.partners, ownerKnown: !!owners.get(getState().selectedUid)?.name, frameReady: getFrame()?.dataset.playerReady === "true", counts, received, displayed: model.items.length, structure };
+      const report = { dom, roleSample, socketTimeSource: stats?.dom?.socketTimeSource || null, historyEntries: Number(stats?.historyEntries) || 0, collectorRevision: typeof stats?.revision === "string" ? stats.revision.slice(0, 40) : "응답 없음", version: chrome.runtime.getManifest?.().version || "확인 불가", enabled: filter.enabled, streamers: filter.streamers, managers: filter.managers, partners: filter.partners, ownerKnown: !!owners.get(getState().selectedUid)?.name, frameReady: getFrame()?.dataset.playerReady === "true", counts, received, displayed: model.size, structure };
       try {
         await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
         notify("채팅 내용 없이 점검 정보를 복사했습니다.");
@@ -2136,6 +2199,7 @@
       if (!changes[CZImportantChat.KEY]) return;
       const next = CZImportantChat.settings(changes[CZImportantChat.KEY].newValue);
       if (JSON.stringify(next) === JSON.stringify(filter)) return;
+      if (collectionKey(next) !== collectionKey(filter)) collectionSince = Date.now();
       filter = next;
       model.applySettings(filter);
       controls();
@@ -2160,7 +2224,23 @@
     }
     controls();
     render();
-    return { dispose, openSettings, sync(force = false) {
+    return { dispose, openSettings, toggleTarget(data) {
+      if (!ready || typeof data.name !== "string" || !data.name.trim() || data.name.length > 40 || typeof data.add !== "boolean") return;
+      const name = data.name.normalize("NFC").trim(), same = (value) => value.toLocaleLowerCase("ko-KR") === name.toLocaleLowerCase("ko-KR");
+      if (data.add) {
+        if (filter.names.length >= 50 && !filter.names.some(same)) {
+          notify("사용자는 최대 50명까지 지정할 수 있습니다.");
+          if (getFrame()) configured.delete(getFrame());
+          configure();
+          return;
+        }
+        save({ ...filter, names: [...filter.names.filter((value) => !same(value)), name], excludedNames: filter.excludedNames.filter((value) => !same(value)) });
+        notify("자동 수집 대상에 추가했습니다. 추가 이후의 새 채팅부터 수집합니다.");
+      } else {
+        save({ ...filter, names: filter.names.filter((value) => !same(value)) });
+        notify("수동 수집 대상에서 삭제했습니다. 역할 자동 수집 설정은 유지됩니다.");
+      }
+    }, sync(force = false) {
       if (getState().chatOpen === false && dialog.open) dialog.close();
       if (force && getFrame()) {
         configured.delete(getFrame());
@@ -2178,7 +2258,7 @@
       stats = value && typeof value === "object" ? value : null;
       diagnostics();
     }, receive(data) {
-      if (Array.isArray(data.messages)) received += Math.min(100, data.messages.length);
+      if (Array.isArray(data.messages)) received += data.messages.length;
       if (ready && model.add(data.uid, data.messages, filter)) render();
       else diagnostics();
     }, panel };
@@ -2703,7 +2783,7 @@
     scope.listen(window, "message", (event) => {
       const { chatFrame, importantChat, state } = context;
       const data = event.data;
-      const fromChat = ["CHAT_READY", "IMPORTANT_CHAT_BATCH", "IMPORTANT_CHAT_STATUS", "CHAT_SETTINGS_OPEN", "CHAT_HEADER"].includes(data?.type) || data?.type === "MEDIA_KEY" && event.source === chatFrame?.contentWindow;
+      const fromChat = ["CHAT_READY", "IMPORTANT_CHAT_TARGET_TOGGLE", "IMPORTANT_CHAT_BATCH", "IMPORTANT_CHAT_STATUS", "CHAT_SETTINGS_OPEN", "CHAT_HEADER"].includes(data?.type) || data?.type === "MEDIA_KEY" && event.source === chatFrame?.contentWindow;
       const frame = fromChat ? chatFrame : tileMap.get(data?.uid)?.querySelector("iframe");
       if (!CZMessages.isPlayerMessage(event, frame) || fromChat && data.uid !== chatFrame?.dataset.uid) return;
       if (data.type === "POWER_DIAGNOSTICS_RESULT") {
@@ -2715,6 +2795,10 @@
         return;
       }
       if (data.type === "CHAT_HEADER") return;
+      if (data.type === "IMPORTANT_CHAT_TARGET_TOGGLE") {
+        importantChat?.toggleTarget(data);
+        return;
+      }
       if (data.type === "IMPORTANT_CHAT_STATUS") {
         importantChat?.status(data.stats);
         return;

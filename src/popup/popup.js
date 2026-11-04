@@ -241,5 +241,4 @@
     });
   });
   loadFavorites({ refreshOnline: true }).catch((err) => setStatus(String(err), true));
-  document.getElementById("settingsBackupBtn").onclick = () => chrome.runtime.sendMessage({ type: "OPEN_SETTINGS_BACKUP" }).catch((error) => setStatus(error.message, true));
 })();

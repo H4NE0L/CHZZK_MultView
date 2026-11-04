@@ -65,7 +65,8 @@
     }
     const leafNames = (node) => {
       const found = [...node.querySelectorAll(names)].filter((el) => !el.querySelector(names));
-      return node.matches?.('[class^="_chatting_message_"],[class*=" _chatting_message_"]') ? found.slice(0, 1) : found;
+      const messageRows = '[data-chat-message],[class*="live_chatting_list_item"],[class^="_chatting_message_"],[class*=" _chatting_message_"]';
+      return node.matches?.(messageRows) && !node.querySelector(messageRows) ? found.slice(0, 1) : found;
     };
     const decorations = '[class*="badge" i],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i],svg,script,style,time,[data-role="streamer"],[data-role="manager"],[data-role="partner"],[data-user-role],[data-user-type]';
     const isDecoration = (node) => node.matches?.(decorations) && !node.matches('button[class*="button_chatting"]');
@@ -90,11 +91,27 @@
       return /인증\s*(?:마크|배지)|공식\s*(?:마크|배지)|(?:파트너|스트리머|관리자)\s*(?:마크|배지)|verified|verification|certified|certification|official\s*(?:mark|badge)/i.test(label) || /(?:^|[/_.-])(?:badge|verified|verification|certified)(?:[/_.-]|$)/i.test(asset.split("?")[0]);
     }
     const bodyIgnored = (node) => node.matches?.('script,style,time,[hidden],[class*="blind" i],[class*="sr_only" i],[class*="screen_reader" i],[class*="visually_hidden" i]');
-    const imageSource = (image) => [image.currentSrc, image.getAttribute("data-src"), image.src, image.getAttribute("srcset")?.split(/\s+/)[0]].find((source) => typeof source === "string" && /^https:\/\//.test(source)) || image.currentSrc || image.src || "";
+    const imageSource = (image) => {
+      const candidates = [image.getAttribute("data-src"), image.getAttribute("data-srcset")?.split(/[\s,]+/)[0], image.currentSrc, image.getAttribute("src"), image.getAttribute("srcset")?.split(/[\s,]+/)[0]];
+      for (const candidate of candidates) {
+        if (!candidate?.trim()) continue;
+        try {
+          const url = new URL(candidate.startsWith("//") ? "https:" + candidate : candidate, document.baseURI);
+          if (url.protocol === "https:") return url.href;
+        } catch (_) {
+        }
+      }
+      return "";
+    };
     function copyImageSources(originals, copies) {
       originals.forEach((image, index) => {
         const source = imageSource(image);
-        if (source && copies[index]) copies[index].setAttribute("src", source);
+        if (copies[index]) {
+          copies[index].removeAttribute("srcset");
+          copies[index].removeAttribute("sizes");
+          if (source) copies[index].setAttribute("src", source);
+          else copies[index].removeAttribute("src");
+        }
       });
     }
     function cloneBody(node) {
@@ -158,7 +175,12 @@
       return parts;
     }
     function rowForName(nickname) {
-      if (nickname.closest('.cz-native-chat-header,[role="menu"],#cz-chat-settings')) return null;
+      if (nickname.closest('.cz-native-chat-header,[role="menu"],[role="dialog"],[data-cz-collection-profile],#cz-chat-settings')) return null;
+      for (let panel = nickname.parentElement, depth = 0; panel && panel !== document.body && depth < 6; depth++, panel = panel.parentElement) {
+        if (panel.matches(rows) || panel.querySelector(rows) || leafNames(panel).length > 1) break;
+        const actions = [...panel.querySelectorAll("button,a,[role=button],[role=menuitem]")].map((node) => String(node.textContent || "").replace(/\s+/g, ""));
+        if (actions.includes("메시지신고") && actions.includes("사용자차단")) return null;
+      }
       const known = nickname.closest(rows);
       if (known) return known;
       let row = nickname.parentElement;
@@ -440,7 +462,15 @@
   // src/content/chat-collector.js
   globalThis.CZChatCollector = { create({ send, status = () => {
   } }) {
-    let filter = CZImportantChat.settings({ enabled: false }), observer = null, timer = null, sequence = 0;
+    let filter = CZImportantChat.settings({ enabled: false }), observer = null, timer = null, sequence = 0, lastOrder = 0, baseline = false, configuredOnce = false, canActivate = false, since = Infinity;
+    const session = globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + "-" + Math.random().toString(36).slice(2), orders = /* @__PURE__ */ new WeakMap(), blockedRows = /* @__PURE__ */ new WeakSet(), bornLive = /* @__PURE__ */ new WeakSet();
+    function orderFor(row, fresh = false) {
+      if (fresh || !orders.has(row)) {
+        lastOrder = Math.max(lastOrder + 1, Date.now() * 1e3);
+        orders.set(row, lastOrder);
+      }
+      return orders.get(row);
+    }
     const history = create2();
     let identities = /* @__PURE__ */ new WeakMap(), liveTails = /* @__PURE__ */ new WeakMap();
     let liveInserts = /* @__PURE__ */ new WeakSet();
@@ -457,14 +487,15 @@
     function report() {
       if (!statusTimer) statusTimer = scope.timeout(() => {
         statusTimer = null;
-        status({ ...counts, revision: "refactor-stage3-1", historyEntries: history.size, ownerKnown: !!ownerName, enabled: filter.enabled, structure, roleSample: dom.roleSample, dom: dom.summary(counts.scanned) });
+        status({ ...counts, revision: "collection-emotes-2", historyEntries: history.size, ownerKnown: !!ownerName, enabled: filter.enabled, structure, roleSample: dom.roleSample, dom: dom.summary(counts.scanned) });
       }, 500);
     }
     function flush() {
+      timer?.();
       timer = null;
       if (pending.size) {
-        const batch = Array.from(pending.values());
-        send(batch);
+        const batch = Array.from(pending.values()).sort((a, b) => a.order - b.order);
+        for (let i = 0; i < batch.length; i += CZImportantChat.BATCH_SIZE) send(batch.slice(i, i + CZImportantChat.BATCH_SIZE));
         counts.sent += batch.length;
         pending.clear();
         report();
@@ -472,8 +503,9 @@
     }
     function read(row) {
       row = dom.normalizeRow(row);
+      if (!row.isConnected) return;
       if (leafNames(row).length > 1) {
-        for (const child of [...row.querySelectorAll(rows)].slice(-200)) if (leafNames(child).length === 1) read(child);
+        for (const child of [...row.querySelectorAll(rows)]) if (leafNames(child).length === 1) read(child);
         return;
       }
       if (!observed.has(row)) {
@@ -481,31 +513,35 @@
         counts.scanned++;
         report();
       }
+      if (!orders.has(row) && !baseline) bornLive.add(row);
+      orderFor(row);
+      if (baseline) blockedRows.add(row);
       if (dom.aboveHeader(row)) return;
       const parsed = dom.read(row);
       structure = parsed.structure;
       report();
       if (!parsed.message) return;
       const { name, text, segments, nativeTime, sourceId, badges, badgesAfter, nameColor, bodyColor, role } = parsed.message;
-      const fingerprint = JSON.stringify([name, text]), hint = replacements.get(row);
+      const fingerprint = JSON.stringify([name, text]), shape = JSON.stringify([name, segments.map((part) => part.type === "image" ? { type: "image", src: part.src } : part)]), hint = replacements.get(row);
       const historyKey = sourceId ? "native:" + sourceId : hash(JSON.stringify([name, text, segments, nativeTime]));
-      const existing = identities.get(row), sameExisting = existing?.fingerprint === fingerprint && (!sourceId || existing.id === sourceId);
+      const existing = identities.get(row), sameExisting = !!existing && (sourceId ? existing.id === sourceId : existing.fingerprint === fingerprint || existing.shape === shape);
       const cached = history.get(historyKey), restored = cached && !sameExisting && (sourceId || !liveInserts.has(row) && readingHistory(row)) ? cached : null;
       const previous = (sameExisting ? existing : null) || (hint?.fingerprint === fingerprint && (!sourceId || sourceId === hint.id) ? hint : null) || (restored ? { ...restored, fingerprint } : null);
-      const id = String(sourceId || (previous?.fingerprint === fingerprint ? previous.id : ++sequence)).slice(0, 160);
-      const item = CZImportantChat.message({ id, name, text, segments, badges, badgesAfter, nameColor, bodyColor, role, time: CZImportantChat.timestamp(nativeTime) ?? (previous?.fingerprint === fingerprint ? previous.time : null) });
+      const id = String(sourceId || previous?.id || "local:" + session + ":" + ++sequence).slice(0, 160);
+      if (existing && !sameExisting && !previous) {
+        orderFor(row, true);
+        bornLive.add(row);
+      }
+      const activated = baseline && canActivate && bornLive.has(row) && orderFor(row) >= since * 1e3;
+      const historical = !activated && (blockedRows.has(row) || baseline || sameExisting && existing.historical || !existing && !liveInserts.has(row) && readingHistory(row));
+      blockedRows.delete(row);
+      const item = CZImportantChat.message({ id, name, text, segments, badges, badgesAfter, nameColor, bodyColor, role, order: previous?.order ?? orderFor(row), time: CZImportantChat.timestamp(nativeTime) ?? previous?.time ?? null });
       if (!item) return;
-      if (existing?.historical && !liveInserts.has(row)) item.updateOnly = true;
+      if (historical) item.updateOnly = true;
       if (liveInserts.has(row) || !readingHistory(row)) liveTails.set(row.parentElement, new WeakRef(row));
       const signature = JSON.stringify(item);
-      if (sameExisting && existing.historical && cached?.matched && !liveInserts.has(row)) {
-        const identity2 = { ...existing, signature };
-        identities.set(row, identity2);
-        seen.set(row, identity2);
-        return;
-      }
       if (restored && restored.id === id && (restored.matched || restored.signature === hash(signature))) {
-        const identity2 = { fingerprint, id, time: item.time, signature, historical: true };
+        const identity2 = { fingerprint, shape, id, time: item.time, order: item.order, signature, historical: true };
         identities.set(row, identity2);
         seen.set(row, identity2);
         counts.restored++;
@@ -521,15 +557,14 @@
       if (seen.get(row)?.signature === signature) return;
       counts.parsed++;
       report();
-      const identity = { fingerprint, id, time: item.time, signature };
+      const matched = CZImportantChat.matches(item, filter);
+      const identity = { fingerprint, shape, id, time: item.time, order: item.order, signature, historical: !!historical, collected: previous?.collected === true || matched && !historical };
       identities.set(row, identity);
       seen.set(row, identity);
-      const matched = CZImportantChat.matches(item, filter);
-      history.remember(historyKey, identity, signature, matched);
-      if (!matched) return;
+      history.remember(historyKey, identity, signature, matched || !!historical);
+      if (!matched || historical && !previous?.collected) return;
       counts.matched++;
       pending.set(id, item);
-      if (pending.size > CZImportantChat.LIMIT) pending.delete(pending.keys().next().value);
       if (!timer) timer = scope.timeout(flush, 250);
     }
     function scan(node) {
@@ -539,8 +574,8 @@
       if (closest) {
         read(closest);
         return;
-      } else Array.from(el.querySelectorAll(rows)).slice(-200).forEach(read);
-      const candidates = new Set([...el.querySelectorAll(names)].slice(-200).filter((nickname) => !nickname.closest(rows)));
+      } else Array.from(el.querySelectorAll(rows)).forEach(read);
+      const candidates = new Set([...el.querySelectorAll(names)].filter((nickname) => !nickname.closest(rows)));
       const own = el.closest(names);
       if (own) candidates.add(own);
       let ancestor = el;
@@ -572,7 +607,11 @@
     }
     function configure(value, identity = {}) {
       if (scope.isDisposed) return;
+      if (pending.size) flush();
       stop();
+      canActivate = configuredOnce;
+      configuredOnce = true;
+      since = typeof identity.since === "number" && Number.isFinite(identity.since) ? identity.since : Date.now();
       dom.resetScroll();
       structure = null;
       counts = { scanned: 0, parsed: 0, matched: 0, sent: 0, restored: 0 };
@@ -583,7 +622,7 @@
       observer = new MutationObserver((records) => {
         dom.resetScroll();
         replacements = /* @__PURE__ */ new WeakMap();
-        const messageRows = (node) => node.nodeType === 1 ? [...node.matches(rows) ? [node] : [], ...node.querySelectorAll(rows)].slice(0, 200) : [];
+        const messageRows = (node) => node.nodeType === 1 ? [...node.matches(rows) ? [node] : [], ...node.querySelectorAll(rows)] : [];
         liveInserts = /* @__PURE__ */ new WeakSet();
         for (const record of records) {
           if (record.type !== "childList" || !record.addedNodes.length || record.nextSibling !== null || record.previousSibling !== liveTails.get(record.target)?.deref()) continue;
@@ -627,11 +666,17 @@
           if (record.type !== "childList" || !record.addedNodes.length) candidates.add(record.target);
           for (const node of record.addedNodes) candidates.add(node);
         }
-        for (const node of candidates) scan(node);
+        const ordered = [...candidates].sort((a, b) => a === b ? 0 : a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+        for (const node of ordered) scan(node);
       });
       releaseObserver = scope.observe(observer);
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["alt", "title", "aria-label", "data-role", "data-user-role", "data-user-type", "href", "xlink:href", "src", "srcset", "class", "style", "data-cz-message-time", "data-message-time", "data-timestamp", "data-created-at"] });
-      scan(document.body);
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["alt", "title", "aria-label", "data-role", "data-user-role", "data-user-type", "href", "xlink:href", "src", "srcset", "data-src", "data-srcset", "data-message-id", "data-chat-id", "class", "style", "data-cz-message-time", "data-message-time", "data-timestamp", "data-created-at"] });
+      baseline = true;
+      try {
+        scan(document.body);
+      } finally {
+        baseline = false;
+      }
     }
     function dispose() {
       stop();

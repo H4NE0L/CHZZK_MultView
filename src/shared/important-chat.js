@@ -3,7 +3,7 @@
   // src/shared/important-chat.ts
   var record = (value) => value && typeof value === "object" ? value : {};
   var importantChat = /* @__PURE__ */ (() => {
-    const KEY = "chzzkImportantChatV1", LIMIT = 100;
+    const KEY = "chzzkImportantChatV1", BATCH_SIZE = 200;
     const clean = (value) => typeof value === "string" ? value.normalize("NFC").trim() : "";
     const nameKey = (value) => clean(value).toLocaleLowerCase("ko-KR");
     const nameList = (value) => [...new Map((Array.isArray(value) ? value : []).filter((n) => typeof n === "string").map((n) => clean(n).slice(0, 40)).filter(Boolean).map((n) => [nameKey(n), n])).values()].slice(0, 50);
@@ -38,7 +38,7 @@
         if (!part || remaining <= 0) continue;
         if (part.type === "image") {
           const alt = clean(part.alt).slice(0, 80) || "[이모티콘]", src = imageUrl(part.src);
-          if (src && images < 8) {
+          if (src && images < 64) {
             result.push({ type: "image", src, alt });
             images++;
             remaining -= alt.length;
@@ -88,50 +88,80 @@
         if (badge.src && !src) return [];
         return src || alt || icon ? [{ src, alt, svg: icon }] : [];
       });
-      return { id: value.id, name, text, updateOnly: value.updateOnly === true, segments: parts, badges: decorations(value.badges), badgesAfter: decorations(value.badgesAfter), nameColor: color(value.nameColor), bodyColor: color(value.bodyColor), role: typeof value.role === "string" && ["streamer", "manager", "partner"].includes(value.role) ? value.role : "", time: typeof value.time === "number" && Number.isFinite(value.time) && Math.abs(value.time) <= 864e13 ? value.time : null };
+      return { order: typeof value.order === "number" && Number.isSafeInteger(value.order) && value.order > 0 ? value.order : null, id: value.id, name, text, updateOnly: value.updateOnly === true, segments: parts, badges: decorations(value.badges), badgesAfter: decorations(value.badgesAfter), nameColor: color(value.nameColor), bodyColor: color(value.bodyColor), role: typeof value.role === "string" && ["streamer", "manager", "partner"].includes(value.role) ? value.role : "", time: typeof value.time === "number" && Number.isFinite(value.time) && Math.abs(value.time) <= 864e13 ? value.time : null };
     }
     function matches(item, filter) {
       return filter.enabled && !(filter.excludedNames || []).some((n) => nameKey(n) === nameKey(item.name)) && (item.role === "streamer" && filter.streamers || item.role === "manager" && filter.managers || item.role === "partner" && filter.partners || filter.names.some((n) => nameKey(n) === nameKey(item.name)));
     }
     function create() {
-      let uid = null, items = [];
+      let uid = null, items = [], clock = 0, minimumOrder = 0, lastExclusions = "";
+      const byId = /* @__PURE__ */ new Map(), positions = /* @__PURE__ */ new Map();
+      function clear(reset = false) {
+        minimumOrder = reset ? 0 : Math.max(clock + 1, Date.now() * 1e3);
+        items = [];
+        byId.clear();
+        positions.clear();
+        clock = 0;
+      }
       return {
         reset(next) {
           uid = next;
-          items = [];
+          clear(true);
         },
         get uid() {
           return uid;
         },
+        get size() {
+          return items.length;
+        },
         get items() {
           return items.slice();
         },
-        clear() {
-          items = [];
-        },
+        clear,
         applySettings(filter) {
-          items = items.filter((item) => !(filter.excludedNames || []).some((name) => nameKey(name) === nameKey(item.name)));
+          const key = JSON.stringify(filter.excludedNames);
+          if (key === lastExclusions) return;
+          lastExclusions = key;
+          items = items.filter((item) => {
+            const keep = !(filter.excludedNames || []).some((name) => nameKey(name) === nameKey(item.name));
+            if (!keep) {
+              byId.delete(item.id);
+              positions.delete(item.id);
+            }
+            return keep;
+          });
         },
         add(channel, batch, filter) {
           if (channel !== uid || !filter.enabled || !Array.isArray(batch)) return false;
           let changed = false;
-          for (const raw of batch.slice(0, LIMIT)) {
+          for (const raw of batch) {
             const item = message(raw);
-            if (!item || !matches(item, filter)) continue;
-            const existing = items.findIndex((old) => old.id === item.id);
-            if (existing < 0 && item.updateOnly) continue;
-            if (existing >= 0) {
-              if (JSON.stringify(items[existing]) === JSON.stringify(item)) continue;
-              items[existing] = item;
-            } else items.push(item);
-            if (items.length > LIMIT) items.shift();
+            if (!item || !matches(item, filter) || item.order !== null && item.order < minimumOrder) continue;
+            const existing = byId.get(item.id);
+            if (!existing && item.updateOnly) continue;
+            if (existing) {
+              if (JSON.stringify(existing) === JSON.stringify(item)) continue;
+              items[items.indexOf(existing)] = item;
+            } else {
+              const order = item.order ?? clock + 1;
+              clock = Math.max(clock, order);
+              positions.set(item.id, order);
+              let low = 0, high = items.length;
+              while (low < high) {
+                const middle = low + high >>> 1;
+                if (positions.get(items[middle].id) <= order) low = middle + 1;
+                else high = middle;
+              }
+              items.splice(low, 0, item);
+            }
+            byId.set(item.id, item);
             changed = true;
           }
           return changed;
         }
       };
     }
-    return { KEY, LIMIT, settings, message, matches, create, imageUrl, timestamp };
+    return { KEY, BATCH_SIZE, settings, message, matches, create, imageUrl, timestamp };
   })();
   globalThis.CZImportantChat = importantChat;
 })();
