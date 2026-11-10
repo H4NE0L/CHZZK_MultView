@@ -135,3 +135,5 @@ API 조사와 타임스탬프 참고 구현 비교: [chzzk-api-research.md](chzz
 채팅 역할 판독은 Badge Moa의 `profile.userRoleCode`·`profile.badge.imageUrl`·`verifiedMark` 기준을 참고하되 독립 구현합니다. MAIN-world에서 해당 행 소유의 chatMessage/chattingMessage만 제한된 범위로 읽고 역할 enum만 DOM에 전달합니다. 인접 행·목록 프로필은 사용하지 않으며 시각 기능 OFF에서도 역할 수집은 동작합니다. 지연 props는 행별 최대 3회·동시 128개만 재확인하고 수집 OFF·pagehide 시 정리합니다. 헤더 집계는 메시지 ID별 갱신을 중복 계산하지 않고 초기화·제외·채널 변경과 함께 갱신합니다.
 
 파일명 형식은 세션의 screenshotNameFormat/recordingNameFormat으로 저장하며, 누락·손상된 값은 기존 기본 형식을 적용합니다. shared/media/filename.ts에서 치환 항목 검증과 Windows 안전한 파일명 생성을 공통 처리합니다. 촬영·녹화 시작 시 형식과 현지 시각을 고정하고, 제목 치환이 필요할 때만 방송 제목 API를 조회합니다. 확장자와 구간 저장 접미사는 기존 저장 경로가 붙입니다.
+
+역할 판정에서 방송 주인 이름 일치를 먼저 확인하며, 인증(파트너) 정보만으로 스트리머·매니저 배지 판독을 조기 종료하지 않습니다. 하위 닉네임 컴포넌트의 직접 profile은 작성자 이름을 대조하고, message/messageData 래퍼와 행 내부 host props도 제한된 범위에서 확인합니다. 점검의 sourceRoleReader가 profile-roles-2이면 이 확장 판독기가 적용된 상태입니다.

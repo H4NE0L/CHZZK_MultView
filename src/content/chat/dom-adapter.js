@@ -15,7 +15,7 @@ export function create({getOwnerName}) {
   }
   function domSummary(scanned){
     let socketTimeSource=null;try{const raw=document.documentElement.getAttribute('data-cz-socket-time-state')||'';if(raw.length<600)socketTimeSource=JSON.parse(raw);}catch(_){}
-    return {socketTimeSource,sourceTimeReader:document.documentElement.getAttribute('data-cz-time-reader')||'',rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
+    return {socketTimeSource,sourceRoleReader:document.documentElement.getAttribute('data-cz-role-reader')||'',sourceTimeReader:document.documentElement.getAttribute('data-cz-time-reader')||'',rowCandidates:document.querySelectorAll(rows).length,nicknameCandidates:document.querySelectorAll(names).length,
       classes:scanned?[]:[...new Set([...document.querySelectorAll('[class*="chat"],[class*="name"]')].slice(-100).map(el=>String(el.className||'').slice(0,160)))].slice(-40)};
   }
   const leafNames=node=>{const found=[...node.querySelectorAll(names)].filter(el=>!el.querySelector(names));
@@ -110,11 +110,11 @@ export function create({getOwnerName}) {
   }
   let roleSample=[];
   function role(row,textElements,nickname,suffix=new Set()) {
-    const source=row.getAttribute('data-cz-source-role'),nativeId=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id');if(['streamer','manager','partner'].includes(source)&&(!nativeId||row.getAttribute('data-cz-source-role-id')===nativeId))return source;
+    const source=row.getAttribute('data-cz-source-role'),nativeId=row.getAttribute('data-message-id')||row.getAttribute('data-chat-id');const sourceRole=['streamer','manager','partner'].includes(source)&&(!nativeId||row.getAttribute('data-cz-source-role-id')===nativeId)?source:'';
     if(getOwnerName() && nameKey(authorName(nickname))===nameKey(getOwnerName()))return 'streamer';
     let author=authorBoundary(row,nickname);
     for(let node=author,depth=0;node && node!==row && depth<4;node=node.parentElement,depth++)if(/username|nickname|author/.test(String(node.className)))author=node;
-    let detected='';roleSample=[];
+    let detected=sourceRole;roleSample=sourceRole?[{tag:'SOURCE_PROFILE',labels:[sourceRole],markers:[]}]:[];
     const candidates=[row,...row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]')];
     for(const badge of candidates){
       if(textElements.some(el=>el===badge || el.contains(badge)))continue;

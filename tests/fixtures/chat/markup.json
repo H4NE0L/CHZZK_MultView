@@ -93,5 +93,22 @@
     "expectedImageSources": [
       "https://ssl.pstatic.net/emote.png"
     ]
+  },
+  {
+    "id": "verified-owner-is-streamer",
+    "owner": "방송 주인",
+    "html": "<div id=\"message\" data-chat-message data-cz-source-role=\"partner\"><span data-chat-nickname>방송 주인</span><span data-chat-text>안녕하세요</span></div>",
+    "expected": {
+      "name": "방송 주인",
+      "role": "streamer"
+    }
+  },
+  {
+    "id": "verified-manager-keeps-manager-badge",
+    "html": "<div id=\"message\" data-chat-message data-cz-source-role=\"partner\"><img alt=\"매니저 배지\" src=\"https://pstatic.net/manager.png\"><span data-chat-nickname>매니저</span><span data-chat-text>안내</span></div>",
+    "expected": {
+      "name": "매니저",
+      "role": "manager"
+    }
   }
 ]

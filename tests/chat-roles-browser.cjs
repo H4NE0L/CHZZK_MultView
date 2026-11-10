@@ -14,6 +14,10 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
  await page.evaluate(()=>{const row=document.querySelector('[data-message-id=manager]');row.dataset.messageId='recycled-normal';row.__reactProps$fixture={chatMessage:{msgId:'recycled-normal',profile:{userRoleCode:'common_user'}}};row.querySelector('[data-chat-text]').textContent='재활용된 일반 채팅';});await page.waitForTimeout(350);assert.equal(await page.evaluate(()=>model.size),3,'old role cannot leak into a recycled message ID');
  await page.evaluate(()=>{const row=make('wrong','manager','다른 ID');row.__reactProps$fixture.chatMessage.msgId='other';const profile={};Object.defineProperty(profile,'userRoleCode',{get(){window.getterRead=true;return 'streamer';}});make('getter','regular','getter',profile);});await page.waitForTimeout(700);
  assert.equal(await page.evaluate(()=>model.size),3);assert.equal(await page.evaluate(()=>!!window.getterRead),false);
+ await page.evaluate(()=>{
+  const nested=make('nested','nested-owner','하위 프로필');delete nested.__reactProps$fixture;nested.querySelector('[data-chat-nickname]').__reactProps$fixture={profile:{nickname:'nested-owner',userRoleCode:'streamer'}};
+  const wrapped=make('wrapped','wrapped-manager','다른 메시지 구조');wrapped.__reactProps$fixture={data:{messageData:{msgId:'wrapped',profile:{nickname:'wrapped-manager',userRoleCode:'manager'}}}};
+ });await page.waitForFunction(()=>model.size===5);assert.deepEqual(await page.evaluate(()=>model.items.slice(-2).map(item=>item.role)),['streamer','manager']);
  await page.evaluate(()=>{document.documentElement.setAttribute('data-cz-roles-enabled','false');document.dispatchEvent(new Event('cz-chat-roles-config'));collector.dispose();});assert.equal(await page.locator('[data-cz-source-role]').count(),0);
  console.log('PASS: role profiles independent of timestamps/badges, live tail while reading history, delayed props, ID conflicts, getter safety and OFF cleanup.');
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
