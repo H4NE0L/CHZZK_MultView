@@ -1,8 +1,9 @@
 import {create as createDOM} from './chat/dom-adapter.js';
 import {create as createHistory,hash} from '../shared/chat/history';
 import {ResourceScope} from '../shared/runtime/scope';
-// Observe visible markup only; parsing, role rules and bounded history are separate.
+// Prefer validated live source messages; DOM remains a fallback when unavailable.
 globalThis.CZChatCollector = {create({send,status=()=>{}}) {
+  let sourceActive=false;
   let filter=CZImportantChat.settings({enabled:false}),observer=null,timer=null,sequence=0,lastOrder=0,baseline=false,configuredOnce=false,canActivate=false,since=Infinity;
   const session=globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),orders=new WeakMap(),blockedRows=new WeakSet(),bornLive=new WeakSet();
   function orderFor(row,fresh=false){if(fresh||!orders.has(row)){lastOrder=Math.max(lastOrder+1,Date.now()*1000);orders.set(row,lastOrder);}return orders.get(row);}
@@ -11,9 +12,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
   const dom=createDOM({getOwnerName:()=>ownerName});
   const {rows,names,leafNames,rowForName}=dom;
   const readingHistory=row=>dom.readingHistory(row);
-  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'collection-emotes-2',historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
+  function report(){if(!statusTimer)statusTimer=scope.timeout(()=>{statusTimer=null;status({...counts,revision:'collection-wire-1',sourceActive,historyEntries:history.size,ownerKnown:!!ownerName,enabled:filter.enabled,structure,roleSample:dom.roleSample,dom:dom.summary(counts.scanned)});},500);}
   function flush(){timer?.();timer=null;if(pending.size){const batch=Array.from(pending.values()).sort((a,b)=>a.order-b.order);for(let i=0;i<batch.length;i+=CZImportantChat.BATCH_SIZE)send(batch.slice(i,i+CZImportantChat.BATCH_SIZE));counts.sent+=batch.length;pending.clear();report();}}
   function read(row) {
+    if(sourceActive)return;
     row=dom.normalizeRow(row);if(!row.isConnected)return;
     if(leafNames(row).length>1){for(const child of [...row.querySelectorAll(rows)])if(leafNames(child).length===1)read(child);return;}
     if(!observed.has(row)){observed.add(row);counts.scanned++;report();}
@@ -65,10 +67,10 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     for(const nickname of candidates){const row=rowForName(nickname);if(row)read(row);}
     if(!counts.scanned)report();
   }
-  function stop(){releaseObserver?.();releaseObserver=null;observer=null;timer?.();timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();statusTimer?.();statusTimer=null;}
+  function stop(){sourceActive=false;document.documentElement.setAttribute('data-cz-source-collection','false');document.dispatchEvent(new Event('cz-chat-source-config'));releaseObserver?.();releaseObserver=null;observer=null;timer?.();timer=null;pending.clear();seen=new WeakMap();observed=new WeakSet();statusTimer?.();statusTimer=null;}
   function configure(value,identity={}) {
     if(scope.isDisposed)return;
-    if(pending.size)flush();stop();canActivate=configuredOnce;configuredOnce=true;since=typeof identity.since==='number'&&Number.isFinite(identity.since)?identity.since:Date.now();dom.resetScroll();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled)return;
+    if(pending.size)flush();stop();canActivate=configuredOnce;configuredOnce=true;since=typeof identity.since==='number'&&Number.isFinite(identity.since)?identity.since:Date.now();dom.resetScroll();structure=null;counts={scanned:0,parsed:0,matched:0,sent:0,restored:0};ownerName=typeof identity.streamerName==='string'?identity.streamerName.slice(0,80):'';filter=CZImportantChat.settings(value);report();if(!filter.enabled){sourceActive=false;document.documentElement.setAttribute('data-cz-source-collection','false');document.dispatchEvent(new Event('cz-chat-source-config'));return;}
     observer=new MutationObserver(records=>{
       dom.resetScroll();replacements=new WeakMap();
       const messageRows=node=>node.nodeType===1?[...(node.matches(rows)?[node]:[]),...node.querySelectorAll(rows)]:[];
@@ -104,8 +106,23 @@ globalThis.CZChatCollector = {create({send,status=()=>{}}) {
     releaseObserver=scope.observe(observer);
     observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['alt','title','aria-label','data-role','data-user-role','data-user-type','href','xlink:href','src','srcset','data-src','data-srcset','data-message-id','data-chat-id','class','style','data-cz-source-role','data-cz-source-role-id','data-cz-message-time','data-message-time','data-timestamp','data-created-at']});
     baseline=true;try{scan(document.body);}finally{baseline=false;}
+    document.documentElement.setAttribute('data-cz-source-collection','true');document.dispatchEvent(new Event('cz-chat-source-config'));
   }
-  function dispose(){stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}
+  scope.listen(window,'message',event=>{
+    if(event.source!==window||event.origin!==location.origin||event.data?.source!=='cz-live-chat-source-v1'||!filter.enabled)return;
+    sourceActive=event.data.active===true;if(!sourceActive||!Array.isArray(event.data.messages)||typeof event.data.receivedAt!=='number'||event.data.receivedAt<since)return;
+    const batch=[];
+    for(const raw of event.data.messages.slice(0,200)){
+      const sourceOrder=Number.isSafeInteger(raw?.order)&&raw.order>0?raw.order:Date.now()*1000;lastOrder=Math.max(lastOrder,sourceOrder);const item=CZImportantChat.message({...raw,order:sourceOrder});if(!item)continue;
+      if(ownerName&&item.name.normalize('NFC').trim()===ownerName.normalize('NFC').trim())item.role='streamer';
+      if(!CZImportantChat.matches(item,filter))continue;
+      // A first native packet can race its DOM insertion before source activation.
+      for(const [id,entry]of pending)if(id.startsWith('local:')&&entry.name===item.name&&entry.text===item.text){pending.delete(id);break;}
+      batch.push(item);
+    }
+    if(batch.length){send(batch);counts.sent+=batch.length;counts.matched+=batch.length;report();}
+  });
+  function dispose(){document.documentElement.setAttribute('data-cz-source-collection','false');document.dispatchEvent(new Event('cz-chat-source-config'));sourceActive=false;stop();history.clear();identities=new WeakMap();liveTails=new WeakMap();liveInserts=new WeakSet();replacements=new WeakMap();structure=null;ownerName='';dom.resetScroll();scope.dispose();}
   scope.listen(document,'load',event=>{if(filter.enabled && event.target?.matches?.('img'))scan(event.target);},true);
   scope.listen(window,'pagehide',event=>{if(!event.persisted)dispose();});
   return {configure,stop,dispose};
