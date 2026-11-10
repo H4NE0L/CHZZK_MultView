@@ -73,3 +73,7 @@
 .ic-summary { display:flex; flex:1 1 0; min-width:0; align-items:center; gap:6px; overflow:hidden; white-space:nowrap; color:#aeb7c2; font-size:11px; }
 .ic-summary-entry { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .ic-summary-name { color:#91baff; }
+
+.media-filename-settings { display:flex; flex-direction:column; gap:6px; }
+.media-filename-settings input { width:100%; min-width:0; box-sizing:border-box; }
+.media-filename-settings output { display:block; overflow-wrap:anywhere; color:#aeb7c2; font-size:11px; }

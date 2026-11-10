@@ -76,3 +76,12 @@ test('player preferences default to existing behavior and roundtrip independentl
  assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',document)).ok,true);assert.equal(f.data[S].rewindBar,false);assert.equal(f.data[S].autoWide,false);
  document.data.session.autoWide='false';assert.throws(()=>f.api.parse(document));
 });
+
+test('media filename formats roundtrip through backup and old backups keep defaults',async()=>{
+ const f=setup(),doc=(await f.send('SETTINGS_BACKUP_EXPORT')).document;
+ doc.data.session.screenshotNameFormat='사진_{channel}_{date}';doc.data.session.recordingNameFormat='영상_{title}_{time}';
+ const parsed=f.api.parse(doc);assert.equal(parsed.data.session.screenshotNameFormat,doc.data.session.screenshotNameFormat);assert.equal(parsed.data.session.recordingNameFormat,doc.data.session.recordingNameFormat);
+ assert.equal((await f.send('SETTINGS_BACKUP_RESTORE',doc)).ok,true);assert.equal(f.data[S].recordingNameFormat,doc.data.session.recordingNameFormat);
+ delete doc.data.session.screenshotNameFormat;delete doc.data.session.recordingNameFormat;assert(f.api.parse(doc).data.session.screenshotNameFormat.includes('{channel}'));
+ doc.data.session.screenshotNameFormat='{unknown}';assert.throws(()=>f.api.parse(doc),/파일명/);
+});
