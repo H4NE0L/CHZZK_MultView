@@ -83,7 +83,7 @@
     else window.addEventListener("volumechange", onVolumeChange, true);
     function bind(video) {
       bound.add(video);
-      apply(video);
+      if (video === findVideo()) apply(video);
     }
     for (const type of ["loadedmetadata", "playing"]) document.addEventListener(type, (event) => {
       if (event.target === findVideo() && bound.has(event.target)) apply(event.target);

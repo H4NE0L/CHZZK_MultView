@@ -95,12 +95,19 @@
     }
     function create() {
       let uid = null, items = [], clock = 0, minimumOrder = 0, lastExclusions = "";
+      const authors = /* @__PURE__ */ new Map();
+      function countAuthor(item, delta) {
+        const key = nameKey(item.name), current = authors.get(key), count = (current?.count || 0) + delta;
+        if (count <= 0) authors.delete(key);
+        else authors.set(key, { name: item.name, nameColor: item.nameColor || current?.nameColor || "", count });
+      }
       const byId = /* @__PURE__ */ new Map(), positions = /* @__PURE__ */ new Map();
       function clear(reset = false) {
         minimumOrder = reset ? 0 : Math.max(clock + 1, Date.now() * 1e3);
         items = [];
         byId.clear();
         positions.clear();
+        authors.clear();
         clock = 0;
       }
       return {
@@ -114,6 +121,9 @@
         get size() {
           return items.length;
         },
+        get authors() {
+          return Array.from(authors.values(), (value) => ({ ...value }));
+        },
         get items() {
           return items.slice();
         },
@@ -125,6 +135,7 @@
           items = items.filter((item) => {
             const keep = !(filter.excludedNames || []).some((name) => nameKey(name) === nameKey(item.name));
             if (!keep) {
+              countAuthor(item, -1);
               byId.delete(item.id);
               positions.delete(item.id);
             }
@@ -142,6 +153,13 @@
             if (existing) {
               if (JSON.stringify(existing) === JSON.stringify(item)) continue;
               items[items.indexOf(existing)] = item;
+              if (nameKey(existing.name) !== nameKey(item.name)) {
+                countAuthor(existing, -1);
+                countAuthor(item, 1);
+              } else {
+                const summary = authors.get(nameKey(item.name));
+                if (summary && item.nameColor) summary.nameColor = item.nameColor;
+              }
             } else {
               const order = item.order ?? clock + 1;
               clock = Math.max(clock, order);
@@ -153,6 +171,7 @@
                 else high = middle;
               }
               items.splice(low, 0, item);
+              countAuthor(item, 1);
             }
             byId.set(item.id, item);
             changed = true;

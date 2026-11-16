@@ -1,10 +1,25 @@
 "use strict";
 (() => {
+  // src/shared/media/filename.ts
+  var DEFAULT_SCREENSHOT_NAME = "{channel}_{title}_{YYYY}{MM}{DD}{HH}{mm}{ss}";
+  var DEFAULT_RECORDING_NAME = "[{YY}.{MM}.{DD}]{channel}_{title}";
+  var NAME_TOKENS = ["channel", "title", "uid", "date", "time", "YYYY", "YY", "MM", "DD", "HH", "mm", "ss"];
+  function templateError(value) {
+    if (typeof value !== "string" || !value.trim()) return "파일명 형식을 입력하세요.";
+    if (value.length > 200) return "파일명 형식은 200자 이하로 입력하세요.";
+    if (/[{}]/.test(value.replace(/\{([^{}]+)\}/g, (token, key) => NAME_TOKENS.includes(key) ? "" : token))) return "지원하는 치환 항목만 사용하세요.";
+    if (/\.(png|mp4|webm)\s*$/i.test(value)) return "확장자는 자동으로 붙습니다. 형식에서 확장자를 빼주세요.";
+    return "";
+  }
+  function normalizeTemplate(value, kind) {
+    return templateError(value) ? kind === "recording" ? DEFAULT_RECORDING_NAME : DEFAULT_SCREENSHOT_NAME : value.trim();
+  }
+
   // src/shared/session-store.ts
   var record = (value) => value && typeof value === "object" ? value : {};
   var sessionStore = (() => {
     const KEY = "chzzkMultiviewV09";
-    const DEFAULT_STATE = Object.freeze({ channels: [], selectedUid: null, layout: "grid", chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: "right", shortcutsEnabled: true, powerRewards: false, chatTimestamps: false, rewindBar: true, autoWide: true });
+    const DEFAULT_STATE = Object.freeze({ channels: [], selectedUid: null, layout: "grid", chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: "right", shortcutsEnabled: true, powerRewards: false, chatTimestamps: false, rewindBar: true, autoWide: true, screenshotNameFormat: DEFAULT_SCREENSHOT_NAME, recordingNameFormat: DEFAULT_RECORDING_NAME });
     const clamp01 = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
     function parseInput(value) {
       const raw = String(value || "").trim();
@@ -53,6 +68,8 @@
       const layout = saved.layout === "main-sub" ? "main-sub" : "grid";
       const visible = channels.slice(0, layout === "main-sub" ? 4 : 9);
       return {
+        screenshotNameFormat: normalizeTemplate(saved.screenshotNameFormat, "screenshot"),
+        recordingNameFormat: normalizeTemplate(saved.recordingNameFormat, "recording"),
         channels,
         selectedUid: typeof saved.selectedUid === "string" && visible.some((c) => c.uid === saved.selectedUid) ? saved.selectedUid : visible[0]?.uid || null,
         layout,

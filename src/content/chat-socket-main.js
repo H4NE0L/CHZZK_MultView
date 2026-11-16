@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   // src/shared/chat/source-epoch.js
-  var own = (object, key) => object && typeof object === "object" ? Object.getOwnPropertyDescriptor(object, key)?.value : void 0;
+  var own = (object2, key) => object2 && typeof object2 === "object" ? Object.getOwnPropertyDescriptor(object2, key)?.value : void 0;
   function sourceEpoch(message) {
     for (const key of ["messageTime", "messageTimestamp", "msgTime", "createdAt", "createTime", "ctime", "time", "regTime", "timestamp"]) {
       const value = own(message, key);
@@ -14,8 +14,60 @@
     return null;
   }
 
+  // src/shared/chat/history.ts
+  function hash(value) {
+    let a = 2166136261, b = 5381;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      a = Math.imul(a ^ code, 16777619);
+      b = Math.imul(b, 33) ^ code;
+    }
+    return `${value.length}:${a >>> 0}:${b >>> 0}`;
+  }
+
+  // src/shared/chat/socket-message.js
+  var object = (value) => {
+    if (typeof value === "string" && value.length <= 16e3) {
+      try {
+        return JSON.parse(value);
+      } catch (_) {
+        return {};
+      }
+    }
+    return value && typeof value === "object" ? value : {};
+  };
+  function socketMessage(value, fallbackId) {
+    if (!value || typeof value !== "object") return null;
+    const profile = object(value.profile), name = profile.nickname, body = value.content ?? value.msg ?? value.message;
+    if (typeof name !== "string" || !name.trim() || typeof body !== "string" || !body.trim() || body.length > 16e3) return null;
+    const code = typeof profile.userRoleCode === "string" ? profile.userRoleCode.toLowerCase() : "";
+    const badge = typeof profile.badge?.imageUrl === "string" ? profile.badge.imageUrl : "";
+    let role = "";
+    if (!/operator|admin|staff/.test(code) && !badge.includes("/icon/owner.png")) {
+      if (/streamer|owner|broadcaster/.test(code) || badge.includes("/icon/streamer.png")) role = "streamer";
+      else if (/manager/.test(code) || badge.includes("/icon/manager.png")) role = "manager";
+      else if (profile.verifiedMark === true) role = "partner";
+    }
+    const emojis = object(object(value.extras).emojis), segments = [];
+    let offset = 0;
+    const tokens = /\{:[^{}]{1,100}:\}/g;
+    let match;
+    while ((match = tokens.exec(body)) && segments.length < 62) {
+      const key = match[0].slice(2, -2), src = emojis[key] ?? emojis[match[0]];
+      if (typeof src !== "string" || !src.startsWith("https://")) continue;
+      if (match.index > offset) segments.push({ type: "text", text: body.slice(offset, match.index) });
+      segments.push({ type: "image", src, alt: match[0] });
+      offset = match.index + match[0].length;
+    }
+    if (offset < body.length) segments.push({ type: "text", text: body.slice(offset) });
+    const time = sourceEpoch(value), nativeId = value.messageId ?? value.msgId ?? value.id;
+    const id = ["string", "number"].includes(typeof nativeId) ? String(nativeId) : time !== null ? "wire:" + hash(JSON.stringify([value.uid || name, time, body])) : fallbackId;
+    if (!id || id.length > 160) return null;
+    return { id, name, text: body.slice(0, 1e3), segments, role, time, nameColor: profile.title?.color || "", badges: badge ? [{ src: badge, alt: role || "배지" }] : [], badgesAfter: [], bodyColor: "" };
+  }
+
   // src/shared/chat/message-content.js
-  var own2 = (object, key) => object && typeof object === "object" ? Object.getOwnPropertyDescriptor(object, key)?.value : void 0;
+  var own2 = (object2, key) => object2 && typeof object2 === "object" ? Object.getOwnPropertyDescriptor(object2, key)?.value : void 0;
   function imageToken(value) {
     try {
       const url = new URL(value);
@@ -115,15 +167,18 @@
     window.__CZChatSocketReaderV1 = true;
     const Native = window.WebSocket, sockets = /* @__PURE__ */ new Map();
     let disposed = false, enabled = new URLSearchParams(location.search).get("cz_timestamps") === "1";
-    let packets = 0, statsTimer = null;
+    let collection = false, sourceReady = false, sequence = 0, wireOrder = 0;
+    const session = Math.random().toString(36).slice(2);
+    const notify = (messages) => window.postMessage({ source: "cz-live-chat-source-v1", active: collection && sourceReady && sockets.size > 0, receivedAt: Date.now(), messages }, location.origin);
+    let packets = 0, delivered = 0, statsTimer = null;
     function report() {
       if (!statsTimer) statsTimer = setTimeout(() => {
         statsTimer = null;
-        document.documentElement?.setAttribute("data-cz-socket-time-state", JSON.stringify({ revision: "20261102-1", enabled, sockets: sockets.size, packets, indexed: sourceTimes.size }));
+        document.documentElement?.setAttribute("data-cz-socket-time-state", JSON.stringify({ revision: "20261111-1", enabled, collection, sourceReady, delivered, sockets: sockets.size, packets, indexed: sourceTimes.size }));
       }, 250);
     }
     function receive(event) {
-      if (disposed || !enabled || typeof event.data !== "string" || event.data.length > 1024 * 1024) return;
+      if (disposed || !enabled && !collection || typeof event.data !== "string" || event.data.length > 1024 * 1024) return;
       packets++;
       report();
       let packet;
@@ -143,7 +198,18 @@
       }
       const messages = Array.isArray(body) ? body : body?.messageList ?? body?.messages ?? (body?.profile ? [body] : []);
       if (!Array.isArray(messages)) return;
-      messages.slice(-200).forEach(sourceTimes.add);
+      if (enabled) messages.slice(-200).forEach(sourceTimes.add);
+      if (collection && [93101, 93102].includes(Number(packet.cmd))) {
+        const parsed = messages.map((message) => socketMessage(message, "wire:" + session + ":" + ++sequence)).filter(Boolean);
+        parsed.forEach((item) => {
+          wireOrder = Math.max(wireOrder + 1, Date.now() * 1e3);
+          item.order = wireOrder;
+          if (!enabled) item.time = null;
+        });
+        delivered += parsed.length;
+        if (parsed.length) sourceReady = true;
+        for (let i = 0; i < parsed.length; i += 200) notify(parsed.slice(i, i + 200));
+      }
     }
     const ProxySocket = new Proxy(Native, { construct(target, args, newTarget) {
       const socket = Reflect.construct(target, args, newTarget);
@@ -154,9 +220,12 @@
             socket.removeEventListener("message", receive);
             socket.removeEventListener("close", close);
             sockets.delete(socket);
+            if (!sockets.size) sourceReady = false;
+            if (collection) notify([]);
           };
           sockets.set(socket, close);
-          if (enabled) socket.addEventListener("message", receive);
+          if (collection) notify([]);
+          if (enabled || collection) socket.addEventListener("message", receive);
           socket.addEventListener("close", close);
         }
       } catch (_) {
@@ -165,14 +234,18 @@
     } });
     function configure() {
       enabled = !disposed && (document.documentElement?.hasAttribute("data-cz-timestamps-enabled") ? document.documentElement.getAttribute("data-cz-timestamps-enabled") === "true" : new URLSearchParams(location.search).get("cz_timestamps") === "1");
+      collection = !disposed && document.documentElement?.getAttribute("data-cz-source-collection") === "true";
+      if (!collection) sourceReady = false;
       for (const socket of sockets.keys()) {
         socket.removeEventListener("message", receive);
-        if (enabled) socket.addEventListener("message", receive);
+        if (enabled || collection) socket.addEventListener("message", receive);
       }
       if (!enabled) sourceTimes.clear();
+      notify([]);
       report();
     }
     document.addEventListener("cz-chat-timestamps-config", configure);
+    document.addEventListener("cz-chat-source-config", configure);
     configure();
     window.WebSocket = ProxySocket;
     window.addEventListener("pagehide", () => {
@@ -180,6 +253,7 @@
       clearTimeout(statsTimer);
       statsTimer = null;
       document.removeEventListener("cz-chat-timestamps-config", configure);
+      document.removeEventListener("cz-chat-source-config", configure);
       for (const close of sockets.values()) close();
       sockets.clear();
       sourceTimes.clear();

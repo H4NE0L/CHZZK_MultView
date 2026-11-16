@@ -1,5 +1,31 @@
 "use strict";
 (() => {
+  // src/content/player-video.js
+  function findPlaybackVideo(root = document) {
+    const candidates = [...root.querySelectorAll("video")].filter((video) => video.isConnected);
+    const rank = (video) => {
+      const box = video.getBoundingClientRect(), style = getComputedStyle(video);
+      const visible = box.width > 0 && box.height > 0 && style.display !== "none" && style.visibility !== "hidden" && !video.closest('[hidden],[aria-hidden="true"]');
+      const scoped = !!video.closest(".pzp-pc,.webplayer-internal-core,[data-player]");
+      return [Number(visible), Number(video.readyState >= 2 && !video.ended), Number(scoped), Number(video.matches(".webplayer-internal-video")), Number(!video.paused && !video.ended), box.width * box.height];
+    };
+    let selected = null, best = null;
+    for (const video of candidates) {
+      const score = rank(video);
+      let better = !best;
+      if (best) for (let i = 0; i < score.length; i++) {
+        if (score[i] === best[i]) continue;
+        better = score[i] > best[i];
+        break;
+      }
+      if (better) {
+        selected = video;
+        best = score;
+      }
+    }
+    return selected;
+  }
+
   // src/shared/chat/roles.ts
   var nameKey = (value) => String(value || "").normalize("NFC").trim().toLocaleLowerCase("ko-KR");
 
@@ -256,7 +282,7 @@
       document.dispatchEvent(new Event("cz-playback-trace-enable"));
     }
     function findVideo() {
-      return document.querySelector("video");
+      return findPlaybackVideo();
     }
     function isVideoMuted(video) {
       if (!video) return true;
@@ -276,18 +302,30 @@
     }
     const audio = CZPlayerAudio.create({ findVideo, report: reportVideoState });
     const setMuted = audio.setMuted, setVolume = audio.setVolume;
+    let readyVideo = null;
     function bindVideo(video) {
-      if (!video || video.dataset.chzzkMvBound === "1") return;
-      video.dataset.chzzkMvBound = "1";
-      if (!chatMode) {
-        audio.bind(video);
-        for (const event of ["loadeddata", "playing"]) video.addEventListener(event, scheduleTheater);
+      if (!video) return;
+      if (video.dataset.chzzkMvBound !== "1") {
+        video.dataset.chzzkMvBound = "1";
+        if (!chatMode) {
+          audio.bind(video);
+          for (const event of ["loadeddata", "playing"]) video.addEventListener(event, () => {
+            scheduleTheater();
+            bindVideo(video);
+          });
+        }
       }
-      if (!chatMode) window.parent.postMessage({ source: "chzzk-multiview", type: "PLAYER_READY", uid: frameUid }, PARENT_ORIGIN);
+      if (chatMode || video !== findVideo() || readyVideo === video) return;
+      readyVideo = video;
+      window.parent.postMessage({ source: "chzzk-multiview", type: "PLAYER_READY", uid: frameUid }, PARENT_ORIGIN);
     }
     function bindObserver() {
       if (videoObserver || !document.documentElement) return;
       videoObserver = new MutationObserver((records) => {
+        if (readyVideo && !readyVideo.isConnected) {
+          readyVideo = null;
+          bindVideo(findVideo());
+        }
         for (const record of records) for (const node of record.addedNodes) {
           if (node.nodeType !== 1) continue;
           const controls = '.pzp-pc__viewmode-button,button[aria-label*="넓은"],button[title*="넓은"],video';
@@ -484,6 +522,7 @@
     const targetMenu = chatMode ? createTargetMenu({ send: (data) => window.parent.postMessage({ source: "chzzk-multiview", uid: frameUid, ...data }, PARENT_ORIGIN) }) : null;
     bindObserver();
     if (chatMode) window.parent.postMessage({ source: "chzzk-multiview", type: "CHAT_READY", uid: frameUid }, PARENT_ORIGIN);
+    let roleReaderRequested = false;
     let disposing = false;
     window.addEventListener("message", (event) => {
       if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
@@ -521,6 +560,17 @@
       if (event.data.type === "CHAT_TIMESTAMP_CONFIG" && chatMode) configureTimestamps(event.data.enabled);
       if (event.data.type === "CHAT_PRESENTATION" && chatMode) CZChatLayout.setPresentation(event.data);
       if (event.data.type === "IMPORTANT_CHAT_CONFIG" && chatMode) {
+        const on = event.data.settings?.enabled !== false;
+        document.documentElement.setAttribute("data-cz-roles-enabled", String(on));
+        document.dispatchEvent(new Event("cz-chat-roles-config"));
+        if (on && !roleReaderRequested) {
+          roleReaderRequested = true;
+          chrome.runtime.sendMessage({ type: "CHAT_METADATA_INIT" }).then((result) => {
+            if (!result?.ok) roleReaderRequested = false;
+          }).catch(() => {
+            roleReaderRequested = false;
+          });
+        }
         importantCollector?.configure(event.data.settings, { streamerName: event.data.streamerName, since: event.data.since });
         targetMenu?.configure(CZImportantChat.settings(event.data.settings));
       }

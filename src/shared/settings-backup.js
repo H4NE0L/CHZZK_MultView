@@ -1,5 +1,15 @@
 "use strict";
 (() => {
+  // src/shared/media/filename.ts
+  var NAME_TOKENS = ["channel", "title", "uid", "date", "time", "YYYY", "YY", "MM", "DD", "HH", "mm", "ss"];
+  function templateError(value) {
+    if (typeof value !== "string" || !value.trim()) return "파일명 형식을 입력하세요.";
+    if (value.length > 200) return "파일명 형식은 200자 이하로 입력하세요.";
+    if (/[{}]/.test(value.replace(/\{([^{}]+)\}/g, (token, key) => NAME_TOKENS.includes(key) ? "" : token))) return "지원하는 치환 항목만 사용하세요.";
+    if (/\.(png|mp4|webm)\s*$/i.test(value)) return "확장자는 자동으로 붙습니다. 형식에서 확장자를 빼주세요.";
+    return "";
+  }
+
   // src/shared/settings-backup.ts
   var PREVIOUS_KEY = "chzzkSettingsBeforeRestoreV1";
   var HEIGHT_KEY = "chzzkImportantChatHeightV1";
@@ -14,6 +24,7 @@
     if (raw.powerRewards !== void 0 && typeof raw.powerRewards !== "boolean") throw Error("통나무 수집 설정을 확인해주세요.");
     for (const key of ["rewindBar", "autoWide"]) if (raw[key] !== void 0 && typeof raw[key] !== "boolean") throw Error("플레이어 설정을 확인해주세요.");
     if (raw.chatTimestamps !== void 0 && typeof raw.chatTimestamps !== "boolean") throw Error("타임스탬프 설정을 확인해주세요.");
+    for (const key of ["screenshotNameFormat", "recordingNameFormat"]) if (raw[key] !== void 0 && templateError(raw[key])) throw Error("파일명 형식을 확인해주세요.");
     const channels = raw.channels.map((value2) => {
       const channel = object(value2);
       if (typeof channel.uid !== "string" || channel.uid.length > 160) throw Error("방송 ID를 확인해주세요.");

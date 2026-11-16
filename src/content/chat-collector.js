@@ -57,6 +57,7 @@
       }
       return {
         socketTimeSource,
+        sourceRoleReader: document.documentElement.getAttribute("data-cz-role-reader") || "",
         sourceTimeReader: document.documentElement.getAttribute("data-cz-time-reader") || "",
         rowCandidates: document.querySelectorAll(rows).length,
         nicknameCandidates: document.querySelectorAll(names).length,
@@ -219,12 +220,14 @@
     }
     let roleSample = [];
     function role(row, textElements, nickname, suffix = /* @__PURE__ */ new Set()) {
+      const source = row.getAttribute("data-cz-source-role"), nativeId = row.getAttribute("data-message-id") || row.getAttribute("data-chat-id");
+      const sourceRole = ["streamer", "manager", "partner"].includes(source) && (!nativeId || row.getAttribute("data-cz-source-role-id") === nativeId) ? source : "";
       if (getOwnerName() && nameKey(authorName(nickname)) === nameKey(getOwnerName())) return "streamer";
       let author = authorBoundary(row, nickname);
       for (let node = author, depth = 0; node && node !== row && depth < 4; node = node.parentElement, depth++) if (/username|nickname|author/.test(String(node.className))) author = node;
-      let detected = "";
-      roleSample = [];
-      const candidates = row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]');
+      let detected = sourceRole;
+      roleSample = sourceRole ? [{ tag: "SOURCE_PROFILE", labels: [sourceRole], markers: [] }] : [];
+      const candidates = [row, ...row.querySelectorAll('img,svg,svg use,[data-role],[data-user-role],[data-user-type],[aria-label],[title],[class*="badge"],[class*="Badge"]')];
       for (const badge of candidates) {
         if (textElements.some((el) => el === badge || el.contains(badge))) continue;
         const beforeName = !!(badge.compareDocumentPosition(nickname) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -462,6 +465,7 @@
   // src/content/chat-collector.js
   globalThis.CZChatCollector = { create({ send, status = () => {
   } }) {
+    let sourceActive = false;
     let filter = CZImportantChat.settings({ enabled: false }), observer = null, timer = null, sequence = 0, lastOrder = 0, baseline = false, configuredOnce = false, canActivate = false, since = Infinity;
     const session = globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + "-" + Math.random().toString(36).slice(2), orders = /* @__PURE__ */ new WeakMap(), blockedRows = /* @__PURE__ */ new WeakSet(), bornLive = /* @__PURE__ */ new WeakSet();
     function orderFor(row, fresh = false) {
@@ -487,7 +491,7 @@
     function report() {
       if (!statusTimer) statusTimer = scope.timeout(() => {
         statusTimer = null;
-        status({ ...counts, revision: "collection-emotes-2", historyEntries: history.size, ownerKnown: !!ownerName, enabled: filter.enabled, structure, roleSample: dom.roleSample, dom: dom.summary(counts.scanned) });
+        status({ ...counts, revision: "collection-wire-1", sourceActive, historyEntries: history.size, ownerKnown: !!ownerName, enabled: filter.enabled, structure, roleSample: dom.roleSample, dom: dom.summary(counts.scanned) });
       }, 500);
     }
     function flush() {
@@ -502,6 +506,7 @@
       }
     }
     function read(row) {
+      if (sourceActive) return;
       row = dom.normalizeRow(row);
       if (!row.isConnected) return;
       if (leafNames(row).length > 1) {
@@ -538,7 +543,7 @@
       const item = CZImportantChat.message({ id, name, text, segments, badges, badgesAfter, nameColor, bodyColor, role, order: previous?.order ?? orderFor(row), time: CZImportantChat.timestamp(nativeTime) ?? previous?.time ?? null });
       if (!item) return;
       if (historical) item.updateOnly = true;
-      if (liveInserts.has(row) || !readingHistory(row)) liveTails.set(row.parentElement, new WeakRef(row));
+      if (!row.nextElementSibling || liveInserts.has(row) || !readingHistory(row)) liveTails.set(row.parentElement, new WeakRef(row));
       const signature = JSON.stringify(item);
       if (restored && restored.id === id && (restored.matched || restored.signature === hash(signature))) {
         const identity2 = { fingerprint, shape, id, time: item.time, order: item.order, signature, historical: true };
@@ -594,6 +599,9 @@
       if (!counts.scanned) report();
     }
     function stop() {
+      sourceActive = false;
+      document.documentElement.setAttribute("data-cz-source-collection", "false");
+      document.dispatchEvent(new Event("cz-chat-source-config"));
       releaseObserver?.();
       releaseObserver = null;
       observer = null;
@@ -618,7 +626,12 @@
       ownerName = typeof identity.streamerName === "string" ? identity.streamerName.slice(0, 80) : "";
       filter = CZImportantChat.settings(value);
       report();
-      if (!filter.enabled) return;
+      if (!filter.enabled) {
+        sourceActive = false;
+        document.documentElement.setAttribute("data-cz-source-collection", "false");
+        document.dispatchEvent(new Event("cz-chat-source-config"));
+        return;
+      }
       observer = new MutationObserver((records) => {
         dom.resetScroll();
         replacements = /* @__PURE__ */ new WeakMap();
@@ -670,15 +683,45 @@
         for (const node of ordered) scan(node);
       });
       releaseObserver = scope.observe(observer);
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["alt", "title", "aria-label", "data-role", "data-user-role", "data-user-type", "href", "xlink:href", "src", "srcset", "data-src", "data-srcset", "data-message-id", "data-chat-id", "class", "style", "data-cz-message-time", "data-message-time", "data-timestamp", "data-created-at"] });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["alt", "title", "aria-label", "data-role", "data-user-role", "data-user-type", "href", "xlink:href", "src", "srcset", "data-src", "data-srcset", "data-message-id", "data-chat-id", "class", "style", "data-cz-source-role", "data-cz-source-role-id", "data-cz-message-time", "data-message-time", "data-timestamp", "data-created-at"] });
       baseline = true;
       try {
         scan(document.body);
       } finally {
         baseline = false;
       }
+      document.documentElement.setAttribute("data-cz-source-collection", "true");
+      document.dispatchEvent(new Event("cz-chat-source-config"));
     }
+    scope.listen(window, "message", (event) => {
+      if (event.source !== window || event.origin !== location.origin || event.data?.source !== "cz-live-chat-source-v1" || !filter.enabled) return;
+      sourceActive = event.data.active === true;
+      if (!sourceActive || !Array.isArray(event.data.messages) || typeof event.data.receivedAt !== "number" || event.data.receivedAt < since) return;
+      const batch = [];
+      for (const raw of event.data.messages.slice(0, 200)) {
+        const sourceOrder = Number.isSafeInteger(raw?.order) && raw.order > 0 ? raw.order : Date.now() * 1e3;
+        lastOrder = Math.max(lastOrder, sourceOrder);
+        const item = CZImportantChat.message({ ...raw, order: sourceOrder });
+        if (!item) continue;
+        if (ownerName && item.name.normalize("NFC").trim() === ownerName.normalize("NFC").trim()) item.role = "streamer";
+        if (!CZImportantChat.matches(item, filter)) continue;
+        for (const [id, entry] of pending) if (id.startsWith("local:") && entry.name === item.name && entry.text === item.text) {
+          pending.delete(id);
+          break;
+        }
+        batch.push(item);
+      }
+      if (batch.length) {
+        send(batch);
+        counts.sent += batch.length;
+        counts.matched += batch.length;
+        report();
+      }
+    });
     function dispose() {
+      document.documentElement.setAttribute("data-cz-source-collection", "false");
+      document.dispatchEvent(new Event("cz-chat-source-config"));
+      sourceActive = false;
       stop();
       history.clear();
       identities = /* @__PURE__ */ new WeakMap();
