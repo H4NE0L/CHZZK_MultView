@@ -1,3 +1,4 @@
+import {templateError} from './media/filename';
 import type {ViewerSession} from './contracts/session';
 import type {ChatSettings} from './contracts/chat';
 import type {BackupDocument} from './favorites-backup';
@@ -17,6 +18,7 @@ function cleanSession(value: unknown): ViewerSession {
   if(raw.powerRewards!==undefined && typeof raw.powerRewards!=='boolean')throw Error('통나무 수집 설정을 확인해주세요.');
   for(const key of ['rewindBar','autoWide'])if(raw[key]!==undefined&&typeof raw[key]!=='boolean')throw Error('플레이어 설정을 확인해주세요.');
   if(raw.chatTimestamps!==undefined && typeof raw.chatTimestamps!=='boolean')throw Error('타임스탬프 설정을 확인해주세요.');
+  for(const key of ['screenshotNameFormat','recordingNameFormat'])if(raw[key]!==undefined&&templateError(raw[key]))throw Error('파일명 형식을 확인해주세요.');
   const channels=raw.channels.map(value=>{
     const channel=object(value);
     if(typeof channel.uid!=='string' || channel.uid.length>160)throw Error('방송 ID를 확인해주세요.');

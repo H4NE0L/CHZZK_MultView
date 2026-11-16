@@ -1,3 +1,4 @@
+import {findPlaybackVideo} from './player-video.js';
 import {createTargetMenu} from './chat/target-menu.js';
 import {create as createPowerRewards} from './power-rewards.js';
 /* CHZZK live iframe helper for MultiView. */
@@ -42,7 +43,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   if(!chatMode){document.documentElement.setAttribute('data-cz-playback-trace','true');document.dispatchEvent(new Event('cz-playback-trace-enable'));}
 
   function findVideo() {
-    return document.querySelector("video");
+    return findPlaybackVideo();
   }
 
   function isVideoMuted(video) {
@@ -64,11 +65,16 @@ import {create as createPowerRewards} from './power-rewards.js';
 
   const audio=CZPlayerAudio.create({findVideo,report:reportVideoState});
   const setMuted=audio.setMuted,setVolume=audio.setVolume;
+  let readyVideo=null;
   function bindVideo(video) {
-    if (!video || video.dataset.chzzkMvBound === "1") return;
-    video.dataset.chzzkMvBound = "1";
-    if(!chatMode){audio.bind(video);for(const event of ['loadeddata','playing'])video.addEventListener(event,scheduleTheater);}
-    if (!chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
+    if(!video)return;
+    if(video.dataset.chzzkMvBound!=="1"){
+      video.dataset.chzzkMvBound="1";
+      if(!chatMode){audio.bind(video);for(const event of ['loadeddata','playing'])video.addEventListener(event,()=>{scheduleTheater();bindVideo(video);});}
+    }
+    if(chatMode||video!==findVideo()||readyVideo===video)return;
+    readyVideo=video;
+    window.parent.postMessage({source: 'chzzk-multiview', type: 'PLAYER_READY', uid: frameUid}, PARENT_ORIGIN);
   }
 
   function bindObserver() {
@@ -76,6 +82,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     videoObserver = new MutationObserver(records => {
       // Native chat can mutate hundreds of times a second. Inspect added
       // subtrees only instead of searching the complete page for every chat.
+      if(readyVideo&&!readyVideo.isConnected){readyVideo=null;bindVideo(findVideo());}
       for(const record of records)for(const node of record.addedNodes){
         if(node.nodeType!==1)continue;
         const controls='.pzp-pc__viewmode-button,button[aria-label*="넓은"],button[title*="넓은"],video';
@@ -301,6 +308,7 @@ import {create as createPowerRewards} from './power-rewards.js';
   bindObserver();
   if (chatMode) window.parent.postMessage({source: 'chzzk-multiview', type: 'CHAT_READY', uid: frameUid}, PARENT_ORIGIN);
 
+  let roleReaderRequested=false;
   let disposing=false;
   window.addEventListener("message", event => {
     if (!CZMessages.isParentCommand(event, PARENT_ORIGIN, window.parent)) return;
@@ -319,7 +327,7 @@ import {create as createPowerRewards} from './power-rewards.js';
     if(event.data.type==='POWER_DIAGNOSTICS' && !chatMode)chrome.runtime.sendMessage({type:'POWER_DIAGNOSTICS'}).then(result=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,...(result?.ok?{diagnostics:{...result.diagnostics,audio:audio.snapshot()}}:{error:result?.error||'점검 실행 실패'})},PARENT_ORIGIN)).catch(error=>window.parent.postMessage({source:'chzzk-multiview',type:'POWER_DIAGNOSTICS_RESULT',uid:frameUid,requestId:event.data.requestId,error:String(error)},PARENT_ORIGIN));
     if(event.data.type==='CHAT_TIMESTAMP_CONFIG' && chatMode)configureTimestamps(event.data.enabled);
     if(event.data.type==='CHAT_PRESENTATION' && chatMode)CZChatLayout.setPresentation(event.data);
-    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode){importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName,since:event.data.since});targetMenu?.configure(CZImportantChat.settings(event.data.settings));}
+    if(event.data.type==='IMPORTANT_CHAT_CONFIG' && chatMode){const on=event.data.settings?.enabled!==false;document.documentElement.setAttribute('data-cz-roles-enabled',String(on));document.dispatchEvent(new Event('cz-chat-roles-config'));if(on&&!roleReaderRequested){roleReaderRequested=true;chrome.runtime.sendMessage({type:'CHAT_METADATA_INIT'}).then(result=>{if(!result?.ok)roleReaderRequested=false;}).catch(()=>{roleReaderRequested=false;});}importantCollector?.configure(event.data.settings,{streamerName:event.data.streamerName,since:event.data.since});targetMenu?.configure(CZImportantChat.settings(event.data.settings));}
     if (event.data.type.startsWith('MEDIA_') && (!chatMode || event.data.type==='MEDIA_SHORTCUTS')) media?.command(event.data);
     if (event.data.type === "SET_NAV_VISIBLE") setNavVisible(!!event.data.visible);
     if (event.data.type === "SET_CHAT_MODE") {

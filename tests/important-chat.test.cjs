@@ -93,3 +93,14 @@ test('late updates from before clear cannot repopulate history',()=>{
  buffer.add('A',[{id:'before',name:'A',text:'late metadata',order}],filter);assert.equal(buffer.size,0);
  buffer.add('A',[{id:'after',name:'A',text:'after',order:Date.now()*1000+1000}],filter);assert.equal(buffer.size,1);
 });
+
+test('author header counts preserve colors without double-counting metadata updates and clear/exclusion',()=>{
+ const api=setup(),model=api.create(),filter=api.settings();model.reset('A');
+ const message={id:'one',name:'작성자',text:'처음',role:'manager',nameColor:'rgb(12, 180, 80)'};
+ model.add('A',[message,{...message,id:'two'}],filter);
+ assert.equal(model.authors[0].count,2);assert.equal(model.authors[0].nameColor,message.nameColor);
+ model.add('A',[{...message,text:'메타 갱신',nameColor:'#aabbcc'}],filter);
+ assert.equal(model.authors[0].count,2);assert.equal(model.authors[0].nameColor,'#aabbcc');
+ model.applySettings(api.settings({excludedNames:['작성자']}));assert.equal(model.authors.length,0);
+ model.reset('A');model.add('A',[message],filter);model.clear();assert.equal(model.authors.length,0);
+});

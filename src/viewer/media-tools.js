@@ -1,3 +1,4 @@
+import {formatMediaName,normalizeTemplate} from '../shared/media/filename';
 import {screenshotGallery} from './screenshot-gallery.js';
 import {MAX_SCREENSHOTS,MAX_PENDING_SCREENSHOTS,MAX_SCREENSHOT_BYTES,DOWNLOAD_URL_MS} from '../shared/media/limits';
 import {ResourceScope} from '../shared/runtime/scope';
@@ -25,7 +26,9 @@ export const mediaTools = {create(context) {
   function download(blob,name){const lease=urls.create(blob,DOWNLOAD_URL_MS),a=document.createElement('a');a.href=lease.url;a.download=name;a.click();}
   async function fileName(uid,date=new Date(),kind='screenshot',controller=new AbortController()) {
     const channel=context.state.channels.find(c=>c.uid===uid);
-    let title='방송';
+    const template=normalizeTemplate(context.state[kind==='recording'?'recordingNameFormat':'screenshotNameFormat'],kind);
+    let title=channel?.title||'방송';
+    if(!template.includes('{title}'))return formatMediaName(template,kind,{channel:channel?.name,uid,title,date});
     const release=scope.add(()=>controller.abort()),cancelTimeout=scope.timeout(()=>controller.abort(),15000);
     try {
       const id=channel?.sourceId || uid;
@@ -33,10 +36,7 @@ export const mediaTools = {create(context) {
       const response=await fetch(`https://api.chzzk.naver.com/${path}`,{credentials:'include',signal:controller.signal});
       if(response.ok){const data=await response.json();if(data.code===200)title=data.content?.liveTitle || data.content?.videoTitle || title;}
     }catch(_){}finally{cancelTimeout();release();}
-    const stamp=[date.getFullYear(),date.getMonth()+1,date.getDate(),date.getHours(),date.getMinutes(),date.getSeconds()].map((n,i)=>i?String(n).padStart(2,'0'):String(n)).join('');
-    const clean=value=>String(value).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_');
-    if(kind==='recording')return `[${String(date.getFullYear()).slice(-2)}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}]${clean(channel?.name || uid).slice(0,70)}_${clean(title).slice(0,70)}`;
-    return `${clean(channel?.name || uid).slice(0,70)}_${clean(title).slice(0,70)}_${stamp}`;
+    return formatMediaName(template,kind,{channel:channel?.name,uid,title,date});
   }
   async function screenshot(uid) {
     if(scope.isDisposed)return;

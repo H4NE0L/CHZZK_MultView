@@ -13,7 +13,7 @@ export function mount({rootId:ROOT_ID,siteMode,scope}) {
     document.body.appendChild(host);
     if(siteMode){
       scope.add(lockPageScroll(document));
-      host.style.cssText='position:fixed;inset:0;z-index:2147483647';
+      host.style.cssText='position:fixed!important;inset:0!important;width:100%!important;height:100%!important;overflow:hidden!important;box-sizing:border-box!important;z-index:2147483647!important';
       document.querySelectorAll('video').forEach(video=>{video.muted=true;video.pause();});
     }
     const shadowRoot = host.attachShadow({ mode: "open" });

@@ -1,8 +1,9 @@
+import {DEFAULT_SCREENSHOT_NAME,DEFAULT_RECORDING_NAME,normalizeTemplate} from './media/filename';
 import type {ParsedChannel, SessionChannel, ViewerSession} from './contracts/session';
 const record=(value: unknown): Record<string, unknown> => value && typeof value==='object' ? value as Record<string, unknown> : {};
 export const sessionStore = (() => {
   const KEY = 'chzzkMultiviewV09';
-  const DEFAULT_STATE = Object.freeze<ViewerSession>({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right', shortcutsEnabled:true,powerRewards:false,chatTimestamps:false,rewindBar:true,autoWide:true});
+  const DEFAULT_STATE = Object.freeze<ViewerSession>({channels: [], selectedUid: null, layout: 'grid', chatOpen: true, screenLocked: false, mainOnly: false, masterVolume: 1, chatSide: 'right', shortcutsEnabled:true,powerRewards:false,chatTimestamps:false,rewindBar:true,autoWide:true,screenshotNameFormat:DEFAULT_SCREENSHOT_NAME,recordingNameFormat:DEFAULT_RECORDING_NAME});
   const clamp01 = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, Number(value))) : 0;
   function parseInput(value: unknown): ParsedChannel | null {
     const raw = String(value || "").trim();
@@ -49,7 +50,7 @@ export const sessionStore = (() => {
     }
     const layout = saved.layout === 'main-sub' ? 'main-sub' : 'grid';
     const visible = channels.slice(0, layout === 'main-sub' ? 4 : 9);
-    return {channels, selectedUid: typeof saved.selectedUid==='string' && visible.some(c => c.uid === saved.selectedUid) ? saved.selectedUid : visible[0]?.uid || null,
+    return {screenshotNameFormat:normalizeTemplate(saved.screenshotNameFormat,'screenshot'),recordingNameFormat:normalizeTemplate(saved.recordingNameFormat,'recording'),channels, selectedUid: typeof saved.selectedUid==='string' && visible.some(c => c.uid === saved.selectedUid) ? saved.selectedUid : visible[0]?.uid || null,
       layout, chatOpen: saved.chatOpen !== false, screenLocked: saved.screenLocked === true,
       mainOnly: saved.mainOnly === true, masterVolume: saved.masterVolume == null ? 1 : clamp01(saved.masterVolume),
       chatSide: saved.chatSide === 'left' ? 'left' : 'right',shortcutsEnabled:saved.shortcutsEnabled!==false,powerRewards:saved.powerRewards===true,chatTimestamps:saved.chatTimestamps===true,rewindBar:saved.rewindBar!==false,autoWide:saved.autoWide!==false};

@@ -1,3 +1,4 @@
+import {DEFAULT_SCREENSHOT_NAME,DEFAULT_RECORDING_NAME,normalizeTemplate,templateError,formatMediaName} from '../shared/media/filename';
 import type {ViewerSession} from '../shared/contracts/session';
 import type {ResourceScope} from '../shared/runtime/scope';
 interface SettingsContext {
@@ -47,6 +48,14 @@ export function bind(context: SettingsContext) {
   timestamps.checked=context.state.chatTimestamps===true;
   root.dataset.chatTimestamps=String(timestamps.checked);
   scope.listen(timestamps,'change',()=>{context.state.chatTimestamps=timestamps.checked;context.syncShortcuts();context.save();});
+  const filenameInputs=[] as {input:HTMLInputElement;refresh:()=>void}[];
+  for(const [kind,key,previewId] of [['screenshot','screenshotNameFormat','screenshotNamePreview'],['recording','recordingNameFormat','recordingNamePreview']] as const){
+    const input=element<HTMLInputElement>('#'+key),preview=element<HTMLOutputElement>('#'+previewId);
+    input.value=normalizeTemplate(context.state[key],kind);
+    const refresh=()=>{const error=templateError(input.value);input.setCustomValidity(error);preview.textContent=error||'예시: '+formatMediaName(input.value,kind,{channel:'방송인',title:'방송 제목',uid:'channel-id'})+(kind==='screenshot'?'.png':'.mp4');};refresh();
+    scope.listen(input,'input',refresh);scope.listen(input,'change',()=>{refresh();if(!input.reportValidity())return;context.state[key]=input.value.trim();context.save();});filenameInputs.push({input,refresh});
+  }
+  scope.listen(element('#resetMediaNameFormats'),'click',()=>{context.state.screenshotNameFormat=DEFAULT_SCREENSHOT_NAME;context.state.recordingNameFormat=DEFAULT_RECORDING_NAME;filenameInputs[0]!.input.value=DEFAULT_SCREENSHOT_NAME;filenameInputs[1]!.input.value=DEFAULT_RECORDING_NAME;filenameInputs.forEach(control=>control.refresh());context.save();});
   const others=['favoriteManager','followingManager','syncManager','volumeManager','channelManager'].map(id=>element<HTMLDetailsElement>('#'+id));
   scope.listen(settings,'toggle',()=>{if(settings.open)for(const panel of others)panel.open=false;});
   for(const panel of others)scope.listen(panel,'toggle',()=>{if(panel.open)settings.open=false;});

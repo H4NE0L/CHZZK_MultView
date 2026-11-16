@@ -12,7 +12,7 @@
     const runtime=globalThis.__CZAudioRuntime?.snapshot?.()||{available:false,contexts:[]};
     const clock=performance.now?.()??null;
     if(sampleOnly)return {clock,mediaElements,audioRuntime:runtime};
-    const video=document.querySelector('video'),chat=document.querySelector('[class*="live_chat"],[class*="chat_area"],[class*="liveChat"],[class*="chatting"],[data-chat-toolbar]');
+    const video=globalThis.__CZAudioRuntime?.findVideo?.()||document.querySelector('video'),chat=document.querySelector('[class*="live_chat"],[class*="chat_area"],[class*="liveChat"],[class*="chatting"],[data-chat-toolbar]');
     const candidates=[...document.querySelectorAll('button,[role=button]')].slice(-600).filter(button=>!button.closest('[class^="_chatting_message_"],[class*=" _chatting_message_"],[class*="live_chatting_list_item"],[data-chat-message]')).map(button=>({label:[button.getAttribute('aria-label'),button.getAttribute('title'),button.textContent,...[...button.querySelectorAll('img[alt],svg title')].map(icon=>icon.getAttribute('alt')||icon.textContent)].filter(Boolean).join(' ').replace(/\s+/g,' ').trim().slice(0,120),classes:String(button.className||'').slice(0,160),disabled:button.disabled===true||button.getAttribute('aria-disabled')==='true'})).filter(button=>/통나무|보너스|log.?power|watch.?reward/i.test(button.label)).slice(0,12);
     const routes=new Map();
     for(const entry of performance.getEntriesByType('resource').slice(-300)){

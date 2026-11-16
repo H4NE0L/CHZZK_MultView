@@ -5,6 +5,7 @@ export interface SessionChannel extends Record<string, unknown> {
   volume: number; muted: boolean;
 }
 export interface ViewerSession {
+  screenshotNameFormat?: string; recordingNameFormat?: string;
   channels: SessionChannel[]; selectedUid: string | null; layout: Layout;
   chatOpen: boolean; screenLocked: boolean; mainOnly: boolean;
   masterVolume: number; chatSide: 'left' | 'right'; shortcutsEnabled: boolean; powerRewards?: boolean; chatTimestamps?: boolean; rewindBar?: boolean; autoWide?: boolean;

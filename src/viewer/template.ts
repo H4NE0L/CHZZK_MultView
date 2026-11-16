@@ -95,6 +95,12 @@ export const html = `
                 <label class="settings-option" for="recordingProfile"><span>녹화 품질</span><select id="recordingProfile"><option value="balanced">저부하 · 최대 720p / 30fps</option><option value="original">원본 해상도 / 프레임</option></select></label>
                 <p>저부하 모드는 녹화 인코딩 부담을 줄입니다. 설정은 다음 녹화부터 적용됩니다.</p>
               </div>
+<div class="settings-feature media-filename-settings">
+                <label for="screenshotNameFormat">스크린샷 파일명 형식</label><input id="screenshotNameFormat" type="text" maxlength="200" spellcheck="false" aria-describedby="mediaNameFormatHelp screenshotNamePreview"><output id="screenshotNamePreview"></output>
+                <label for="recordingNameFormat">영상 파일명 형식</label><input id="recordingNameFormat" type="text" maxlength="200" spellcheck="false" aria-describedby="mediaNameFormatHelp recordingNamePreview"><output id="recordingNamePreview"></output>
+                <p id="mediaNameFormatHelp">{channel} 방송인 · {title} 방송 제목 · {uid} 방송 ID · {date} 날짜 · {time} 시각. 개별 날짜·시각: {YYYY} {YY} {MM} {DD} {HH} {mm} {ss}. PC의 현지 시각을 사용하고 확장자는 자동으로 붙입니다. 다음 촬영·녹화부터 적용됩니다.</p>
+                <button id="resetMediaNameFormats" type="button">파일명 형식 기본값 복원</button>
+              </div>
 </section>
               <section id="settingsChatPanel" role="tabpanel" aria-labelledby="settingsChatTab" data-settings-panel="chat" hidden>
                 <div class="settings-feature">

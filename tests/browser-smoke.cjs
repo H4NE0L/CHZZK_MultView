@@ -509,6 +509,11 @@ async function run() {
       window.__paint=setInterval(()=>{ctx.fillStyle=count++%2?'#00dc9b':'#223344';ctx.fillRect(0,0,320,180);},50);
       window.__captureStream=canvas.captureStream(20);video.srcObject=window.__captureStream;await video.play();
     });
+    await main.locator('#settingsManager').evaluate(el=>el.open=true);await main.locator('#settingsPlayerTab').click();
+    await main.locator('#screenshotNameFormat').fill('shot_{channel}_{date}_{time}');await main.locator('#screenshotNameFormat').dispatchEvent('change');
+    await main.locator('#recordingNameFormat').fill('record_{channel}_{YYYY}');await main.locator('#recordingNameFormat').dispatchEvent('change');
+    assert((await main.locator('#screenshotNamePreview').textContent()).includes('shot_방송인_'));
+    await main.locator('#settingsManager').evaluate(el=>el.open=false);
     await main.locator('.video-tile[data-uid="video:12345678"]').hover();
     await main.bringToFront();
     await main.locator('#uidInput').hover();
@@ -527,7 +532,7 @@ async function run() {
     const gallery=main.locator('.screenshot-gallery');await main.locator('.media-body img').evaluate(img=>img.decode());await main.bringToFront();const before=await gallery.boundingBox();
     await gallery.locator('header').hover({position:{x:30,y:15}});await main.mouse.down();await main.mouse.move(30,before.y+45,{steps:10});await main.mouse.up();
     const after=await gallery.boundingBox();assert(Math.abs(after.x-before.x)>10 || Math.abs(after.y-before.y)>10,'screenshot window can be moved');
-    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullBytes=fs.readFileSync(await (await fullDownload).path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
+    const fullDownload=main.waitForEvent('download');await main.locator('.media-save').click();const fullShot=await fullDownload;assert.match(fullShot.suggestedFilename(),/^shot_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.png$/);const fullBytes=fs.readFileSync(await fullShot.path());assert.equal(fullBytes.readUInt32BE(16),320);assert.equal(fullBytes.readUInt32BE(20),180);
     await main.locator('.screenshot-gallery').waitFor({state:'detached'});
     await main.evaluate(()=>{document.body.tabIndex=-1;document.body.focus();});await main.locator('body').press('s');await main.locator('.media-body img').waitFor();
     assert.equal(await main.locator('#chatOriginalBtn').count(),0);
@@ -544,7 +549,7 @@ async function run() {
     const copied=await main.evaluate(async()=>{const items=await navigator.clipboard.read();const blob=await items[0].getType('image/png');const bytes=new DataView(await blob.arrayBuffer());return [bytes.getUint32(16),bytes.getUint32(20)];});
     assert.deepEqual(copied,[160,90]);
     const imageDownload=main.waitForEvent('download');await main.locator('.media-save').click();
-    const savedImage=await imageDownload;assert(/_\d{14}\.png$/.test(savedImage.suggestedFilename()));
+    const savedImage=await imageDownload;assert(/^shot_.+_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.png$/.test(savedImage.suggestedFilename()));
     const imageBytes=fs.readFileSync(await savedImage.path());
     assert.equal(imageBytes.readUInt32BE(16),160);assert.equal(imageBytes.readUInt32BE(20),90);
     assert.equal(await main.locator('.screenshot-gallery').count(),1);
@@ -565,7 +570,7 @@ async function run() {
     assert(Math.max(...row.map(r=>r.top))<Math.min(...row.map(r=>r.bottom)),'recording controls share one row');
     await resultPage.locator('#format').selectOption({label:'WebM'});
     const recordingDownload=resultPage.waitForEvent('download');await resultPage.locator('#save').click();
-    assert(/^\[\d{2}\.\d{2}\.\d{2}\][^_]+_.+\.webm$/.test((await recordingDownload).suggestedFilename()));
+    assert(/^record_.+_\d{4}\.webm$/.test((await recordingDownload).suggestedFilename()));
     await resultPage.locator('#end').fill('0.5');
     const trimDownload=resultPage.waitForEvent('download');await resultPage.locator('#trim').click();
     assert((await trimDownload).suggestedFilename().endsWith('_0-0.5s.webm'));

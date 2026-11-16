@@ -40,6 +40,11 @@ const root=(process.env.CZ_TEST_ROOT || path.resolve(__dirname,'..')),read=file=
  await launchButton.click();
  await page.locator('.mv-root').waitFor();
  assert.deepEqual(await page.evaluate(()=>[document.documentElement,document.body].map(element=>getComputedStyle(element).overflow)),['hidden','hidden'],'site mode locks original page scrolling');
+ await page.evaluate(()=>{document.documentElement.style.setProperty('overflow-y','scroll','important');document.body.style.setProperty('overflow','auto','important');document.body.style.minHeight='2400px';});
+ await page.waitForFunction(()=>[document.documentElement,document.body].every(el=>getComputedStyle(el).overflowX==='hidden'&&getComputedStyle(el).overflowY==='hidden'));
+ assert.deepEqual(await page.evaluate(()=>[document.documentElement,document.body].map(el=>getComputedStyle(el).scrollbarWidth)),['none','none'],'native rerender cannot restore outer scrollbars');
+ assert.equal(await page.locator('#__chzzk_multiview_v09__').evaluate(el=>el.getBoundingClientRect().right),1280,'overlay fits the viewport');
+
  await page.waitForFunction(()=>document.getElementById('__chzzk_multiview_v09__').shadowRoot.querySelector('#videoGrid iframe')?.dataset.playerReady==='true');
  for(const [selector,key]of [['#favoriteManager > summary','F'],['#volumeManager > summary','V'],['#screenLockBtn','H'],['#collapseBtn','B'],['#layoutToggle button','G'],['#chatToggleBtn','C'],['.tile-screenshot','S'],['.tile-record','R']])assert((await page.locator(selector).first().getAttribute('title')).includes('단축키 '+key));
  await page.locator('#screenLockBtn').evaluate(el=>el.click());assert((await page.locator('#screenLockBtn').getAttribute('title')).includes('단축키 H'));await page.locator('#screenLockBtn').evaluate(el=>el.click());

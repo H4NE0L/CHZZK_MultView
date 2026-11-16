@@ -1,3 +1,4 @@
+import {findPlaybackVideo} from './player-video.js';
 // MAIN-world context discovery never creates/connects nodes or resumes audio.
 // Only an explicit removed-player teardown closes tracked contexts. Weak references and a hard bound avoid retention.
 (() => {
@@ -35,7 +36,7 @@
   let timer;await Promise.race([Promise.allSettled(active.map(context=>{try{return context.close();}catch(error){return Promise.reject(error);}})),new Promise(resolve=>{timer=setTimeout(resolve,250);})]);clearTimeout(timer);
   return {observed:active.length,states:snapshot().contexts};
  }
- globalThis.__CZAudioRuntime={snapshot,close};
+ globalThis.__CZAudioRuntime={snapshot,close,findVideo:findPlaybackVideo};
  for(const key of ['AudioContext','webkitAudioContext']){
   const Native=globalThis[key];if(typeof Native!=='function')continue;
   globalThis[key]=new Proxy(Native,{construct(target,args,newTarget){

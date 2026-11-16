@@ -52,7 +52,7 @@ globalThis.CZPlayerAudio = {create({findVideo,report}) {
     if(matches(video))publish(video,'command');else recover();
   };
   if(early)early.volumechange=onVolumeChange;else window.addEventListener('volumechange',onVolumeChange,true);
-  function bind(video){bound.add(video);apply(video);}
+  function bind(video){bound.add(video);if(video===findVideo())apply(video);}
   // A live stream may restart using the same video element after ending/error.
   // Restore its own preference once playback becomes available again.
   for(const type of ['loadedmetadata','playing'])document.addEventListener(type,event=>{
